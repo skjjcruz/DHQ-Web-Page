@@ -1727,8 +1727,11 @@ window.addEventListener('DOMContentLoaded', function () {
   const SESSION_KEY = 'fw_session_v1';
   // The live app; sign-ins here hand the session over to this origin.
   const APP_URL = 'https://skjjcruz.github.io/github.com-skjjcruz-owner-dashboard-dev/landing.html';
-  // ?signout — arrive from the app's logo: clear the local copy and stay put.
+  // ?signout — arrive from the app: clear the local copy and stay put.
   const FORCE_SIGNOUT = new URLSearchParams(window.location.search).has('signout');
+  // ?home — arrive from the app's logo: stay on this page (no auto-bounce back
+  // into the app) but keep the session so CTAs still skip straight in.
+  const STAY_HOME = new URLSearchParams(window.location.search).has('home');
 
   let _sbClient = null;
   function getSbClient() {
@@ -1917,7 +1920,7 @@ window.addEventListener('DOMContentLoaded', function () {
   // callback above handles): skip the pitch, go straight to the app.
   (function checkSession() {
     try {
-      if (FORCE_SIGNOUT) return;
+      if (FORCE_SIGNOUT || STAY_HOME) return;
       const hash = window.location.hash || '';
       if (hash.indexOf('access_token=') !== -1 || /[?&]code=/.test(window.location.search)) return;
       const session = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
