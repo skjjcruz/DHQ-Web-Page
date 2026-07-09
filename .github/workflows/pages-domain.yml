@@ -1,7 +1,15 @@
 # Sets the Pages custom domain (dhqfootball.com) and, once GitHub has issued
-# the TLS certificate for it, flips on "Enforce HTTPS". Run it once after the
-# first deploy to attach the domain, then again with enforce_https=true after
-# the registrar DNS records exist and the certificate shows as issued.
+# the TLS certificate for it, flips on "Enforce HTTPS".
+#
+# NOTE: GitHub does not let the built-in GITHUB_TOKEN change a Pages custom
+# domain or the HTTPS toggle (403 "Resource not accessible by integration") —
+# only a user token can. Two ways to use this workflow:
+#   a) Add a repo secret PAGES_ADMIN_TOKEN (fine-grained PAT with "Pages"
+#      read/write on this repo, or classic PAT with `repo` scope) — then this
+#      workflow can set the domain / enforce HTTPS on demand; or
+#   b) Do it once by hand in Settings → Pages (custom domain field + the
+#      "Enforce HTTPS" checkbox) and just use this workflow's status report.
+#
 # www.dhqfootball.com needs no config here: with the apex as the custom domain
 # and a www CNAME pointing at skjjcruz.github.io, GitHub redirects www → apex.
 name: Configure Pages custom domain
@@ -22,23 +30,30 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
-      GH_TOKEN: ${{ github.token }}
+      GH_TOKEN: ${{ secrets.PAGES_ADMIN_TOKEN != '' && secrets.PAGES_ADMIN_TOKEN || github.token }}
       DOMAIN: dhqfootball.com
     steps:
       - name: Set custom domain
         run: |
-          set -euo pipefail
-          gh api -X PUT "repos/${{ github.repository }}/pages" -f cname="$DOMAIN"
-          echo "Custom domain set to $DOMAIN"
+          set -uo pipefail
+          if gh api -X PUT "repos/${{ github.repository }}/pages" -f cname="$DOMAIN"; then
+            echo "Custom domain set to $DOMAIN"
+          else
+            echo "::warning::Could not set the custom domain — GITHUB_TOKEN is not allowed to. Add a PAGES_ADMIN_TOKEN repo secret and re-run, or set it once manually: Settings → Pages → Custom domain → $DOMAIN → Save."
+          fi
 
       - name: Enforce HTTPS
         if: inputs.enforce_https
         run: |
-          set -euo pipefail
-          gh api -X PUT "repos/${{ github.repository }}/pages" -F https_enforced=true
-          echo "HTTPS enforcement enabled"
+          set -uo pipefail
+          if gh api -X PUT "repos/${{ github.repository }}/pages" -F https_enforced=true; then
+            echo "HTTPS enforcement enabled"
+          else
+            echo "::warning::Could not enforce HTTPS — needs PAGES_ADMIN_TOKEN (see above) or the Settings → Pages checkbox. Also requires the certificate to be issued first."
+          fi
 
       - name: Report Pages status
+        if: always()
         run: |
           gh api "repos/${{ github.repository }}/pages" \
-            --jq '{status, cname, https_enforced, protected_domain_state, certificate_state: (.https_certificate.state // "n/a")}'
+            --jq '{status, cname, https_enforced, build_type, protected_domain_state, certificate_state: (.https_certificate.state // "n/a"), certificate_desc: (.https_certificate.description // "n/a")}'
