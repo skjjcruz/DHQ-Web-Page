@@ -638,7 +638,7 @@ body.editing .ed-del{opacity:.45;text-decoration:line-through;outline:1px dashed
     <button class="btn btn--ghost nav-features" onclick="document.getElementById('pricing').scrollIntoView({behavior:'smooth'})">Plans</button>
     <button class="btn btn--ghost nav-features" onclick="document.getElementById('about').scrollIntoView({behavior:'smooth'})">Vision</button>
     <button class="btn btn--ghost nav-features" onclick="document.getElementById('community').scrollIntoView({behavior:'smooth'})">Discord</button>
-    <button class="btn btn--primary" onclick="document.getElementById('engine').scrollIntoView({behavior:'smooth'})">Start free</button>
+    <button class="btn btn--primary" onclick="document.getElementById('auth').scrollIntoView({behavior:'smooth'})">Start free</button>
   </div>
 </div></header>
 
@@ -651,7 +651,7 @@ body.editing .ed-del{opacity:.45;text-decoration:line-through;outline:1px dashed
       <h1>Generic advice: stop here.<span class="f">This is your world.</span></h1>
       <p class="hero__sub">Every other tool ranks players for a league that isn't yours. Dynasty HQ rebuilds every value, trade, and draft call around <b>your exact scoring and roster</b> — and reads <b>how each rival actually operates.</b></p>
       <div class="hero__cta">
-        <button class="btn btn--primary btn--lg" onclick="document.getElementById('engine').scrollIntoView({behavior:'smooth'})">Start free with Sleeper</button>
+        <button class="btn btn--primary btn--lg" onclick="document.getElementById('auth').scrollIntoView({behavior:'smooth'})">Start free with Sleeper</button>
         <button class="btn btn--ghost" onclick="document.getElementById('pricing').scrollIntoView({behavior:'smooth'})">or see plans</button>
       </div>
       <div class="hero__fine" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center"><span class="chip">$0 · no credit card</span><span class="chip">Dynasty + redraft</span><span class="chip">Sleeper · MFL</span></div>
@@ -723,7 +723,7 @@ body.editing .ed-del{opacity:.45;text-decoration:line-through;outline:1px dashed
   <div class="aha-cta">
     <p class="aha-cta__t">That's your board — recomputed live on your settings.</p>
     <p class="aha-cta__s">Connect your Sleeper league to make it real — your rosters, your matchups, your market, season over season.</p>
-    <button class="btn btn--primary btn--lg" onclick="document.getElementById('engine').scrollIntoView({behavior:'smooth'})">Start free with Sleeper</button>
+    <button class="btn btn--primary btn--lg" onclick="document.getElementById('auth').scrollIntoView({behavior:'smooth'})">Start free with Sleeper</button>
     <span class="hero__fine">Free for one Sleeper league · no credit card</span>
   </div>
   </div>
@@ -736,7 +736,7 @@ body.editing .ed-del{opacity:.45;text-decoration:line-through;outline:1px dashed
     <div class="tier">
       <div class="tier__name">Scout</div><div class="tier__price"><span class="price-amt">$0</span></div><div class="tier__note">Free forever</div>
       <ul><li>Mobile and desktop experience</li><li>A curated-feature experience</li><li>The raw data, you do your own analysis</li><li>One AI-call per day</li></ul>
-      <button class="btn btn--primary" onclick="document.getElementById('engine').scrollIntoView({behavior:'smooth'})">Start free with Sleeper</button>
+      <button class="btn btn--primary" onclick="document.getElementById('auth').scrollIntoView({behavior:'smooth'})">Start free with Sleeper</button>
     </div>
     <div class="tier tier--feat" id="tier-dhq">
       <div class="tier__name" style="color:var(--forge)">Dynasty HQ Pro</div>
@@ -747,12 +747,12 @@ body.editing .ed-del{opacity:.45;text-decoration:line-through;outline:1px dashed
       <div class="tier__price"><span class="price-amt">$9.99</span><span class="price-per">/mo</span></div>
       <div class="tier__note tier__save" hidden>Billed $99.99/yr · ≈ $8.33/mo · save ~17%</div>
       <ul><li>The full Dynasty HQ experience</li><li>DHQ Engine, Owner DNA, Follow-live draft</li><li>Deep GM-strategy customization</li><li>Alex Ingram, your AI GM.</li><li>20 AI calls per-day</li></ul>
-      <button class="btn btn--primary" onclick="document.getElementById('engine').scrollIntoView({behavior:'smooth'})">Go Pro</button>
+      <button class="btn btn--primary" onclick="document.getElementById('auth').scrollIntoView({behavior:'smooth'})">Go Pro</button>
     </div>
     <div class="tier">
       <div class="tier__name">DHQ Labs</div><div class="tier__price"><span class="price-amt">Soon</span></div><div class="tier__note" style="color:var(--tactical)">In development</div>
       <ul><li>Full redraft functionality</li><li>Empire mode — all leagues, one terminal</li><li>MFL sync</li></ul>
-      <button class="btn btn--secondary" onclick="document.getElementById('engine').scrollIntoView({behavior:'smooth'})">Get early access</button>
+      <button class="btn btn--secondary" onclick="document.getElementById('auth').scrollIntoView({behavior:'smooth'})">Get early access</button>
     </div>
   </div>
 </div></section>
@@ -1048,10 +1048,58 @@ body.editing .ed-del{opacity:.45;text-decoration:line-through;outline:1px dashed
   <div class="closing__in reveal">
     <h2>A universe built around your league.</h2>
     <p>Your scoring. Your rivals. Your history. No other system cares this much about making the experience yours — and only yours.</p>
-    <button class="btn btn--primary btn--lg" onclick="document.getElementById('engine').scrollIntoView({behavior:'smooth'})">Start free with Sleeper</button>
+    <button class="btn btn--primary btn--lg" onclick="document.getElementById('auth').scrollIntoView({behavior:'smooth'})">Start free with Sleeper</button>
     <div class="hero__fine" style="margin-top:var(--sp-4)">Free for one Sleeper league · no credit card</div>
   </div>
 </section>
+
+<!-- JOIN / SIGN IN -->
+<style>
+.auth-card{max-width:420px;margin:0 auto;background:var(--bg-1);border:1px solid var(--border);border-radius:6px;padding:var(--sp-6) var(--sp-5)}
+.auth-provider{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;min-height:48px;border-radius:4px;font-family:var(--font-sans);font-size:15px;font-weight:600;cursor:pointer;margin-bottom:8px;transition:box-shadow var(--t-fast)}
+.auth-google{border:1px solid var(--border-strong);background:#fff;color:#1f2328}
+.auth-google:hover{box-shadow:0 4px 14px rgba(0,0,0,.35)}
+.auth-apple{border:1px solid #000;background:#000;color:#fff}
+.auth-apple:hover{box-shadow:0 4px 14px rgba(0,0,0,.5)}
+.auth-or{display:flex;align-items:center;text-align:center;color:var(--text-3);font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin:16px 0;gap:10px}
+.auth-or::before,.auth-or::after{content:'';flex:1;height:1px;background:var(--border)}
+.auth-input{width:100%;min-height:46px;margin-bottom:8px;padding:0 14px;border:1px solid var(--border-strong);border-radius:4px;background:var(--bg-inset);color:var(--text-1);font-family:var(--font-sans);font-size:15px}
+.auth-input:focus{outline:none;border-color:var(--forge);box-shadow:0 0 0 3px var(--forge-tint)}
+.auth-input::placeholder{color:var(--text-3)}
+.auth-submit{width:100%;min-height:48px;margin-top:4px;border:1px solid var(--forge);border-radius:4px;background:var(--forge);color:#08090C;font-family:var(--font-mono);font-size:15px;font-weight:600;letter-spacing:.03em;cursor:pointer;transition:background var(--t-fast)}
+.auth-submit:hover{background:var(--forge-bright);border-color:var(--forge-bright)}
+.auth-submit:disabled{opacity:.65;cursor:wait}
+.auth-fine{text-align:center;font-size:12px;color:var(--text-3);margin-top:12px}
+.auth-linkbtn{background:none;border:none;color:var(--text-2);font-family:var(--font-sans);font-size:13px;cursor:pointer;text-decoration:underline}
+.auth-linkbtn:hover{color:var(--forge)}
+.auth-alert{display:none;border-radius:4px;line-height:1.5;margin-bottom:14px;padding:12px;font-size:14px}
+.auth-alert.show{display:block}
+.auth-alert.alert-error{color:#ffd8d4;background:var(--neg-tint);border:1px solid var(--neg)}
+.auth-alert.alert-success{color:#dcffe9;background:var(--pos-tint);border:1px solid var(--pos)}
+</style>
+<section class="section" id="auth"><div class="wrap">
+  <div class="intro reveal"><span class="intro__eye">Join</span><h2 id="authTitle">Create your <span class="gild">account.</span></h2><p id="authSub">Step 1 of 2 — create your account with Google, Apple, or email. Next, you'll connect your Sleeper account.</p></div>
+  <div class="auth-card reveal">
+    <div class="auth-alert" id="alertJoin"></div>
+    <button id="btnGoogle" class="auth-provider auth-google" onclick="handleGoogle()">
+      <svg viewBox="0 0 48 48" width="18" height="18" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.4 29.3 35 24 35c-6.1 0-11-4.9-11-11s4.9-11 11-11c2.8 0 5.4 1.1 7.3 2.8l5.7-5.7C33.6 6.1 29.1 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.3-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16 19 13 24 13c2.8 0 5.4 1.1 7.3 2.8l5.7-5.7C33.6 6.1 29.1 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35 26.7 36 24 36c-5.3 0-9.7-2.6-11.3-7l-6.6 5.1C9.6 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4.1 5.6l6.2 5.2C39.9 36 44 30.6 44 24c0-1.3-.1-2.3-.4-3.5z"/></svg>
+      Continue with Google
+    </button>
+    <button id="btnApple" class="auth-provider auth-apple" onclick="handleApple()">
+      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="currentColor"><path d="M17.05 12.04c-.03-2.65 2.16-3.92 2.26-3.98-1.23-1.8-3.15-2.05-3.83-2.08-1.63-.16-3.18.96-4.01.96-.82 0-2.1-.94-3.46-.91-1.78.03-3.42 1.03-4.34 2.62-1.85 3.21-.47 7.95 1.33 10.55.88 1.27 1.93 2.7 3.3 2.65 1.32-.05 1.82-.85 3.42-.85 1.59 0 2.04.85 3.44.82 1.42-.02 2.32-1.3 3.19-2.58 1-1.47 1.42-2.89 1.44-2.97-.03-.01-2.76-1.06-2.79-4.2zM14.6 4.48c.73-.89 1.22-2.12 1.08-3.35-1.05.04-2.32.7-3.07 1.58-.67.78-1.26 2.03-1.1 3.23 1.17.09 2.36-.6 3.09-1.46z"/></svg>
+      Continue with Apple
+    </button>
+    <div class="auth-or"><span>or</span></div>
+    <input class="auth-input" type="email" id="acctEmail" placeholder="Email" autocomplete="email" autocapitalize="off">
+    <input class="auth-input" type="password" id="acctPassword" placeholder="Password (8+ characters)" autocomplete="current-password">
+    <button class="auth-submit" id="btnJoin" onclick="handleEmailAuth()">Create account →</button>
+    <p class="auth-fine"><span id="sleeperHint">Step 1 of 2 — next you'll connect your Sleeper account.</span></p>
+    <div style="text-align:center;margin-top:14px">
+      <button class="auth-linkbtn" id="toggleMode" onclick="toggleAuthMode()">Already have an account? Sign in</button>
+      <button class="auth-linkbtn" id="forgotBtn" onclick="handleForgot()" style="display:none">Forgot password?</button>
+    </div>
+  </div>
+</div></section>
 
 <footer class="foot"><div class="wrap foot__in">
   <div class="brand"><img class="brand-logo" src="img/logo.png" alt="Dynasty HQ">DYNASTY&nbsp;HQ <span class="beta-badge">Beta</span></div>
@@ -1061,7 +1109,7 @@ body.editing .ed-del{opacity:.45;text-decoration:line-through;outline:1px dashed
 
 <!-- mobile sticky CTA (shown under 560px) -->
 <div class="mcta">
-  <button class="btn btn--primary btn--lg" onclick="document.getElementById('engine').scrollIntoView({behavior:'smooth'})">Start free with Sleeper</button>
+  <button class="btn btn--primary btn--lg" onclick="document.getElementById('auth').scrollIntoView({behavior:'smooth'})">Start free with Sleeper</button>
   <span class="hero__fine">Free for one Sleeper league · no credit card</span>
 </div>
 
@@ -1485,6 +1533,10 @@ function initMotion(){
   /* ===== ABOUT (#about) — founder note fades up ===== */
   gsap.fromTo('#about .about__in',{opacity:0,y:24},{opacity:1,y:0,duration:0.8,ease:'apple',scrollTrigger:{trigger:'#about .about__in',start:'top 82%',toggleActions:once}});
 
+  /* ===== JOIN (#auth) — intro, then the sign-in card rises ===== */
+  gsap.fromTo('#auth .intro',{opacity:0,y:20},{opacity:1,y:0,duration:0.7,ease:'apple',scrollTrigger:{trigger:'#auth .intro',start:'top 82%',toggleActions:once}});
+  gsap.fromTo('#auth .auth-card',{opacity:0,y:24},{opacity:1,y:0,duration:0.8,ease:'appleHero',scrollTrigger:{trigger:'#auth .auth-card',start:'top 84%',toggleActions:once}});
+
   /* ===== CLOSING + FOOTER — dramatic final reveal (h2 -> serif line -> CTA), then a soft landing ===== */
   gsap.fromTo('.closing__in h2, .closing__in p, .closing__in .btn--lg, .closing__in .hero__fine',{opacity:0,y:28},{opacity:1,y:0,duration:0.9,ease:'appleHero',stagger:0.11,scrollTrigger:{trigger:'.closing__in',start:'top 78%',toggleActions:once}});
   gsap.fromTo('.foot__in',{opacity:0,y:16},{opacity:1,y:0,duration:0.7,ease:'apple',scrollTrigger:{trigger:'.foot',start:'top 92%',toggleActions:once}});
@@ -1661,6 +1713,225 @@ if(document.readyState==='loading')window.addEventListener('DOMContentLoaded',in
     }).catch(function(){alert('Download needs the page opened through the local server (http://...), not the file opened directly.');});
   });
 })();
+</script>
+
+<!-- ── Auth: same wiring as the app's facing page (Supabase). On success the
+     session is handed to the app via a #dhq_session URL fragment, which the
+     app's landing page ingests pre-paint (fragments never reach a server). ── -->
+<script defer src="vendor/supabase.min.js"></script>
+<script>
+window.addEventListener('DOMContentLoaded', function () {
+  const FW_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4c2hpcXl4aGhpZnZ0ZnFhd2JxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3MTExMzAsImV4cCI6MjA4ODI4NzEzMH0.zJi9W986ZLaANiZN6pt6ReFwaQU6yPeidsERIWo2ibI';
+  const SUPABASE_URL = 'https://sxshiqyxhhifvtfqawbq.supabase.co';
+  const FW_API_BASE = SUPABASE_URL + '/functions/v1';
+  const SESSION_KEY = 'fw_session_v1';
+  // The live app; sign-ins here hand the session over to this origin.
+  const APP_URL = 'https://skjjcruz.github.io/github.com-skjjcruz-owner-dashboard-dev/landing.html';
+  // ?signout — arrive from the app's logo: clear the local copy and stay put.
+  const FORCE_SIGNOUT = new URLSearchParams(window.location.search).has('signout');
+
+  let _sbClient = null;
+  function getSbClient() {
+    if (!_sbClient && window.supabase) {
+      _sbClient = window.supabase.createClient(SUPABASE_URL, FW_ANON_KEY);
+    }
+    return _sbClient;
+  }
+
+  // ── Landing analytics (same table + shape as the app's facing page) ──────
+  const LANDING_ANALYTICS_SESSION_KEY = 'fw_landing_analytics_session_v1';
+  function landingAnalyticsSessionId() {
+    try {
+      let sid = sessionStorage.getItem(LANDING_ANALYTICS_SESSION_KEY);
+      if (!sid) {
+        sid = 'sess_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+        sessionStorage.setItem(LANDING_ANALYTICS_SESSION_KEY, sid);
+      }
+      return sid;
+    } catch { return 'sess_' + Date.now().toString(36); }
+  }
+  function safeLandingMeta(meta) {
+    const out = { route: window.location.hostname + (window.location.pathname || '/') };
+    Object.entries(meta || {}).forEach(([key, value]) => {
+      if (/email|password|token|secret|message|content|body/i.test(key)) return;
+      if (value == null) return;
+      if (['string', 'number', 'boolean'].includes(typeof value)) out[key] = value;
+    });
+    return out;
+  }
+  function trackLandingEvent(eventName, metadata = {}) {
+    try {
+      const db = getSbClient();
+      if (!db || !eventName) return;
+      db.from('analytics_events').insert([{
+        event_id: 'evt_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10),
+        username: null, league_id: null,
+        session_id: landingAnalyticsSessionId(),
+        platform: 'warroom', module: 'landing',
+        widget: metadata.widget || null,
+        event_name: eventName,
+        event_ts: new Date().toISOString(),
+        entity_type: metadata.entityType || null,
+        entity_id: metadata.entityId || null,
+        metadata: safeLandingMeta(metadata),
+      }]).then(() => {}).catch(() => {});
+    } catch {}
+  }
+  trackLandingEvent('landing_viewed', { viewport: window.innerWidth < 768 ? 'mobile' : 'desktop' });
+
+  let authMode = 'signup'; // 'signup' | 'signin'
+
+  function showAlert(type, message) {
+    const el = document.getElementById('alertJoin');
+    el.className = 'auth-alert alert-' + type + ' show';
+    el.textContent = message;
+    if (type !== 'success') setTimeout(() => el.classList.remove('show'), 6000);
+  }
+
+  // Hand the app session across origins in the URL fragment (base64url JSON).
+  function handOffToApp(session) {
+    const json = JSON.stringify(session);
+    const b64u = btoa(unescape(encodeURIComponent(json)))
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    window.location.href = APP_URL + '#dhq_session=' + b64u;
+  }
+
+  window.toggleAuthMode = function () {
+    authMode = authMode === 'signup' ? 'signin' : 'signup';
+    const signup = authMode === 'signup';
+    document.getElementById('authTitle').innerHTML = signup ? 'Create your <span class="gild">account.</span>' : 'Welcome <span class="gild">back.</span>';
+    document.getElementById('authSub').textContent = signup
+      ? "Step 1 of 2 — create your account with Google, Apple, or email. Next, you'll connect your Sleeper account."
+      : 'Sign in to your Dynasty HQ account.';
+    document.getElementById('sleeperHint').parentElement.style.display = signup ? '' : 'none';
+    document.getElementById('btnJoin').textContent = signup ? 'Create account →' : 'Sign in →';
+    document.getElementById('btnGoogle').lastChild.textContent = signup ? ' Continue with Google' : ' Sign in with Google';
+    document.getElementById('btnApple').lastChild.textContent = signup ? ' Continue with Apple' : ' Sign in with Apple';
+    document.getElementById('toggleMode').textContent = signup ? 'Already have an account? Sign in' : 'Need an account? Sign up';
+    document.getElementById('forgotBtn').style.display = signup ? 'none' : '';
+  };
+
+  // ── Email signup / signin (account only — Sleeper handled in the app) ────
+  window.handleEmailAuth = async function () {
+    const email = document.getElementById('acctEmail').value.trim();
+    const password = document.getElementById('acctPassword').value;
+    const btn = document.getElementById('btnJoin');
+    const signup = authMode === 'signup';
+    if (!email || !password) { showAlert('error', 'Email and password are required.'); return; }
+    if (signup && password.length < 8) { showAlert('error', 'Password must be at least 8 characters.'); return; }
+    trackLandingEvent(signup ? 'signup_started' : 'signin_started');
+    btn.disabled = true; btn.textContent = signup ? 'Creating account…' : 'Signing in…';
+    try {
+      const path = signup ? 'fw-signup' : 'fw-signin';
+      const res = await fetch(`${FW_API_BASE}/${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': FW_ANON_KEY, 'Authorization': `Bearer ${FW_ANON_KEY}` },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.token) {
+        trackLandingEvent(signup ? 'signup_failed' : 'signin_failed', { status: res.status });
+        showAlert('error', data.error || (signup ? 'Sign-up failed.' : 'Invalid email or password.'));
+        btn.disabled = false; btn.textContent = signup ? 'Create account →' : 'Sign in →';
+        return;
+      }
+      localStorage.setItem(SESSION_KEY, JSON.stringify(data));
+      trackLandingEvent(signup ? 'signup_succeeded' : 'signin_succeeded');
+      showAlert('success', 'Account ready — taking you to Dynasty HQ…');
+      setTimeout(() => handOffToApp(data), 600);
+    } catch (err) {
+      trackLandingEvent(signup ? 'signup_failed' : 'signin_failed', { reason: 'network' });
+      showAlert('error', 'Network error: ' + (err?.message || String(err)));
+      btn.disabled = false; btn.textContent = signup ? 'Create account →' : 'Sign in →';
+    }
+  };
+
+  // ── Google / Apple OAuth: round-trips back to this page ──────────────────
+  window.handleGoogle = function () {
+    const db = getSbClient();
+    if (!db) { showAlert('error', 'Sign-in is still loading — try again in a moment.'); return; }
+    trackLandingEvent('oauth_started', { provider: 'google' });
+    db.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + window.location.pathname } });
+  };
+  window.handleApple = function () {
+    const db = getSbClient();
+    if (!db) { showAlert('error', 'Sign-in is still loading — try again in a moment.'); return; }
+    trackLandingEvent('oauth_started', { provider: 'apple' });
+    db.auth.signInWithOAuth({ provider: 'apple', options: { redirectTo: window.location.origin + window.location.pathname } });
+  };
+
+  // OAuth return: exchange the Supabase token for an app session, hand off.
+  (async function handleOAuthCallback() {
+    try {
+      if (FORCE_SIGNOUT) return;
+      const db = getSbClient();
+      if (!db) return;
+      const { data } = await db.auth.getSession();
+      if (!data?.session) return;
+      const user = data.session.user;
+      const fallbackName = user.user_metadata?.full_name || user.user_metadata?.name || user.email;
+      let appSession = null;
+      try {
+        const res = await fetch(`${FW_API_BASE}/fw-oauth-sync`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${data.session.access_token}` },
+          body: JSON.stringify({ productSlug: 'war_room' }),
+        });
+        if (res.ok) appSession = await res.json();
+      } catch (syncErr) { console.warn('[DHQ] OAuth sync error:', syncErr); }
+      const session = appSession?.token
+        ? { token: appSession.token, user: { email: appSession.user?.email || user.email, displayName: appSession.user?.displayName || fallbackName } }
+        : { token: data.session.access_token, user: { email: user.email, displayName: fallbackName } };
+      localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+      trackLandingEvent('oauth_succeeded');
+      handOffToApp(session);
+    } catch (e) { console.warn('[DHQ] OAuth callback error:', e); }
+  })();
+
+  // ── Forgot password ───────────────────────────────────────────────────────
+  window.handleForgot = async function () {
+    const email = document.getElementById('acctEmail').value.trim();
+    if (!email) { showAlert('error', 'Enter your email first, then tap “Forgot password?”'); document.getElementById('acctEmail').focus(); return; }
+    trackLandingEvent('password_reset_requested');
+    try {
+      await fetch(`${FW_API_BASE}/fw-request-password-reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': FW_ANON_KEY, 'Authorization': `Bearer ${FW_ANON_KEY}` },
+        body: JSON.stringify({ email }),
+      });
+    } catch {}
+    // Always show success — never reveal whether an email exists.
+    showAlert('success', 'If that email has an account, a password reset link is on the way.');
+  };
+
+  // ?signout: clear the marketing-origin session copy and stay on this page.
+  (async function forceSignOut() {
+    if (!FORCE_SIGNOUT) return;
+    try { localStorage.removeItem(SESSION_KEY); } catch {}
+    try { const db = getSbClient(); if (db) await db.auth.signOut(); } catch {}
+    try { if (authMode === 'signup') window.toggleAuthMode(); } catch {}
+    try { history.replaceState(null, '', window.location.pathname); } catch {}
+  })();
+
+  // Already signed in on this origin (and not an OAuth return, which the
+  // callback above handles): skip the pitch, go straight to the app.
+  (function checkSession() {
+    try {
+      if (FORCE_SIGNOUT) return;
+      const hash = window.location.hash || '';
+      if (hash.indexOf('access_token=') !== -1 || /[?&]code=/.test(window.location.search)) return;
+      const session = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+      if (session?.token) {
+        trackLandingEvent('landing_existing_session_redirected');
+        handOffToApp(session);
+      }
+    } catch {}
+  })();
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && ['acctEmail', 'acctPassword'].includes(document.activeElement?.id)) window.handleEmailAuth();
+  });
+});
 </script>
 </body>
 </html>

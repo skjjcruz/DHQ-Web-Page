@@ -86,7 +86,7 @@ jobs:
           set -euo pipefail
           test -f index.html
           test -f CNAME && grep -qx 'dhqfootball.com' CNAME
-          for f in gsap.min.js ScrollTrigger.min.js CustomEase.min.js lenis.min.js; do
+          for f in gsap.min.js ScrollTrigger.min.js CustomEase.min.js lenis.min.js supabase.min.js; do
             test -f "vendor/$f"
             grep -q "vendor/$f" index.html
           done
