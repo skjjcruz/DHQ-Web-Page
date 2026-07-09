@@ -12,13 +12,10 @@
 <!-- Apple-style motion: Lenis smooth scroll + GSAP ScrollTrigger. Deferred so they execute
      before DOMContentLoaded (when the motion layer runs) but never block the engine, which
      keeps working with zero libraries. If any of these fail, the page falls back to native scroll. -->
-<link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
-<link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
-<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/CustomEase.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/lenis@1.1.18/dist/lenis.min.js"></script>
+<script defer src="vendor/gsap.min.js"></script>
+<script defer src="vendor/ScrollTrigger.min.js"></script>
+<script defer src="vendor/CustomEase.min.js"></script>
+<script defer src="vendor/lenis.min.js"></script>
 <script>/* enable motion only when JS on AND user allows it (no-JS => content visible, no flash) */
 try{if(!matchMedia('(prefers-reduced-motion: reduce)').matches){document.documentElement.className='anim';}}catch(e){}</script>
 <style>
