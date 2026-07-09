@@ -1,0 +1,117 @@
+# Automated landing-page mirror: C2-Football/dynasty-hq-landing (idea lab) → this repo (live site).
+#
+# Twice a week (and on demand) this merges new C2 landing commits into main —
+# same pattern as sync-from-c2.yml in skjjcruz/DHQ-Shared:
+#   1. git merge c2/main            (three-way; live-only changes survive because
+#                                    the ancestry merge recorded a common base)
+#   2. sanity checks: index.html + CNAME + vendor/ libs present, and the page
+#      still loads GSAP/Lenis from vendor/ (not the lab's CDN tags)
+#   3. green    → push to main and dispatch the Pages deploy (GITHUB_TOKEN
+#                 pushes don't fire push-triggered workflows, so we dispatch)
+#      red      → PR opened for review instead
+#      conflict → issue opened; a human (or Claude) resolves it
+#
+# Expected conflict source: the lab's index.html <head> references CDN script
+# tags where live uses vendor/ — a lab edit touching those lines will conflict.
+#
+# If C2-Football/dynasty-hq-landing ever goes private, add a C2_SYNC_TOKEN repo
+# secret (a PAT with read access to it); the fetch below falls back to github.token.
+name: Sync landing page from C2 idea lab
+
+on:
+  schedule:
+    - cron: '0 11 * * 1,4'   # Mon + Thu 11:00 UTC (~6am CT)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  actions: write
+
+concurrency:
+  group: c2-landing-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Fetch C2 canonical + detect new commits
+        id: delta
+        run: |
+          set -euo pipefail
+          TOKEN='${{ secrets.C2_SYNC_TOKEN }}'
+          if [ -z "$TOKEN" ]; then TOKEN='${{ github.token }}'; fi
+          git remote add c2 "https://x-access-token:${TOKEN}@github.com/C2-Football/dynasty-hq-landing.git"
+          git fetch c2 main
+          NEW=$(git rev-list --count HEAD..c2/main)
+          echo "new=$NEW" >> "$GITHUB_OUTPUT"
+          echo "C2 commits not yet in main: $NEW"
+          git log --oneline HEAD..c2/main | head -20 || true
+
+      - name: Merge C2 changes
+        if: steps.delta.outputs.new != '0'
+        id: merge
+        run: |
+          set -euo pipefail
+          git config user.name  'dhq-landing-sync[bot]'
+          git config user.email 'noreply@github.com'
+          if git merge c2/main --no-edit; then
+            echo "outcome=clean" >> "$GITHUB_OUTPUT"
+          else
+            git merge --abort
+            echo "outcome=conflict" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open issue on merge conflict
+        if: steps.delta.outputs.new != '0' && steps.merge.outputs.outcome == 'conflict'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create \
+            --title "Landing sync conflict with C2-Football/dynasty-hq-landing ($(date -u +%F))" \
+            --body "The scheduled landing-page sync hit merge conflicts with C2-Football/dynasty-hq-landing@main. Resolve manually with a three-way merge, preserving live-only changes: vendor/ self-hosted GSAP+Lenis script tags in index.html <head>, the CNAME file, and .github/workflows. See the ancestry-merge commit for the base."
+          echo "::warning::Merge conflict — issue opened, no changes pushed."
+
+      - name: Sanity-check merged site
+        if: steps.delta.outputs.new != '0' && steps.merge.outputs.outcome == 'clean'
+        run: |
+          set -euo pipefail
+          test -f index.html
+          test -f CNAME && grep -qx 'dhqfootball.com' CNAME
+          for f in gsap.min.js ScrollTrigger.min.js CustomEase.min.js lenis.min.js; do
+            test -f "vendor/$f"
+            grep -q "vendor/$f" index.html
+          done
+          if grep -qE 'cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net' index.html; then
+            echo "index.html reintroduced CDN references"; exit 1
+          fi
+          echo "Sanity checks passed"
+
+      - name: Push merged site to main (all green)
+        if: steps.delta.outputs.new != '0' && steps.merge.outputs.outcome == 'clean' && success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git push origin HEAD:main
+          gh workflow run pages.yml --ref main
+          echo "::notice::Landing page synced from C2, pushed to main, Pages deploy dispatched."
+
+      - name: Open PR instead (sanity checks failed)
+        if: failure() && steps.merge.outputs.outcome == 'clean'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BRANCH="auto-sync/c2-$(date -u +%Y%m%d-%H%M)"
+          git push origin "HEAD:refs/heads/${BRANCH}"
+          gh pr create \
+            --head "$BRANCH" \
+            --title "Landing sync from C2 (sanity checks failed — needs review)" \
+            --body "The scheduled sync merged cleanly but the merged site failed sanity checks (missing CNAME/vendor libs, or CDN tags reintroduced). Check this run's logs, fix, and merge manually." || true

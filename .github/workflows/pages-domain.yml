@@ -1,0 +1,44 @@
+# Sets the Pages custom domain (dhqfootball.com) and, once GitHub has issued
+# the TLS certificate for it, flips on "Enforce HTTPS". Run it once after the
+# first deploy to attach the domain, then again with enforce_https=true after
+# the registrar DNS records exist and the certificate shows as issued.
+# www.dhqfootball.com needs no config here: with the apex as the custom domain
+# and a www CNAME pointing at skjjcruz.github.io, GitHub redirects www → apex.
+name: Configure Pages custom domain
+
+on:
+  workflow_dispatch:
+    inputs:
+      enforce_https:
+        description: 'Also enforce HTTPS (requires the certificate to be issued)'
+        type: boolean
+        default: false
+
+permissions:
+  pages: write
+
+jobs:
+  domain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DOMAIN: dhqfootball.com
+    steps:
+      - name: Set custom domain
+        run: |
+          set -euo pipefail
+          gh api -X PUT "repos/${{ github.repository }}/pages" -f cname="$DOMAIN"
+          echo "Custom domain set to $DOMAIN"
+
+      - name: Enforce HTTPS
+        if: inputs.enforce_https
+        run: |
+          set -euo pipefail
+          gh api -X PUT "repos/${{ github.repository }}/pages" -F https_enforced=true
+          echo "HTTPS enforcement enabled"
+
+      - name: Report Pages status
+        run: |
+          gh api "repos/${{ github.repository }}/pages" \
+            --jq '{status, cname, https_enforced, protected_domain_state, certificate_state: (.https_certificate.state // "n/a")}'

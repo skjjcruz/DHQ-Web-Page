@@ -1,0 +1,45 @@
+# Deploys the static landing page to GitHub Pages via Actions.
+# configure-pages with `enablement: true` creates/enables the Pages site on
+# first run, so no manual settings step is needed. The custom domain and
+# HTTPS enforcement live in pages-domain.yml (the CNAME file is kept for
+# documentation and as a fallback if the repo ever switches to branch builds —
+# Actions-based Pages ignores it).
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Enable + configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Upload site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
