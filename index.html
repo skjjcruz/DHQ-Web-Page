@@ -1864,9 +1864,11 @@ window.addEventListener('DOMContentLoaded', function () {
   };
 
   // OAuth return: exchange the Supabase token for an app session, hand off.
+  // (Also fires when a lingering Supabase session exists from an earlier OAuth
+  // sign-in — so it must respect ?home too, or the logo link bounces right back.)
   (async function handleOAuthCallback() {
     try {
-      if (FORCE_SIGNOUT) return;
+      if (FORCE_SIGNOUT || STAY_HOME) return;
       const db = getSbClient();
       if (!db) return;
       const { data } = await db.auth.getSession();
