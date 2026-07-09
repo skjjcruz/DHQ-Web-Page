@@ -735,7 +735,7 @@ body.editing .ed-del{opacity:.45;text-decoration:line-through;outline:1px dashed
   <div class="tiers reveal">
     <div class="tier">
       <div class="tier__name">Scout</div><div class="tier__price"><span class="price-amt">$0</span></div><div class="tier__note">Free forever</div>
-      <ul><li>Mobile and desktop experience</li><li>A curated-feature experience</li><li>The raw data, you do your own analysis</li><li>One AI-call per day</li></ul>
+      <ul><li>1 free league</li><li>Mobile and desktop experience</li><li>A curated-feature experience</li><li>The raw data, you do your own analysis</li><li>One AI-call per day</li></ul>
       <button class="btn btn--primary" onclick="document.getElementById('auth').scrollIntoView({behavior:'smooth'})">Start free with Sleeper</button>
     </div>
     <div class="tier tier--feat" id="tier-dhq">
@@ -746,7 +746,7 @@ body.editing .ed-del{opacity:.45;text-decoration:line-through;outline:1px dashed
       </div>
       <div class="tier__price"><span class="price-amt">$9.99</span><span class="price-per">/mo</span></div>
       <div class="tier__note tier__save" hidden>Billed $99.99/yr · ≈ $8.33/mo · save ~17%</div>
-      <ul><li>The full Dynasty HQ experience</li><li>DHQ Engine, Owner DNA, Follow-live draft</li><li>Deep GM-strategy customization</li><li>Alex Ingram, your AI GM.</li><li>20 AI calls per-day</li></ul>
+      <ul><li>The full Dynasty HQ experience</li><li>DHQ Engine, Owner DNA, Follow-live draft</li><li>Deep GM-strategy customization</li><li>Alex Ingram, your AI GM.</li><li id="dhq-ai-calls">10 AI calls per-day</li></ul>
       <button class="btn btn--primary" onclick="document.getElementById('auth').scrollIntoView({behavior:'smooth'})">Go Pro</button>
     </div>
     <div class="tier">
@@ -760,12 +760,13 @@ body.editing .ed-del{opacity:.45;text-decoration:line-through;outline:1px dashed
 /* pricing: Dynasty HQ monthly/annual billing toggle */
 (function(){var seg=document.querySelector('#tier-dhq .billseg');if(!seg)return;
   function el(s){return document.querySelector('#tier-dhq '+s);}
-  var amt=el('.price-amt'),per=el('.price-per'),save=el('.tier__save');
+  var amt=el('.price-amt'),per=el('.price-per'),save=el('.tier__save'),ai=el('#dhq-ai-calls');
   seg.addEventListener('click',function(e){var b=e.target.closest('[data-bill]');if(!b)return;
     Array.prototype.forEach.call(seg.querySelectorAll('[data-bill]'),function(x){x.classList.toggle('on',x===b);});
     var yr=b.dataset.bill==='yr';
     if(amt)amt.textContent=yr?'$99.99':'$9.99';
     if(per)per.textContent=yr?'/yr':'/mo';
+    if(ai)ai.textContent=yr?'15 AI calls per-day':'10 AI calls per-day';
     if(save)save.hidden=!yr;});
 })();
 </script>
