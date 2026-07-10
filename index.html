@@ -1839,6 +1839,9 @@ window.addEventListener('DOMContentLoaded', function () {
         btn.disabled = false; btn.textContent = signup ? 'Create account →' : 'Sign in →';
         return;
       }
+      // Fresh accounts are routed into the app's onboarding funnel (plan
+      // selection) by the receiving page; returning sign-ins skip it.
+      data.isNew = signup === true || data.isNew === true;
       localStorage.setItem(SESSION_KEY, JSON.stringify(data));
       trackLandingEvent(signup ? 'signup_succeeded' : 'signin_succeeded');
       showAlert('success', 'Account ready — taking you to Dynasty HQ…');
@@ -1886,7 +1889,7 @@ window.addEventListener('DOMContentLoaded', function () {
         if (res.ok) appSession = await res.json();
       } catch (syncErr) { console.warn('[DHQ] OAuth sync error:', syncErr); }
       const session = appSession?.token
-        ? { token: appSession.token, user: { email: appSession.user?.email || user.email, displayName: appSession.user?.displayName || fallbackName } }
+        ? { token: appSession.token, isNew: appSession.isNew === true, user: { email: appSession.user?.email || user.email, displayName: appSession.user?.displayName || fallbackName } }
         : { token: data.session.access_token, user: { email: user.email, displayName: fallbackName } };
       localStorage.setItem(SESSION_KEY, JSON.stringify(session));
       trackLandingEvent('oauth_succeeded');
