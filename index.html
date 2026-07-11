@@ -1888,8 +1888,19 @@ window.addEventListener('DOMContentLoaded', function () {
         });
         if (res.ok) appSession = await res.json();
       } catch (syncErr) { console.warn('[DHQ] OAuth sync error:', syncErr); }
+      // Keep the WHOLE user record from fw-oauth-sync — id/tier/products
+      // included. The app's shared client refuses account sessions without
+      // user.id, so dropping the id here locked every Google sign-in to the
+      // free tier once gating went live.
       const session = appSession?.token
-        ? { token: appSession.token, isNew: appSession.isNew === true, user: { email: appSession.user?.email || user.email, displayName: appSession.user?.displayName || fallbackName } }
+        ? {
+            token: appSession.token,
+            isNew: appSession.isNew === true,
+            user: Object.assign({}, appSession.user || {}, {
+              email: appSession.user?.email || user.email,
+              displayName: appSession.user?.displayName || fallbackName,
+            }),
+          }
         : { token: data.session.access_token, user: { email: user.email, displayName: fallbackName } };
       localStorage.setItem(SESSION_KEY, JSON.stringify(session));
       trackLandingEvent('oauth_succeeded');
