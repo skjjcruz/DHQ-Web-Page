@@ -1891,17 +1891,23 @@ window.addEventListener('DOMContentLoaded', function () {
       // Keep the WHOLE user record from fw-oauth-sync — id/tier/products
       // included. The app's shared client refuses account sessions without
       // user.id, so dropping the id here locked every Google sign-in to the
-      // free tier once gating went live.
-      const session = appSession?.token
-        ? {
-            token: appSession.token,
-            isNew: appSession.isNew === true,
-            user: Object.assign({}, appSession.user || {}, {
-              email: appSession.user?.email || user.email,
-              displayName: appSession.user?.displayName || fallbackName,
-            }),
-          }
-        : { token: data.session.access_token, user: { email: user.email, displayName: fallbackName } };
+      // free tier once gating went live. For the same reason, a failed sync
+      // must NOT fall back to storing the raw Supabase token: that recreates
+      // the exact id-less session shape that reads as free tier in the app.
+      // Better to surface the error and let the user retry.
+      if (!appSession?.token || !appSession?.user?.id) {
+        trackLandingEvent('oauth_sync_failed');
+        showAlert('error', 'Sign-in hit a snag finishing your account setup. Please try again in a moment.');
+        return;
+      }
+      const session = {
+        token: appSession.token,
+        isNew: appSession.isNew === true,
+        user: Object.assign({}, appSession.user, {
+          email: appSession.user.email || user.email,
+          displayName: appSession.user.displayName || fallbackName,
+        }),
+      };
       localStorage.setItem(SESSION_KEY, JSON.stringify(session));
       trackLandingEvent('oauth_succeeded');
       handOffToApp(session);
@@ -1933,18 +1939,63 @@ window.addEventListener('DOMContentLoaded', function () {
     try { history.replaceState(null, '', window.location.pathname); } catch {}
   })();
 
+  // Best-effort JWT expiry check (mirrors the app's shared client): true only
+  // when a decodable `exp` claim is in the past (30s skew).
+  function jwtExpired(token) {
+    try {
+      const part = String(token).split('.')[1];
+      if (!part) return false;
+      const claims = JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/')));
+      if (typeof claims?.exp !== 'number') return false;
+      return Date.now() >= claims.exp * 1000 - 30 * 1000;
+    } catch { return false; }
+  }
+
   // Already signed in on this origin (and not an OAuth return, which the
   // callback above handles): skip the pitch, go straight to the app.
-  (function checkSession() {
+  //
+  // A stored session is only handed off if it is healthy — token, user.id,
+  // not expired. Sessions saved during the Jul 9–11 sign-in bug lack user.id,
+  // and the app resolves those to the free tier; handing them off as-is kept
+  // affected accounts locked to Scout even after the sign-in fix shipped.
+  // Damaged-but-live sessions are repaired through fw-refresh-session first;
+  // unrepairable ones are cleared so the user simply signs in again.
+  (async function checkSession() {
     try {
       if (FORCE_SIGNOUT || STAY_HOME) return;
       const hash = window.location.hash || '';
       if (hash.indexOf('access_token=') !== -1 || /[?&]code=/.test(window.location.search)) return;
       const session = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
-      if (session?.token) {
+      if (!session?.token) return;
+      if (session.user?.id && !jwtExpired(session.token)) {
         trackLandingEvent('landing_existing_session_redirected');
         handOffToApp(session);
+        return;
       }
+      if (!jwtExpired(session.token)) {
+        try {
+          const res = await fetch(`${FW_API_BASE}/fw-refresh-session`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${session.token}`, 'apikey': FW_ANON_KEY },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.token && data?.user?.id) {
+              const repaired = { token: data.token, user: data.user };
+              localStorage.setItem(SESSION_KEY, JSON.stringify(repaired));
+              trackLandingEvent('landing_session_repaired');
+              handOffToApp(repaired);
+              return;
+            }
+          }
+        } catch {}
+      }
+      // Expired, or the server refused to re-mint it (e.g. the raw Supabase
+      // token the old failure fallback stored): clear it and show the normal
+      // sign-in. If a live Supabase OAuth session exists, handleOAuthCallback
+      // above re-syncs and hands off on its own.
+      localStorage.removeItem(SESSION_KEY);
+      trackLandingEvent('landing_dead_session_cleared');
     } catch {}
   })();
 
