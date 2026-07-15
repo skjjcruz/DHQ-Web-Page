@@ -746,7 +746,7 @@ body.editing .ed-del{opacity:.45;text-decoration:line-through;outline:1px dashed
       </div>
       <div class="tier__price"><span class="price-amt">$9.99</span><span class="price-per">/mo</span></div>
       <div class="tier__note tier__save" hidden>Billed $99.99/yr · ≈ $8.33/mo · save ~17%</div>
-      <ul><li>The full Dynasty HQ experience</li><li>DHQ Engine, Owner DNA, Follow-live draft</li><li>Deep GM-strategy customization</li><li>Alex Ingram, your AI GM.</li><li id="dhq-ai-calls">10 AI calls per-day</li></ul>
+      <ul><li>The full Dynasty HQ experience</li><li>DHQ Engine, Owner DNA, Follow-live draft</li><li>Deep GM-strategy customization</li><li>Alex Ingram, your AI GM.</li><li id="dhq-ai-calls">15 AI calls per-day</li></ul>
       <button class="btn btn--primary" onclick="document.getElementById('auth').scrollIntoView({behavior:'smooth'})">Go Pro</button>
     </div>
     <div class="tier">
@@ -766,7 +766,7 @@ body.editing .ed-del{opacity:.45;text-decoration:line-through;outline:1px dashed
     var yr=b.dataset.bill==='yr';
     if(amt)amt.textContent=yr?'$99.99':'$9.99';
     if(per)per.textContent=yr?'/yr':'/mo';
-    if(ai)ai.textContent=yr?'15 AI calls per-day':'10 AI calls per-day';
+    if(ai)ai.textContent='15 AI calls per-day';
     if(save)save.hidden=!yr;});
 })();
 </script>
