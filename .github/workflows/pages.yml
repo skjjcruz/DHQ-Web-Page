@@ -30,6 +30,29 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      # ── FIREWALL GATE (owner ruling 2026-07-21) ──────────────────────
+      # The marketing site is a pure brochure: it must NEVER contain auth,
+      # session, or database code. Sign-in lives exclusively on the app
+      # origin; marketing links there and nothing more. This gate fails the
+      # deploy if the firewall is ever breached — see the July 9-11 session
+      # poisoning incident for why this is load-bearing.
+      - name: Firewall gate — no auth/session/database code on marketing
+        run: |
+          set -euo pipefail
+          # (localStorage itself is allowed — the page's local copy-editor uses
+          # it for device-local content edits; the tokens below are the actual
+          # auth/session/database surface.)
+          FORBIDDEN='supabase|dhq_session|fw_session|createClient|FW_ANON|functions/v1|signInWith'
+          if grep -rInE "$FORBIDDEN" --include='*.html' --include='*.js' --exclude-dir=vendor . ; then
+            echo '::error::Firewall breach: marketing must not contain auth/session/database code. Sign-in belongs to the app origin only.'
+            exit 1
+          fi
+          if [ -f vendor/supabase.min.js ]; then
+            echo '::error::Firewall breach: vendor/supabase.min.js must not ship with the marketing site.'
+            exit 1
+          fi
+          echo 'Firewall intact: marketing is a pure brochure.'
+
       - name: Enable + configure Pages
         uses: actions/configure-pages@v5
         with:
