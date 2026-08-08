@@ -19,8 +19,9 @@
 name: Sync landing page from C2 idea lab
 
 on:
-  schedule:
-    - cron: '0 11 * * 1,4'   # Mon + Thu 11:00 UTC (~6am CT)
+  # Schedule removed 2026-08-08: the brochure is retired (index.html is now a
+  # redirect to dhqfootball.com), so merging lab edits would only reopen it.
+  # Manual dispatch stays available if the page is ever revived.
   workflow_dispatch:
 
 permissions:
