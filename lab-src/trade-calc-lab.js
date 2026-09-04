@@ -1420,10 +1420,93 @@
             return buildPicksByOwner(allRosters, tradedPicks, leagueSeason, tcDraftRounds, currentDraftComplete);
         }, [allRosters, tradedPicks, tcDraftRounds, currentDraftComplete]);
 
+        // ── LAB one brain (ratified spec 2026-09-04) ────────────────────
+        // The ledger loads here (moved above the assessments memo it feeds);
+        // WrLabOneBrain then computes the ruled team truth every lab surface
+        // reads: health = 60 pace + 25 starter quality + 15 draft picks,
+        // power = pace preseason / record-then-points in season, elites
+        // count as one, quality-starter-or-player only.
+        const [labModel, setLabModel] = useState({ ledger: null, intent: null });
+        useEffect(() => {
+            let dead = false;
+            // The currentLeague prop is DHQ-shaped (`.id`); the model modules
+            // want the raw Sleeper league object (league_id / season /
+            // previous_league_id / settings), so prefer the S-state entry and
+            // patch the prop's fields over it as a fallback.
+            const rawLg = (window.S?.leagues || []).find(l => String(l.league_id) === String(leagueId));
+            const labLeague = { ...(currentLeague || {}), ...(rawLg || {}), league_id: leagueId };
+            if (!leagueId || !labLeague?.scoring_settings || !allRosters.length || !window.WrLabPointsLedger) return undefined;
+            window._labDbg = { started: Date.now() };
+            window.WrLabPointsLedger.load({
+                league: labLeague,
+                rosters: allRosters,
+                posOf: pid => playerAsset(pid)?.pos || null,
+            }).then(ledger => {
+                if (dead) return;
+                window._labDbg.ledger = Date.now();
+                setLabModel(m => ({ ...m, ledger }));
+                if (window.WrLabIntentReads) {
+                    window.WrLabIntentReads.read({ league: labLeague, rosters: allRosters, ledger })
+                        .then(intent => { if (!dead) { window._labDbg.intent = Date.now(); setLabModel(m => ({ ...m, intent })); } })
+                        .catch(e => { window._labDbg.intentErr = String(e); if (window.wrLog) window.wrLog('lab.intent', e); });
+                }
+            }).catch(e => { window._labDbg.ledgerErr = String(e); if (window.wrLog) window.wrLog('lab.ledger', e); });
+            return () => { dead = true; };
+        }, [leagueId, allRosters.length]);
+
+        const labBrain = useMemo(() => {
+            if (!labModel.ledger || !allRosters.length || !window.WrLabOneBrain) return null;
+            const rawLg = (window.S?.leagues || []).find(l => String(l.league_id) === String(leagueId));
+            const labLeague = { ...(currentLeague || {}), ...(rawLg || {}), league_id: leagueId };
+            try {
+                const brain = window.WrLabOneBrain.compute({
+                    ledger: labModel.ledger,
+                    leagueInfo: labLeague,
+                    rosters: allRosters,
+                    posOf: pid => playersData?.[pid]?.position || null,
+                    picksByOwner,
+                });
+                window._labDbg && (window._labDbg.brain = Date.now());
+                return brain;
+            } catch (e) { if (window.wrLog) window.wrLog('lab.brain', e); return null; }
+        }, [labModel.ledger, allRosters, playersData, picksByOwner]);
+
         const assessments = useMemo(() => {
             if (!allRosters.length || !Object.keys(playersData).length) return [];
-            return allRosters.map(r => assessTeamLocal(r)).filter(Boolean);
-        }, [allRosters, playersData, statsData, picksByOwner, timeRecomputeTs, leagueDraftRounds, currentDraftComplete]);
+            return allRosters.map(r => {
+                const a = assessTeamLocal(r);
+                if (!a) return null;
+                const ob = labBrain?.byRosterId?.[String(r.roster_id)];
+                if (!ob) return a;
+                // Overlay the one brain's ruled fields on the app assessment.
+                // Fields the rulings didn't touch (panic, DNA inputs, record)
+                // stay exactly as the app computed them.
+                const needs = ob.needs.map(n => ({
+                    ...((a.needs || []).find(x => x.pos === n.pos) || {}),
+                    pos: n.pos, urgency: n.urgency, have: n.have, need: n.need,
+                }));
+                const strengths = ob.strengths.map(s => s.pos);
+                const posAssessment = { ...(a.posAssessment || {}) };
+                Object.keys(labBrain.template).forEach(pos => {
+                    const st = ob.qualityCount[pos] < labBrain.template[pos] ? 'need'
+                        : ob.qualityCount[pos] > labBrain.template[pos] ? 'surplus' : 'ok';
+                    posAssessment[pos] = { ...(posAssessment[pos] || {}), status: st };
+                });
+                const brainWindow = (ob.tier === 'ELITE' || ob.tier === 'CONTENDER') ? 'CONTENDING'
+                    : ob.tier === 'REBUILDING' ? 'REBUILDING' : 'TRANSITIONING';
+                return {
+                    ...a,
+                    healthScore: ob.health,
+                    tier: ob.tier, tierColor: ob.tierColor, tierBg: ob.tierBg,
+                    window: brainWindow,
+                    weeklyPts: ob.weeklyPts,
+                    targetPts: ob.barTotal,
+                    powerScore: ob.powerScore, powerRank: ob.powerRank,
+                    needs, strengths, posAssessment,
+                    oneBrain: ob,
+                };
+            }).filter(Boolean);
+        }, [allRosters, playersData, statsData, picksByOwner, timeRecomputeTs, leagueDraftRounds, currentDraftComplete, labBrain]);
 
         const myRosterId = myRoster?.roster_id;
         const rosterState = window.App?.getRosterDataState?.({ roster: myRoster, currentLeague, rosters: allRosters, leagueSkin: resolvedLeagueSkin }) || { isUsable: true };
@@ -1492,7 +1575,10 @@
         const sortedAssessments = useMemo(() => {
             let list = [...assessments];
             if (tierFilter !== 'ALL') list = list.filter(a => a.tier === tierFilter);
-            if (sortMode === 'health') list.sort((a,b) => b.healthScore - a.healthScore);
+            // LAB: the owners list is labeled "sorted by power" — under the one
+            // brain that means the ruled power rank (pace preseason, record +
+            // points in season), with health as the tiebreak.
+            if (sortMode === 'health') list.sort((a,b) => (a.powerRank || 99) - (b.powerRank || 99) || b.healthScore - a.healthScore);
             else if (sortMode === 'panic') list.sort((a,b) => b.panic - a.panic);
             else if (sortMode === 'record') list.sort((a,b) => b.wins - a.wins || b.pf - a.pf);
             return list;
@@ -1740,33 +1826,9 @@
         // leaves the piece null and every consumer falls back to exact b98
         // behavior — the board must never go empty because a feed hiccuped
         // (owner ruling: a populated board beats a perfect empty one).
-        const [labModel, setLabModel] = useState({ ledger: null, intent: null });
-        useEffect(() => {
-            let dead = false;
-            // The currentLeague prop is DHQ-shaped (`.id`); the model modules
-            // want the raw Sleeper league object (league_id / season /
-            // previous_league_id / settings), so prefer the S-state entry and
-            // patch the prop's fields over it as a fallback.
-            const rawLg = (window.S?.leagues || []).find(l => String(l.league_id) === String(leagueId));
-            const labLeague = { ...(currentLeague || {}), ...(rawLg || {}), league_id: leagueId };
-            if (!leagueId || !labLeague?.scoring_settings || !allRosters.length || !window.WrLabPointsLedger) return undefined;
-            window._labDbg = { started: Date.now() };
-            window.WrLabPointsLedger.load({
-                league: labLeague,
-                rosters: allRosters,
-                posOf: pid => playerAsset(pid)?.pos || null,
-            }).then(ledger => {
-                if (dead) return;
-                window._labDbg.ledger = Date.now();
-                setLabModel(m => ({ ...m, ledger }));
-                if (window.WrLabIntentReads) {
-                    window.WrLabIntentReads.read({ league: labLeague, rosters: allRosters, ledger })
-                        .then(intent => { if (!dead) { window._labDbg.intent = Date.now(); setLabModel(m => ({ ...m, intent })); } })
-                        .catch(e => { window._labDbg.intentErr = String(e); if (window.wrLog) window.wrLog('lab.intent', e); });
-                }
-            }).catch(e => { window._labDbg.ledgerErr = String(e); if (window.wrLog) window.wrLog('lab.ledger', e); });
-            return () => { dead = true; };
-        }, [leagueId, allRosters.length]);
+        // LAB one brain: labModel + the ledger load moved ABOVE the assessments
+        // memo (they now feed it). The state lives up there; the Why helpers
+        // below keep reading the same labModel.
 
         // LAB: two-line Whys in pace language (owner rulings: the Why is the
         // championship pace; two short lines max; relative rank, never absolute
