@@ -1792,6 +1792,62 @@
             });
             return best;
         }
+
+        // LAB3: age discounts the lift (thesis Pillar 1, shelf-life). A 34-year-
+        // old's projection is real THIS season and gone the next — the board
+        // stopped chasing Adams/Clowney types once lift carried an age haircut.
+        function labAgeFactor(p) {
+            // Asset objects don't always carry age — resolve from the player
+            // database (the gap that let a 33-year-old through the wall).
+            const age = Number(p?.age != null ? p.age : playersData?.[p?.pid]?.age) || 0;
+            if (!age) return 1;
+            const pos = p?.pos;
+            if (pos === 'QB') return age >= 38 ? 0.6 : 1;
+            if (pos === 'RB') return age >= 30 ? 0.25 : age >= 28 ? 0.5 : 1;
+            // WR/TE/K and all IDP age on roughly the same cliff.
+            return age >= 33 ? 0.15 : age >= 32 ? 0.25 : age >= 30 ? 0.5 : 1;
+        }
+        function labEffLift(p) {
+            const li = labLiftInfo(p);
+            return { lift: li.lift * labAgeFactor(p), group: li.group, rawLift: li.lift };
+        }
+
+        // LAB3: what my lineup LOSES when a starter walks — his PPG minus the
+        // best bench replacement eligible for his group. Bench pieces cost 0.
+        function labGiveLoss(p) {
+            const led = labModel.ledger;
+            const my = led?.teams?.[myRosterId];
+            if (!my || !led.playersPpg || !p?.pid) return 0;
+            const pid = String(p.pid);
+            if (!(my.starterPids || []).includes(pid)) return 0;
+            const gpos = window.WrLabPointsLedger?.GROUP_POSITIONS || {};
+            // Which group does he start in?
+            let group = null;
+            Object.keys(my.starters || {}).forEach(g => {
+                if ((my.starters[g] || []).some(s => s.pid === pid)) group = g;
+            });
+            if (!group) return 0;
+            const ppg = led.playersPpg[pid] || 0;
+            // Best bench replacement eligible for that group, from my roster.
+            const myRosterObjL = allRosters.find(r => r.roster_id === myRosterId);
+            let replacement = 0;
+            [...(myRosterObjL?.players || [])].map(String).forEach(bpid => {
+                if ((my.starterPids || []).includes(bpid)) return;
+                const bp = playerAsset(bpid);
+                if (!bp || !(gpos[group] || []).includes(bp.pos)) return;
+                replacement = Math.max(replacement, led.playersPpg[bpid] || 0);
+            });
+            return Math.max(0, ppg - replacement);
+        }
+
+        // LAB3: the deal's NET effect on my lineup — what comes in minus what
+        // walks out. The board's original sin was counting only the incoming
+        // half (Garrett-plus-cash for a linebacker "helped" the LB slot).
+        function labNetDelta(givePlayers, receivePlayers) {
+            const inLift = (receivePlayers || []).reduce((s, p) => s + labEffLift(p).lift, 0);
+            const outLoss = (givePlayers || []).reduce((s, p) => s + labGiveLoss(p), 0);
+            return inLift - outLoss;
+        }
         function labWhyForDeal(partner, input) {
             const led = labModel.ledger;
             const my = led?.teams?.[myRosterId];
@@ -1803,7 +1859,7 @@
             // LAB v2: consolidation cards get their own two lines — the roster
             // spot is the story, and the partner's read flavors the accept.
             if (input.type === 'Consolidation' && recv.length === 1 && give.length === 2) {
-                const li = labLiftInfo(recv[0]);
+                const li = labEffLift(recv[0]);
                 const readC = labModel.intent?.byRosterId?.[partner.rosterId];
                 const youC = li.group
                     ? `Two-for-one: ${recv[0].name} raises your ${gl[li.group] || li.group} and frees a roster spot.`
@@ -1954,7 +2010,7 @@
             const fairValueBonus = Math.max(0, 18 - Math.abs(userGainPct) * 55);
             // LAB v2: a deal that raises my actual starting lineup outranks a
             // pure value swap; consolidation gets a nudge for freeing a spot.
-            const labLiftBonus = Math.min(30, (deal.receivePlayers || []).reduce((s, p) => s + labLiftInfo(p).lift, 0) * 6);
+            const labLiftBonus = Math.min(30, (deal.receivePlayers || []).reduce((s, p) => s + labEffLift(p).lift, 0) * 6);
             const labConsolidationBonus = deal.type === 'Consolidation' ? 6 : 0;
             return Math.round(
                 deal.likelihood * 1.4
@@ -2220,6 +2276,48 @@
 
         function addCandidate(candidates, partner, input) {
             if (crossClassUnrealistic(input)) return;
+            // LAB3 deal-sanity gate. Picks COUNT in the math now — a mid
+            // pick riding along no longer smuggles a bad swap past the rules
+            // (Garrett-for-a-safety "plus a 4th" is still Garrett for a safety).
+            if (labModel.ledger && (input.givePlayers || []).length) {
+                const rPl = input.receivePlayers || [], gPl = input.givePlayers || [];
+                const rPk = input.receivePicks || [], gPk = input.givePicks || [];
+                const inVal = rPl.reduce((t, p) => t + (p.value || 0), 0) + rPk.reduce((t, p) => t + (p.value || 0), 0) + (input.receiveFaab || 0);
+                const outVal = gPl.reduce((t, p) => t + (p.value || 0), 0) + gPk.reduce((t, p) => t + (p.value || 0), 0) + (input.giveFaab || 0);
+                const clearValueWin = inVal > outVal * 1.15;
+                const bestGive = Math.max(0, ...gPl.map(p => p.value || 0));
+                const bestRecvPlayer = Math.max(0, ...rPl.map(p => p.value || 0));
+                const bestRecvPick = Math.max(0, ...rPk.map(p => p.value || 0));
+                if (!clearValueWin) {
+                    if (rPl.length) {
+                        // Shelf-life rule (thesis Pillar 1): at fair price the
+                        // incoming side must include somebody with a future.
+                        // Kills every "two pieces for a 33-year-old" variant,
+                        // whichever lane built it.
+                        if (rPl.every(p => p.pos !== 'QB' && labAgeFactor(p) <= 0.25)) return;
+                        // Star parity: the incoming headliner (player or a
+                        // premium pick) must be in my best piece's class.
+                        const headliner = Math.max(bestRecvPlayer, bestRecvPick);
+                        if (bestGive >= 2500 && headliner < bestGive * 0.9) return;
+                        // Elite law: an elite piece only moves for near-elite
+                        // return — lineup math never justifies Garrett for a
+                        // good safety, whatever the spreadsheet says.
+                        if (bestGive >= 3400 && Math.max(bestRecvPlayer, bestRecvPick) < bestGive * 0.95) return;
+                        // Superflex law: a startable QB never leaves without a
+                        // QB or a premium pick coming back.
+                        const qbOut = gPl.some(p => p.pos === 'QB' && (p.value || 0) >= 1500);
+                        const qbBack = rPl.some(p => p.pos === 'QB') || bestRecvPick >= 1000;
+                        if (qbOut && !qbBack) return;
+                        // FAAB on top of a swap demands a substantial gain.
+                        const need = (input.giveFaab || 0) > 0 ? 2.0 : 0.5;
+                        if (labNetDelta(gPl, rPl) < need) return;
+                    } else if (bestGive >= 3400 && bestRecvPick < 1000) {
+                        // Selling an elite for change — only a premium pick
+                        // headline makes that a real conversation.
+                        return;
+                    }
+                }
+            }
             // Startable-QB packages must satisfy the owner's composition
             // rules (1sts / QB swaps / elite pieces / multi-starter bundles).
             if (qbTradeRules && qbTradeRules.violates(input)) return;
@@ -2361,7 +2459,7 @@
                     if (mode === 'fillNeed') return effectiveNeedPos.length ? effectiveNeedPos.includes(p.pos) : true;
                     if (mode === 'acquire') return priPos.length || tuning.targetPositions.size ? effectiveNeedPos.includes(p.pos) : true;
                     return true;
-                }).sort((a, b) => labLiftInfo(b).lift - labLiftInfo(a).lift || (b.value || 0) - (a.value || 0)).slice(0, 12);
+                }).sort((a, b) => labEffLift(b).lift - labEffLift(a).lift || (b.value || 0) - (a.value || 0)).slice(0, 12);
             const shopPool = focusAsset && myPlayerIds.has(String(focusPid)) && !isUntouchableAsset(focusAsset, tuning)
                 ? [focusAsset]
                 : myPlayers.filter(p => {
@@ -2550,7 +2648,14 @@
                     return (b.value || 0) - (a.value || 0);
                 };
                 const givePool = (myChips.length ? myChips : myPlayers).slice().sort(labBenchFirst);
-                targetPool.slice(0, 8).forEach(target => addAcquireTarget(target, givePool, myPicks));
+                // LAB3: never pay with a bigger star than the player coming
+                // back — Garrett can't be change for a linebacker. Per target,
+                // payment pieces are capped near the target's own value; if
+                // nothing fits, picks do the talking.
+                targetPool.slice(0, 8).forEach(target => {
+                    const tvCap = ((target.value || 0)) * 1.05;
+                    addAcquireTarget(target, givePool.filter(p => (p.value || 0) <= tvCap), myPicks);
+                });
                 // LAB v2 consolidation lane: two of my bench pieces for one
                 // player who genuinely upgrades a starting slot. The price
                 // carries a quantity premium — the partner is absorbing a
@@ -2559,20 +2664,26 @@
                 if (labMy && labModel.ledger?.playersPpg) {
                     const bench = givePool.filter(p => !(labMy.starterPids || []).includes(String(p.pid)));
                     theirPlayers
-                        .map(p => ({ p, li: labLiftInfo(p) }))
-                        .filter(x => x.li.lift >= 1.5)
+                        .filter(p => p.pos === 'QB' || !(Number(p.age != null ? p.age : playersData?.[p.pid]?.age) >= 31))
+                        .map(p => ({ p, li: labEffLift(p) }))
+                        .filter(x => x.li.lift >= 2.5)
                         .sort((a, b) => b.li.lift - a.li.lift)
                         .slice(0, 4)
                         .forEach(({ p: target }) => {
-                            const tv = target.market ?? target.value ?? 0;
+                            // LAB3: price on RAW value — the partner values his
+                            // starter at sticker, not at the IDP trade discount
+                            // (junk was "affording" Hendrickson at market).
+                            const tv = target.value ?? 0;
                             if (tv <= 0) return;
                             const lo = tv * 1.02, hi = tv * (1.25 + aggression * 0.15);
                             let best = null;
-                            const n = Math.min(bench.length, 14);
+                            // Real pieces only — no throw-ins under 350.
+                            const cred = bench.filter(p => (p.value || 0) >= 350);
+                            const n = Math.min(cred.length, 14);
                             for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
-                                const sum = (bench[i].value || 0) + (bench[j].value || 0);
+                                const sum = (cred[i].value || 0) + (cred[j].value || 0);
                                 if (sum < lo || sum > hi) continue;
-                                if (!best || sum < best.sum) best = { a: bench[i], b: bench[j], sum };
+                                if (!best || sum < best.sum) best = { a: cred[i], b: cred[j], sum };
                             }
                             if (!best) return;
                             addCandidate(candidates, partner, {
@@ -2583,7 +2694,11 @@
                         });
                 }
                 if (candidates.length < 3) {
-                    theirPlayers.slice(0, 14).forEach(target => addAcquireTarget(target, myPlayers, myPicks.length ? myPicks : allMyPicks, 'Fallback board: '));
+                    // LAB3: the fallback board shops by lift too — raw value
+                    // order made a thin partner's aging headliner the default
+                    // target (the Davante Adams fossil).
+                    theirPlayers.slice().sort((a, b) => labEffLift(b).lift - labEffLift(a).lift || (b.value || 0) - (a.value || 0))
+                        .slice(0, 14).forEach(target => addAcquireTarget(target, myPlayers, myPicks.length ? myPicks : allMyPicks, 'Fallback board: '));
                 }
             } else if (mode === 'shop' || mode === 'sellSurplus' || mode === 'picks') {
                 shopPool.slice(0, 8).forEach(asset => addShopAsset(asset, theirPlayers, theirPicks));
