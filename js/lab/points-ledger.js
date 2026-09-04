@@ -105,12 +105,23 @@
             }
 
             var teams = {};
+            var playersPpg = {}; // LAB v2: every rostered player's projected PPG
             rosters.forEach(function (r) {
                 var pool = (r.players || []).map(function (pid) {
-                    return { pid: String(pid), pos: normPos(posOf(pid)), ppg: ppgOf(pid) };
+                    var p = { pid: String(pid), pos: normPos(posOf(pid)), ppg: ppgOf(pid) };
+                    playersPpg[p.pid] = Math.round(p.ppg * 100) / 100;
+                    return p;
                 }).sort(function (a, b) { return b.ppg - a.ppg; });
+                // LAB v2: keep the fill itself — which player sits in which
+                // group — so the finder can reason about slot upgrades and
+                // 2-for-1 consolidation (weakest starter per group, bench).
+                var starters = {};
                 var taken = {}, groupPts = {};
-                var add = function (g, p) { taken[p.pid] = 1; groupPts[g] = (groupPts[g] || 0) + p.ppg; };
+                var add = function (g, p) {
+                    taken[p.pid] = 1;
+                    groupPts[g] = (groupPts[g] || 0) + p.ppg;
+                    (starters[g] = starters[g] || []).push({ pid: p.pid, pos: p.pos, ppg: Math.round(p.ppg * 100) / 100 });
+                };
                 Object.keys(shape.dedicated).forEach(function (pos) {
                     var need = shape.dedicated[pos];
                     for (var i = 0; i < pool.length && need > 0; i++) {
@@ -127,7 +138,19 @@
                 fill(shape.idpN, IDP_OK, 'IDP');
                 var total = 0;
                 Object.keys(groupPts).forEach(function (g) { total += groupPts[g]; });
-                teams[r.roster_id] = { rosterId: r.roster_id, groupPts: groupPts, total: total };
+                // LAB v2: weakest starter per group (the slot a trade would
+                // upgrade) and the full starter pid set (everything else on
+                // the roster is bench — consolidation currency).
+                var weakest = {};
+                Object.keys(starters).forEach(function (g) {
+                    var w = starters[g].reduce(function (a, b) { return (b.ppg < a.ppg ? b : a); });
+                    weakest[g] = w;
+                });
+                teams[r.roster_id] = {
+                    rosterId: r.roster_id, groupPts: groupPts, total: total,
+                    starters: starters, weakestStarter: weakest,
+                    starterPids: Object.keys(taken),
+                };
             });
 
             var groups = Object.keys(BARS).filter(function (g) {
@@ -169,6 +192,7 @@
             return {
                 season: season, bars: BARS, barTotal: barTotal, groups: groups,
                 teams: teams, leagueAvg: leagueAvg, teamCount: n,
+                playersPpg: playersPpg, // LAB v2
             };
         }).catch(function (e) {
             delete _cache[key]; // a failed load must not poison the session
