@@ -10,11 +10,13 @@
         var u = ((a && (a.sleeperUsername || a.username)) || '').toLowerCase();
         if (u !== 'skjjcruz' && u !== 'bigloco') {
           document.documentElement.style.display = 'none';
-          window.location.replace('index.html');
+          // No login on THIS site yet: the owner signs in here once (logins
+          // don't cross sites). A signed-in non-owner goes to the redirect.
+          window.location.replace(u ? 'index.html' : 'login.html?next=trade-lab.html');
         }
       } catch (e) {
         document.documentElement.style.display = 'none';
-        window.location.replace('index.html');
+        window.location.replace('login.html?next=trade-lab.html');
       }
     })();
     </script>

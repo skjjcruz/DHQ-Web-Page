@@ -307,7 +307,7 @@
     try {
         const existingSession = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
         if (existingSession?.token && jwtIsUnexpired(existingSession.token)) {
-            window.location.href = 'index.html';
+            window.location.href = (new URLSearchParams(window.location.search).get('next') === 'trade-lab.html') ? 'trade-lab.html' : 'index.html';
         }
     } catch (e) {
         localStorage.removeItem(SESSION_KEY);
@@ -336,7 +336,7 @@
                     const session = await window.OD.acquireSessionToken(username, password);
                     if (session?.token) {
                         storeSession(session, username);
-                        window.location.href = 'index.html';
+                        window.location.href = (new URLSearchParams(window.location.search).get('next') === 'trade-lab.html') ? 'trade-lab.html' : 'index.html';
                     } else {
                         showError('This legacy login now requires a password-backed gifted account. Use email sign-in for Dynasty HQ accounts.');
                     }
@@ -365,7 +365,7 @@
                 }));
                 storeSession(session, username);
                 localStorage.setItem('od_locked_username_v2', username);
-                window.location.href = 'index.html';
+                window.location.href = (new URLSearchParams(window.location.search).get('next') === 'trade-lab.html') ? 'trade-lab.html' : 'index.html';
                 return;
             }
         } catch {}
