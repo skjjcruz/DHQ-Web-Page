@@ -8,11 +8,14 @@
 // — the paper-run backtest held a 95%+ win rate above the total.
 //
 // Every roster is optimal-filled into the league's real starting slots
-// using Sleeper season projections scored under the LEAGUE'S OWN
-// scoring settings (fallback: last season's actuals per game played).
-// Projections run cooler than realized lineups, so consumers speak in
-// RELATIVE terms (percent of bar, rank vs the league) — never absolute
-// point gaps (owner ruling: relative, not absolute).
+// using Sleeper WEEKLY projections scored under the LEAGUE'S OWN
+// scoring settings, on a PER-GAME basis (fallback: last season's
+// actuals per game played). v3 (owner rulings 2026-09-04): the weekly
+// feeds are what Sleeper's app itself displays — the season-total feed
+// disagrees with them (badly on IDP) — and dividing by games projected
+// instead of 17 stops bye weeks from diluting the pace. Consumers still
+// speak in RELATIVE terms (percent of bar, rank vs the league) — never
+// absolute point gaps (owner ruling: relative, not absolute).
 //
 // Loaded only by trade-lab.html. Nothing in production references it.
 // ══════════════════════════════════════════════════════════════════
@@ -91,14 +94,37 @@
         var posOf = ctx.posOf || function () { return null; };
         var shape = slotShape(league.roster_positions);
 
+        // v3: the 18 weekly feeds, not the season-total one. Sleeper's own
+        // app scores the weekly feeds under the league's settings, so this is
+        // the only source that matches what the owner sees inside Sleeper.
+        var weekReqs = [];
+        for (var w = 1; w <= 18; w++) {
+            weekReqs.push(
+                fetchJson('https://api.sleeper.app/v1/projections/nfl/regular/' + season + '/' + w)
+                    .catch(function () { return {}; }) // a missing week never sinks the load
+            );
+        }
         _cache[key] = Promise.all([
-            fetchJson('https://api.sleeper.app/v1/projections/nfl/regular/' + season),
+            Promise.all(weekReqs),
             fetchJson('https://api.sleeper.app/v1/stats/nfl/regular/' + (season - 1)).catch(function () { return {}; }),
         ]).then(function (feeds) {
-            var proj = feeds[0] || {}, prev = feeds[1] || {};
+            var weeks = feeds[0] || [], prev = feeds[1] || {};
+            // Per player: total projected points across the season and the
+            // number of weeks with a real game projection (bye weeks project
+            // zero, so per-game pace is total ÷ projected games — the ruled
+            // per-game basis).
+            var wkAgg = {};
+            weeks.forEach(function (wk) {
+                for (var pid in wk) {
+                    var pts = scoreStats(wk[pid], scoring);
+                    if (pts <= 0) continue;
+                    var a = wkAgg[pid] || (wkAgg[pid] = { total: 0, games: 0 });
+                    a.total += pts; a.games++;
+                }
+            });
             function ppgOf(pid) {
-                var pr = proj[pid];
-                if (pr) { var t = scoreStats(pr, scoring); if (t > 0) return t / 17; }
+                var a = wkAgg[pid];
+                if (a && a.games) return a.total / a.games;
                 var st = prev[pid];
                 if (st && st.gp) return scoreStats(st, scoring) / st.gp;
                 return 0;
