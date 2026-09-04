@@ -2,22 +2,46 @@
 
 <html lang="en">
 <head>
-    <!-- TRADE LAB GATE: this page renders only for the owner's logins. -->
+    <!-- TRADE LAB GATE v3 (owner ruling 2026-09-04): fully self-contained.
+         No logins borrowed from the product, no redirect anywhere — an access
+         code checked in-page. The right code seeds the lab's own session (the
+         same state the E2E rig proved boots the whole app) and renders; a
+         wrong code or cancel leaves a dead blank page. -->
     <script>
     (function () {
-      try {
-        var a = JSON.parse(localStorage.getItem('od_auth_v1') || 'null');
-        var u = ((a && (a.sleeperUsername || a.username)) || '').toLowerCase();
-        if (u !== 'skjjcruz' && u !== 'bigloco') {
-          document.documentElement.style.display = 'none';
-          // No login on THIS site yet: the owner signs in here once (logins
-          // don't cross sites). A signed-in non-owner goes to the redirect.
-          window.location.replace(u ? 'index.html' : 'login.html?next=trade-lab.html');
-        }
-      } catch (e) {
-        document.documentElement.style.display = 'none';
-        window.location.replace('login.html?next=trade-lab.html');
+      var KEY = 'dhq_lab_key_v1';
+      var HASH = '4bec0353049853786947cbffcb0189c6adbb926c584e9e2d9f58f54963be85bf';
+      function seed() {
+        try {
+          if (!localStorage.getItem('od_auth_v1')) localStorage.setItem('od_auth_v1', JSON.stringify({ username: 'skjjcruz', sleeperUsername: 'skjjcruz' }));
+          if (!localStorage.getItem('dynastyhq_username')) localStorage.setItem('dynastyhq_username', 'skjjcruz');
+          localStorage.setItem('wr_guest_v1', '1');
+        } catch (e) {}
       }
+      var have = null;
+      try { have = localStorage.getItem(KEY); } catch (e) {}
+      if (have === HASH) { seed(); return; } // unlocked on this device — render
+      // Locked: stop the app cold (no further loading), then ask for the code.
+      document.documentElement.style.display = 'none';
+      try { window.stop(); } catch (e) {}
+      function sha256hex(str) {
+        var data = new TextEncoder().encode(str);
+        return crypto.subtle.digest('SHA-256', data).then(function (buf) {
+          return Array.prototype.map.call(new Uint8Array(buf), function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+        });
+      }
+      function ask(triesLeft) {
+        var v = prompt('Access code');
+        if (v == null || !triesLeft) { document.title = ''; return; } // dead end, no navigation
+        sha256hex(v.trim()).then(function (h) {
+          if (h === HASH) {
+            try { localStorage.setItem(KEY, HASH); } catch (e) {}
+            seed();
+            location.reload();
+          } else { ask(triesLeft - 1); }
+        }).catch(function () { document.title = ''; });
+      }
+      if (window.crypto && crypto.subtle) setTimeout(function () { ask(4); }, 50);
     })();
     </script>
     <meta charset="UTF-8">
