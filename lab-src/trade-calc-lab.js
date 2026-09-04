@@ -1840,6 +1840,55 @@
             return Math.max(0, ppg - replacement);
         }
 
+        // LAB4 — the roster-shape law (thesis: Ideal Active Roster
+        // Composition). Points say how GOOD a group is; counts say whether
+        // it's SHORT or STACKED. A shortage position never pays for a trade,
+        // and a surplus position is never bought into — its fix is
+        // two-for-one within the position (fewer bodies, better starter).
+        const LAB_IDEAL_IDP_SF = { QB: 3, RB: 7, WR: 7, TE: 4, K: 2, DL: 7, LB: 6, DB: 6 };
+        function labComposition() {
+            if (!labModel.ledger) return null;
+            const rp = currentLeague?.roster_positions || [];
+            const hasIdp = rp.some(sl => ['DL', 'LB', 'DB', 'IDP_FLEX', 'IDP'].includes(sl));
+            const hasSf = rp.includes('SUPER_FLEX') || rp.includes('OP');
+            if (!hasIdp || !hasSf) return null; // thesis table is for this format; other formats stay lawless for now
+            const myR = allRosters.find(r => r.roster_id === myRosterId);
+            const counts = {};
+            [...(myR?.players || [])].forEach(pid => { const a = playerAsset(pid); if (a?.pos) counts[a.pos] = (counts[a.pos] || 0) + 1; });
+            const shortage = new Set(), surplus = new Set();
+            Object.keys(LAB_IDEAL_IDP_SF).forEach(pos => {
+                const c = counts[pos] || 0;
+                if (c < LAB_IDEAL_IDP_SF[pos]) shortage.add(pos);
+                else if (c > LAB_IDEAL_IDP_SF[pos]) surplus.add(pos);
+            });
+            return { counts, ideal: LAB_IDEAL_IDP_SF, shortage, surplus };
+        }
+
+        // LAB4 — a rebuilding owner does not sell his young building blocks
+        // for ordinary capital (walked trade 2026-09-04: a star rookie TE for
+        // a bare 3rd). Their eyes are on the future — these ARE the future.
+        function labUntouchableForPartner(partner, p) {
+            const read = labModel.intent?.byRosterId?.[partner?.rosterId];
+            if (read?.cls !== 'rebuilding') return false;
+            const age = Number(p?.age != null ? p.age : playersData?.[p?.pid]?.age) || 99;
+            if (age > 24) return false;
+            const ppg = labModel.ledger?.playersPpg?.[String(p?.pid)] || 0;
+            let role = null;
+            try { role = window.App?.NflRoles?.starterRole?.(playersData?.[p.pid]); } catch (e) { }
+            return !!role || ppg >= 8;
+        }
+
+        // LAB4 — fringe players are not currency (owner walk-through
+        // 2026-09-04: "Vidal is a backup and Carter is on a practice squad").
+        // No NFL role + negligible projection = no human trades for you,
+        // whatever the sticker value says. Not payment, not a target.
+        function labIsFringe(p) {
+            if (!p?.pid) return false;
+            if ((p.value || 0) >= 1500) return false;
+            try { if (window.App?.NflRoles?.starterRole?.(playersData?.[p.pid])) return false; } catch (e) { }
+            return (labModel.ledger?.playersPpg?.[String(p.pid)] || 0) < 6;
+        }
+
         // LAB3: the deal's NET effect on my lineup — what comes in minus what
         // walks out. The board's original sin was counting only the incoming
         // half (Garrett-plus-cash for a linebacker "helped" the LB slot).
@@ -2279,7 +2328,7 @@
             // LAB3 deal-sanity gate. Picks COUNT in the math now — a mid
             // pick riding along no longer smuggles a bad swap past the rules
             // (Garrett-for-a-safety "plus a 4th" is still Garrett for a safety).
-            if (labModel.ledger && (input.givePlayers || []).length) {
+            if (labModel.ledger && ((input.givePlayers || []).length || ((input.givePicks || []).length && (input.receivePlayers || []).length))) {
                 const rPl = input.receivePlayers || [], gPl = input.givePlayers || [];
                 const rPk = input.receivePicks || [], gPk = input.givePicks || [];
                 const inVal = rPl.reduce((t, p) => t + (p.value || 0), 0) + rPk.reduce((t, p) => t + (p.value || 0), 0) + (input.receiveFaab || 0);
@@ -2639,6 +2688,9 @@
                 // LAB v2: payment comes from what I can spare — bench pieces
                 // (outside my optimal lineup) lead, then chips from groups I
                 // already win. Starters in thin groups pay last.
+                const labComp = labComposition();
+                // LAB4 give law: fringe bodies and shortage positions never pay.
+                const labGiveOk = p => !labIsFringe(p) && !(labComp?.shortage?.has(p.pos));
                 const labMy = labModel.ledger?.teams?.[myRosterId];
                 const labBenchFirst = (a, b) => {
                     const sp = labMy?.starterPids || [];
@@ -2647,12 +2699,15 @@
                     if (aB !== bB) return aB - bB; // bench (0) before starters (1)
                     return (b.value || 0) - (a.value || 0);
                 };
-                const givePool = (myChips.length ? myChips : myPlayers).slice().sort(labBenchFirst);
+                const givePool = (myChips.length ? myChips : myPlayers).filter(labGiveOk).sort(labBenchFirst);
                 // LAB3: never pay with a bigger star than the player coming
                 // back — Garrett can't be change for a linebacker. Per target,
                 // payment pieces are capped near the target's own value; if
                 // nothing fits, picks do the talking.
-                targetPool.slice(0, 8).forEach(target => {
+                // LAB4 buy law: no fringe targets, and no buying MORE bodies
+                // at a position I'm already stacked at — that group's fix is
+                // the same-position two-for-one below.
+                targetPool.filter(t => t.pos !== 'K' && !labIsFringe(t) && !(labComp?.surplus?.has(t.pos)) && !labUntouchableForPartner(partner, t)).slice(0, 8).forEach(target => {
                     const tvCap = ((target.value || 0)) * 1.05;
                     addAcquireTarget(target, givePool.filter(p => (p.value || 0) <= tvCap), myPicks);
                 });
@@ -2664,21 +2719,29 @@
                 if (labMy && labModel.ledger?.playersPpg) {
                     const bench = givePool.filter(p => !(labMy.starterPids || []).includes(String(p.pid)));
                     theirPlayers
+                        .filter(p => p.pos !== 'K' && !labIsFringe(p) && !labUntouchableForPartner(partner, p))
                         .filter(p => p.pos === 'QB' || !(Number(p.age != null ? p.age : playersData?.[p.pid]?.age) >= 31))
                         .map(p => ({ p, li: labEffLift(p) }))
                         .filter(x => x.li.lift >= 2.5)
                         .sort((a, b) => b.li.lift - a.li.lift)
-                        .slice(0, 4)
+                        .slice(0, 6)
                         .forEach(({ p: target }) => {
+                            // LAB4: at a surplus position the ONLY legal buy is
+                            // the same-position two-for-one — count goes down,
+                            // the starter gets better (the LB-room play).
+                            const samePosOnly = labComp?.surplus?.has(target.pos);
                             // LAB3: price on RAW value — the partner values his
                             // starter at sticker, not at the IDP trade discount
                             // (junk was "affording" Hendrickson at market).
                             const tv = target.value ?? 0;
                             if (tv <= 0) return;
-                            const lo = tv * 1.02, hi = tv * (1.25 + aggression * 0.15);
+                            // In-kind 2-for-1s trade depth the partner can use
+                            // at the same spot — near-even is honest there.
+                            const lo = tv * (samePosOnly ? 0.95 : 1.02), hi = tv * (1.25 + aggression * 0.15);
                             let best = null;
-                            // Real pieces only — no throw-ins under 350.
-                            const cred = bench.filter(p => (p.value || 0) >= 350);
+                            // Real pieces only — no throw-ins under 350, and a
+                            // surplus-position target is paid in kind.
+                            const cred = bench.filter(p => (p.value || 0) >= 350 && (!samePosOnly || p.pos === target.pos));
                             const n = Math.min(cred.length, 14);
                             for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
                                 const sum = (cred[i].value || 0) + (cred[j].value || 0);
@@ -2697,8 +2760,9 @@
                     // LAB3: the fallback board shops by lift too — raw value
                     // order made a thin partner's aging headliner the default
                     // target (the Davante Adams fossil).
-                    theirPlayers.slice().sort((a, b) => labEffLift(b).lift - labEffLift(a).lift || (b.value || 0) - (a.value || 0))
-                        .slice(0, 14).forEach(target => addAcquireTarget(target, myPlayers, myPicks.length ? myPicks : allMyPicks, 'Fallback board: '));
+                    theirPlayers.filter(t => t.pos !== 'K' && !labIsFringe(t) && !(labComp?.surplus?.has(t.pos)) && !labUntouchableForPartner(partner, t))
+                        .sort((a, b) => labEffLift(b).lift - labEffLift(a).lift || (b.value || 0) - (a.value || 0))
+                        .slice(0, 14).forEach(target => addAcquireTarget(target, myPlayers.filter(labGiveOk), myPicks.length ? myPicks : allMyPicks, 'Fallback board: '));
                 }
             } else if (mode === 'shop' || mode === 'sellSurplus' || mode === 'picks') {
                 shopPool.slice(0, 8).forEach(asset => addShopAsset(asset, theirPlayers, theirPicks));
