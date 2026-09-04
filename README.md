@@ -1,3 +1,4 @@
-# Dynasty HQ — Landing Page
-Static marketing landing page for Dynasty HQ. Single self-contained `index.html` + `img/logo.png`.
-Served via GitHub Pages.
+# DHQ Trade Lab host
+
+This repo hosts the gated Trade Lab test build at `/trade-lab.html` (owner logins only).
+The root page remains a redirect to https://dhqfootball.com/. The old landing page lives in git history.
