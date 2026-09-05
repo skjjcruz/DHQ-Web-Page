@@ -2346,6 +2346,21 @@
                     if (allAging) return; // rebuilders don't buy aging vets
                 }
             }
+            // ═══ LAB16 CURRENCY LAW (owner ruling 2026-09-05): "my number
+            // one rule is don't give away players — give away draft picks."
+            // On a win-now or compete plan, a skilled offensive player never
+            // leaves for defenders unless EVERY defender coming back is
+            // absolutely elite (the Parsons/Garrett top-5 tier the market
+            // already prices at face). Defense gets bought with picks, FAAB,
+            // and defensive surplus — the offense is not the wallet.
+            if (_lp.pol === 'win_now' || _lp.pol === 'compete') {
+                const _offP = p => p && (p.pos === 'QB' || p.pos === 'RB' || p.pos === 'WR' || p.pos === 'TE');
+                const _defP = p => p && (p.pos === 'DL' || p.pos === 'LB' || p.pos === 'DB');
+                const _recvDef = (receivePlayers || []).filter(_defP);
+                if ((givePlayers || []).some(_offP) && _recvDef.length && !(receivePlayers || []).some(_offP)) {
+                    if (!_recvDef.every(p => (idpRankByPid.get(String(p.pid)) || 999) <= 5)) return;
+                }
+            }
             const whyYou = labWhy.you || input.whyYou || (userGain >= 0
                 ? `You gain ${Math.abs(Math.round(userGain)).toLocaleString()} DHQ while improving deal fit.`
                 : `You pay ${Math.abs(Math.round(userGain)).toLocaleString()} DHQ for a roster or window upgrade.`);
@@ -2624,6 +2639,15 @@
             const labSoftPos = (labModel.ledger?.teams?.[myRosterId]?.softDetail || [])
                 .flatMap(sd => window.WrLabPointsLedger?.GROUP_POSITIONS?.[sd.group] || []);
             const effectiveNeedPos = [...new Set([...myNeedPos, ...priPos, ...tuning.targetPositions, ...labSoftPos])];
+            // LAB16 need-priority law (owner ruling 2026-09-05): when needs
+            // tie — say DL and RB — the offensive hole gets hunted first,
+            // every time. Defensive needs stay on the list; they wait their
+            // turn and get paid in picks and FAAB, not offense.
+            const LAB16_OFF = new Set(['QB', 'RB', 'WR', 'TE']);
+            const labNeedRank = pos => {
+                const i = effectiveNeedPos.indexOf(pos);
+                return i < 0 ? 99 : (LAB16_OFF.has(pos) ? 0 : 40) + i;
+            };
             const mySurplusPos = myAssessment?.strengths || [];
             const theirNeedPos = (partner.needs || []).map(n => n.pos);
             const myPlayers = assetsForRoster(myRosterObj).filter(p => !isUntouchableAsset(p, tuning));
@@ -2681,7 +2705,7 @@
                     if (mode === 'fillNeed') return effectiveNeedPos.length ? effectiveNeedPos.includes(p.pos) : true;
                     if (mode === 'acquire') return priPos.length || tuning.targetPositions.size ? effectiveNeedPos.includes(p.pos) : true;
                     return true;
-                }).sort((a, b) => labEffLift(b).lift - labEffLift(a).lift || (b.value || 0) - (a.value || 0)).slice(0, 12);
+                }).sort((a, b) => labNeedRank(a.pos) - labNeedRank(b.pos) || labEffLift(b).lift - labEffLift(a).lift || (b.value || 0) - (a.value || 0)).slice(0, 12);
             const shopPool = focusAsset && myPlayerIds.has(String(focusPid)) && !isUntouchableAsset(focusAsset, tuning)
                 ? [focusAsset]
                 : myPlayers.filter(p => {
@@ -2725,15 +2749,36 @@
                     for (let i = 0; i < Math.min(pickPool.length, 5); i++) {
                         for (let j = i + 1; j < Math.min(pickPool.length, 5); j++) push([], [pickPool[i], pickPool[j]]);
                     }
+                    // LAB16: "multiple picks if necessary" — three-pick
+                    // packages reach a real starter's price without a
+                    // single player leaving the roster.
+                    if (opts.deepPicks) {
+                        const pn = Math.min(pickPool.length, 6);
+                        for (let i = 0; i < pn; i++) for (let j = i + 1; j < pn; j++) for (let k = j + 1; k < pn; k++) {
+                            push([], [pickPool[i], pickPool[j], pickPool[k]]);
+                        }
+                    }
                 }
                 return combos.sort((a, b) => Math.abs(a.market - targetValue) - Math.abs(b.market - targetValue) || a.pieces - b.pieces || b.market - a.market);
             }
 
             function addAcquireTarget(target, playerPool, pickPool, reasonPrefix = '') {
                 const targetMkt = assetMarketValue(target);
-                const packages = sideCombos(playerPool, pickPool, targetMkt, { allowPickOnly: true });
-                packages
-                    .filter(pkg => pkg.market >= targetMkt * lowRatio && pkg.market <= targetMkt * highRatio)
+                const packages = sideCombos(playerPool, pickPool, targetMkt, { allowPickOnly: true, deepPicks: true });
+                const banded = packages
+                    .filter(pkg => pkg.market >= targetMkt * lowRatio && pkg.market <= targetMkt * highRatio);
+                // LAB16 (owner ruling 2026-09-05): "don't give away players —
+                // give away draft picks." On a win-now/compete plan, fair
+                // packages re-rank picks-first: pick-only offers lead,
+                // pick-heavy next, paying with players is the last resort.
+                const _pol16 = labPolarity().pol;
+                if (_pol16 === 'win_now' || _pol16 === 'compete') {
+                    const pickShare = pkg => pkg.market > 0 ? pkg.picks.reduce((s, pk) => s + (pk.value || 0), 0) / pkg.market : 0;
+                    banded.sort((a, b) => ((b.players.length === 0) - (a.players.length === 0))
+                        || pickShare(b) - pickShare(a)
+                        || Math.abs(a.market - targetMkt) - Math.abs(b.market - targetMkt));
+                }
+                banded
                     .slice(0, 4)
                     .forEach(pkg => {
                         const faab = balanceFaab(partner, pkg.players, [target], pkg.picks, []);
@@ -2884,7 +2929,12 @@
                 // LAB4 buy law: no fringe targets, and no buying MORE bodies
                 // at a position I'm already stacked at — that group's fix is
                 // the same-position two-for-one below.
-                targetPool.filter(t => t.pos !== 'K' && !labIsFringe(t) && !(labComp?.surplus?.has(t.pos)) && !labUntouchableForPartner(partner, t)).slice(0, 8).forEach(target => {
+                // LAB16: a one-brain NEED position stays buyable even when the
+                // body count reads "stacked" — I own 8 RB bodies but only 2 of
+                // 3 quality starters, and the ratified spec says quality is
+                // the voice that counts. Count-surplus only blocks positions
+                // the brain does NOT need.
+                targetPool.filter(t => t.pos !== 'K' && !labIsFringe(t) && !(labComp?.surplus?.has(t.pos) && !labNeedSet.has(t.pos)) && !labUntouchableForPartner(partner, t)).slice(0, 8).forEach(target => {
                     const tvCap = ((target.value || 0)) * 1.05;
                     addAcquireTarget(target, givePool.filter(p => (p.value || 0) <= tvCap), myPicks);
                 });
@@ -2937,8 +2987,8 @@
                     // LAB3: the fallback board shops by lift too — raw value
                     // order made a thin partner's aging headliner the default
                     // target (the Davante Adams fossil).
-                    theirPlayers.filter(t => t.pos !== 'K' && !labIsFringe(t) && !(labComp?.surplus?.has(t.pos)) && !labUntouchableForPartner(partner, t))
-                        .sort((a, b) => labEffLift(b).lift - labEffLift(a).lift || (b.value || 0) - (a.value || 0))
+                    theirPlayers.filter(t => t.pos !== 'K' && !labIsFringe(t) && !(labComp?.surplus?.has(t.pos) && !labNeedSet.has(t.pos)) && !labUntouchableForPartner(partner, t))
+                        .sort((a, b) => labNeedRank(a.pos) - labNeedRank(b.pos) || labEffLift(b).lift - labEffLift(a).lift || (b.value || 0) - (a.value || 0))
                         .slice(0, 14).forEach(target => addAcquireTarget(target, myPlayers.filter(labGiveOk), myPicks.length ? myPicks : allMyPicks, 'Fallback board: '));
                 }
             } else if (mode === 'shop' || mode === 'sellSurplus' || mode === 'picks') {
@@ -4204,7 +4254,13 @@
                                         : (d.givePlayers || []).some(p => OFF_SKILL.has(p.pos)) ? 1 : 2;
                                     priority.sort((a, b) => offRank(a) - offRank(b));
                                     rest.sort((a, b) => offRank(a) - offRank(b));
-                                    const needTxt = (obMe?.needs || []).map(n => `${n.pos} (${n.have} of ${n.need} starters)`).join(' and ');
+                                    // LAB16: needs speak in priority order — offense
+                                    // out front, defense named as the picks-and-FAAB
+                                    // errand it now is.
+                                    const offNeeds = (obMe?.needs || []).filter(n => OFF_SKILL.has(n.pos));
+                                    const defNeeds = (obMe?.needs || []).filter(n => !OFF_SKILL.has(n.pos));
+                                    const fmtNeeds = list => list.map(n => `${n.pos} (${n.have} of ${n.need} starters)`).join(' and ');
+                                    const needTxt = fmtNeeds([...offNeeds, ...defNeeds]);
                                     const strTxt = (obMe?.strengths || []).map(s => s.pos || s).join(' and ');
                                     const lensTxt = focusTuning?.modeLabel || '';
                                     const focusHeader = (label, body) => (
@@ -4218,9 +4274,19 @@
                                     const winTxt = obMe?.tier === 'REBUILDING' ? 'REBUILDING' : obMe?.tier === 'CROSSROADS' ? 'at a CROSSROADS' : 'CONTENDING';
                                     const nudgePre = lp.declared ? '' : `you haven't set a GM plan — your roster reads as ${winTxt}, so `;
                                     const nudgePost = lp.declared ? '' : ` Set your plan in GM's Office to steer this.`;
+                                    // LAB16 header: the board states the champion's
+                                    // rules out loud — offense first in the hunt,
+                                    // picks as the wallet, defense waits its turn.
+                                    const priFocus = offNeeds.length && defNeeds.length
+                                        ? `${fmtNeeds(offNeeds)} is the front of the line — hunted with draft picks, multiple picks if that's the price. ${fmtNeeds(defNeeds)} waits behind it and fills from picks and FAAB; your skilled offense only leaves for an absolutely elite defender`
+                                        : offNeeds.length
+                                            ? `adding ${fmtNeeds(offNeeds)} — hunted with draft picks, multiple picks if that's the price, never with your skilled offense`
+                                            : defNeeds.length
+                                                ? `adding ${fmtNeeds(defNeeds)} — paid from picks and FAAB; your skilled offense only leaves for an absolutely elite defender`
+                                                : `adding starter help${strTxt ? ` — paid from your ${strTxt} surplus, spare picks, and FAAB, never from your starting core` : ''}`;
                                     const priBody = lp.pol === 'rebuild'
                                         ? `${nudgePre}the board leads with converting veterans and surplus into picks and youth. Points today don't drive a rebuild — the future does.${nudgePost}`
-                                        : `${nudgePre}based on your roster shortfalls${lp.declared && lensTxt ? ` and your ${lensTxt} plan` : ''}, these trades focus on adding ${needTxt || 'starter help'}${strTxt ? ` — paid from your ${strTxt} surplus, spare picks, and FAAB, never from your starting core` : ''}. Every trade here adds weekly points, or it doesn't make the board.${nudgePost}`;
+                                        : `${nudgePre}based on your roster shortfalls${lp.declared && lensTxt ? ` and your ${lensTxt} plan` : ''}, ${priFocus}. Every trade here adds weekly points, or it doesn't make the board.${nudgePost}`;
                                     const restBody = lp.pol === 'rebuild'
                                         ? `win-now adds and depth moves — shown for completeness; they spend the future a rebuild is trying to bank.`
                                         : lp.pol === 'win_now'
