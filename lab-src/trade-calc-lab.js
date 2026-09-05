@@ -456,6 +456,10 @@
                                 <strong style={{ color:deal.viability === 'Moonshot' ? 'var(--bad)' : deal.viability === 'Negotiable' ? 'var(--warn)' : 'var(--good)' }}>{deal.viability || deal.windowImpact.label.replace(/^Window\s*/i, '')}</strong>
                             </div>
                             <div className="tc-dhq-stat">
+                                <span>Net Pts/Wk</span>
+                                <strong style={{ color: (deal.netPts ?? 0) > 0.05 ? 'var(--good)' : (deal.netPts ?? 0) < -0.05 ? 'var(--bad)' : 'var(--silver)' }}>{deal.netPts == null ? '—' : `${deal.netPts >= 0 ? '+' : ''}${deal.netPts.toFixed(1)}`}</strong>
+                            </div>
+                            <div className="tc-dhq-stat">
                                 <span>Window</span>
                                 <strong style={{ color:deal.windowImpact.color }}>{deal.windowImpact.label.replace(/^Window\s*/i, '')}</strong>
                             </div>
@@ -1848,6 +1852,49 @@
         // point gaps; no banners, no system vocabulary — plain football talk).
         function labOrdinal(n) { const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
 
+        // ═══ LAB15 (ratified 2026-09-05): THE NET-POINTS TEST ═══════════
+        // A trade is judged by what it does to my OPTIMAL LINEUP's weekly
+        // points — a full refill, so a traded starter's slot backfilling
+        // from the bench is priced exactly ("does it result in more points
+        // for the team? If no, the trade is bad").
+        const labShape = useMemo(() => {
+            const rawLg = (window.S?.leagues || []).find(l => String(l.league_id) === String(leagueId));
+            const rp = (rawLg || currentLeague || {}).roster_positions || [];
+            return window.WrLabPointsLedger?._slotShape ? window.WrLabPointsLedger._slotShape(rp) : null;
+        }, [leagueId]);
+        const labLineupPts = React.useCallback(pids => {
+            const led = labModel.ledger;
+            if (!led || !labShape) return 0;
+            const FLEX_OK = { RB: 1, WR: 1, TE: 1 }, SF_OK = { QB: 1, RB: 1, WR: 1, TE: 1 }, IDP_OK = { DL: 1, LB: 1, DB: 1 };
+            const pool = pids.map(pid => ({ pid: String(pid), pos: normPos(playersData[pid]?.position), ppg: led.playersPpg[String(pid)] || 0 }))
+                .sort((a, b) => b.ppg - a.ppg);
+            const taken = {}; let total = 0;
+            const take = p => { taken[p.pid] = 1; total += p.ppg; };
+            Object.entries(labShape.dedicated || {}).forEach(([pos, need]) => { let n = need; for (const p of pool) { if (n <= 0) break; if (!taken[p.pid] && p.pos === pos) { take(p); n--; } } });
+            const fillSlots = (n, ok) => { for (const p of pool) { if (n <= 0) break; if (!taken[p.pid] && ok[p.pos]) { take(p); n--; } } };
+            fillSlots(labShape.flexN, FLEX_OK); fillSlots(labShape.sfN, SF_OK); fillSlots(labShape.idpN, IDP_OK);
+            return total;
+        }, [labModel.ledger, labShape, playersData]);
+        const labMyPids = useMemo(() => (allRosters.find(r => r.roster_id === myRosterId)?.players || []).map(String), [allRosters, myRosterId]);
+        const labBasePts = useMemo(() => labLineupPts(labMyPids), [labLineupPts, labMyPids]);
+        function labNetPts(givePlayers, receivePlayers) {
+            if (!labModel.ledger || !labShape) return null;
+            const out = new Set((givePlayers || []).map(p => String(p.pid)));
+            const after = labMyPids.filter(pid => !out.has(pid)).concat((receivePlayers || []).map(p => String(p.pid)));
+            return labLineupPts(after) - labBasePts;
+        }
+        // GM-strategy polarity (ratified): the declared plan decides which
+        // way the gate faces; no declared plan (or custom) falls back to the
+        // one brain's window read, and the board says so out loud.
+        function labPolarity() {
+            const declared = !!(window.WR?.GmMode?.getMode?.(leagueId));
+            const mode = finderTuning?.mode || 'compete';
+            if (declared && mode !== 'custom') return { pol: mode, declared: true };
+            const tier = labBrain?.byRosterId?.[String(myRosterId)]?.tier;
+            const pol = tier === 'REBUILDING' ? 'rebuild' : tier === 'CROSSROADS' ? 'retool' : 'compete';
+            return { pol, declared: false };
+        }
+
         // LAB v2: how much would this player raise MY lineup, and where?
         // Compares his projected PPG against my weakest starter in every
         // group his position can fill; the best positive gap is the lift.
@@ -2280,6 +2327,25 @@
             const whyAccept = labWhy.accept || input.whyAccept || (partner.needs?.length
                 ? `They need ${partner.needs.slice(0, 2).map(n => n.pos).join('/')} and this gives them usable assets.`
                 : `Their ${posture.label.toLowerCase()} posture keeps them open to a clean value offer.`);
+            // ═══ LAB15 GATE: strategy-scaled net-points law ═══
+            const _net = labNetPts(givePlayers, receivePlayers);
+            const _sellForPicks = !(receivePlayers || []).length && (input.receivePicks || []).length > 0;
+            const _lp = labPolarity();
+            if (_net != null) {
+                const youngBack = (receivePlayers || []).some(p => (Number(p.age ?? playersData?.[p.pid]?.age) || 99) <= 25)
+                    || (input.receivePicks || []).some(pk => (pk.round || 9) <= 2);
+                if (_lp.pol === 'win_now') {
+                    if (_sellForPicks) return; // a win-now team never sells starters for futures
+                    if ((receivePlayers || []).length && _net <= 0.05) return; // must ADD points
+                } else if (_lp.pol === 'compete') {
+                    if ((receivePlayers || []).length && _net <= 0.05) return; // the ruled hard gate
+                } else if (_lp.pol === 'retool') {
+                    if ((receivePlayers || []).length && _net <= 0.05 && !youngBack) return;
+                } else if (_lp.pol === 'rebuild') {
+                    const allAging = (receivePlayers || []).length && (receivePlayers || []).every(p => (Number(p.age ?? playersData?.[p.pid]?.age) || 0) >= 27);
+                    if (allAging) return; // rebuilders don't buy aging vets
+                }
+            }
             const whyYou = labWhy.you || input.whyYou || (userGain >= 0
                 ? `You gain ${Math.abs(Math.round(userGain)).toLocaleString()} DHQ while improving deal fit.`
                 : `You pay ${Math.abs(Math.round(userGain)).toLocaleString()} DHQ for a roster or window upgrade.`);
@@ -2327,6 +2393,7 @@
                 givePicks,
                 receivePicks,
                 giveFaab,
+                netPts: _net, sellForPicks: _sellForPicks, polarity: _lp.pol,
                 receiveFaab,
                 totals: { give, receive },
                 userGain,
@@ -4117,7 +4184,13 @@
                                     // see HOW the app is thinking, not just what it says.
                                     const obMe = labBrain?.byRosterId?.[String(myRosterId)];
                                     const needPos = new Set((obMe?.needs || []).map(n => n.pos));
-                                    const isPriority = d => (d.receivePlayers || []).some(p => needPos.has(p.pos));
+                                    // LAB15: polarity decides what "the priority" MEANS —
+                                    // contenders lead with shortfall fixes, rebuilders lead
+                                    // with veterans-into-futures conversions.
+                                    const lp = labPolarity();
+                                    const isPriority = lp.pol === 'rebuild'
+                                        ? d => d.sellForPicks || (d.givePlayers || []).some(p => (Number(p.age ?? playersData?.[p.pid]?.age) || 0) >= 28)
+                                        : d => (d.receivePlayers || []).some(p => needPos.has(p.pos));
                                     const priority = obMe ? visibleDeals.filter(isPriority) : [];
                                     const rest = obMe ? visibleDeals.filter(d => !isPriority(d)) : visibleDeals;
                                     // LAB14 (owner ruling 2026-09-05): offense sells the
@@ -4140,12 +4213,23 @@
                                         </div>
                                     );
                                     const renderCards = (list, base) => list.map((deal, i) => <TcDealCard key={deal.id} deal={deal} idx={base + i} actionFloor={actionFloor} expandedDealId={expandedDealId} setExpandedDealId={setExpandedDealId} loadDealIntoBuilder={loadDealIntoBuilder} saveDeal={saveDeal} sideSummary={sideSummary} />);
+                                    // Header copy per polarity; an undeclared plan says so
+                                    // out loud and points at GM's Office (the nudge).
+                                    const winTxt = obMe?.tier === 'REBUILDING' ? 'REBUILDING' : obMe?.tier === 'CROSSROADS' ? 'at a CROSSROADS' : 'CONTENDING';
+                                    const nudgePre = lp.declared ? '' : `you haven't set a GM plan — your roster reads as ${winTxt}, so `;
+                                    const nudgePost = lp.declared ? '' : ` Set your plan in GM's Office to steer this.`;
+                                    const priBody = lp.pol === 'rebuild'
+                                        ? `${nudgePre}the board leads with converting veterans and surplus into picks and youth. Points today don't drive a rebuild — the future does.${nudgePost}`
+                                        : `${nudgePre}based on your roster shortfalls${lp.declared && lensTxt ? ` and your ${lensTxt} plan` : ''}, these trades focus on adding ${needTxt || 'starter help'}${strTxt ? ` — paid from your ${strTxt} surplus, spare picks, and FAAB, never from your starting core` : ''}. Every trade here adds weekly points, or it doesn't make the board.${nudgePost}`;
+                                    const restBody = lp.pol === 'rebuild'
+                                        ? `win-now adds and depth moves — shown for completeness; they spend the future a rebuild is trying to bank.`
+                                        : lp.pol === 'win_now'
+                                            ? `depth and value plays. Sell-for-futures moves are off this board entirely — your plan says win now.`
+                                            : `${priority.length ? 'other moves the board likes — ' : ''}converting surplus into draft capital (each states what it costs your lineup per week) and value plays outside the shortfall focus.`;
                                     return <>
-                                        {priority.length > 0 && focusHeader('The priority:',
-                                            `based on your roster shortfalls${lensTxt ? ` and your ${lensTxt} plan` : ''}, these trades focus on adding ${needTxt || 'starter help'}${strTxt ? ` — paid from your ${strTxt} surplus, spare picks, and FAAB, never from your starting core` : ''}.`)}
+                                        {priority.length > 0 && focusHeader('The priority:', priBody)}
                                         {renderCards(priority, 0)}
-                                        {rest.length > 0 && focusHeader('Beyond the shortfall:',
-                                            `${priority.length ? 'other moves the board likes — ' : ''}converting your surplus into draft capital and value plays that don't touch your starting core.`)}
+                                        {rest.length > 0 && focusHeader(lp.pol === 'rebuild' ? 'Outside the rebuild:' : 'Beyond the shortfall:', restBody)}
                                         {renderCards(rest, priority.length)}
                                     </>;
                                 })()
