@@ -4120,6 +4120,17 @@
                                     const isPriority = d => (d.receivePlayers || []).some(p => needPos.has(p.pos));
                                     const priority = obMe ? visibleDeals.filter(isPriority) : [];
                                     const rest = obMe ? visibleDeals.filter(d => !isPriority(d)) : visibleDeals;
+                                    // LAB14 (owner ruling 2026-09-05): offense sells the
+                                    // board — within each section, deals BRINGING BACK a
+                                    // skill player lead, deals shipping skill names out
+                                    // for picks come next, pure trench/kicker traffic
+                                    // last. Stable sort keeps the finder's rank order
+                                    // inside each class.
+                                    const OFF_SKILL = new Set(['QB', 'RB', 'WR', 'TE']);
+                                    const offRank = d => (d.receivePlayers || []).some(p => OFF_SKILL.has(p.pos)) ? 0
+                                        : (d.givePlayers || []).some(p => OFF_SKILL.has(p.pos)) ? 1 : 2;
+                                    priority.sort((a, b) => offRank(a) - offRank(b));
+                                    rest.sort((a, b) => offRank(a) - offRank(b));
                                     const needTxt = (obMe?.needs || []).map(n => `${n.pos} (${n.have} of ${n.need} starters)`).join(' and ');
                                     const strTxt = (obMe?.strengths || []).map(s => s.pos || s).join(' and ');
                                     const lensTxt = focusTuning?.modeLabel || '';
