@@ -4109,7 +4109,35 @@
                         </div>
                         <div className="tc-dhq-deal-stage-body">
                             {visibleDeals.length
-                                ? visibleDeals.map((deal, idx) => <TcDealCard key={deal.id} deal={deal} idx={idx} actionFloor={actionFloor} expandedDealId={expandedDealId} setExpandedDealId={setExpandedDealId} loadDealIntoBuilder={loadDealIntoBuilder} saveDeal={saveDeal} sideSummary={sideSummary} />)
+                                ? (() => {
+                                    // LAB13 (owner request 2026-09-05): the board explains
+                                    // itself. Shortfall-fixing trades lead under a header
+                                    // written from the one brain's own reads; everything
+                                    // else follows under its own header, so an owner can
+                                    // see HOW the app is thinking, not just what it says.
+                                    const obMe = labBrain?.byRosterId?.[String(myRosterId)];
+                                    const needPos = new Set((obMe?.needs || []).map(n => n.pos));
+                                    const isPriority = d => (d.receivePlayers || []).some(p => needPos.has(p.pos));
+                                    const priority = obMe ? visibleDeals.filter(isPriority) : [];
+                                    const rest = obMe ? visibleDeals.filter(d => !isPriority(d)) : visibleDeals;
+                                    const needTxt = (obMe?.needs || []).map(n => `${n.pos} (${n.have} of ${n.need} starters)`).join(' and ');
+                                    const strTxt = (obMe?.strengths || []).map(s => s.pos || s).join(' and ');
+                                    const lensTxt = focusTuning?.modeLabel || '';
+                                    const focusHeader = (label, body) => (
+                                        <div key={label} className="tc-lab-focus-header" style={{ margin: '2px 0 10px', padding: '10px 14px', background: 'var(--acc-fill1, rgba(212,175,55,0.06))', borderLeft: '3px solid var(--gold)', borderRadius: '8px', color: 'var(--silver)', fontSize: '0.82rem', lineHeight: 1.55 }}>
+                                            <strong style={{ color: 'var(--gold)', letterSpacing: '0.03em' }}>{label} </strong>{body}
+                                        </div>
+                                    );
+                                    const renderCards = (list, base) => list.map((deal, i) => <TcDealCard key={deal.id} deal={deal} idx={base + i} actionFloor={actionFloor} expandedDealId={expandedDealId} setExpandedDealId={setExpandedDealId} loadDealIntoBuilder={loadDealIntoBuilder} saveDeal={saveDeal} sideSummary={sideSummary} />);
+                                    return <>
+                                        {priority.length > 0 && focusHeader('The priority:',
+                                            `based on your roster shortfalls${lensTxt ? ` and your ${lensTxt} plan` : ''}, these trades focus on adding ${needTxt || 'starter help'}${strTxt ? ` — paid from your ${strTxt} surplus, spare picks, and FAAB, never from your starting core` : ''}.`)}
+                                        {renderCards(priority, 0)}
+                                        {rest.length > 0 && focusHeader('Beyond the shortfall:',
+                                            `${priority.length ? 'other moves the board likes — ' : ''}converting your surplus into draft capital and value plays that don't touch your starting core.`)}
+                                        {renderCards(rest, priority.length)}
+                                    </>;
+                                })()
                                 : <div className="tc-dhq-empty">No actionable package clears {actionFloor}% acceptance. Use moonshots only if you want long-shot leverage ideas.</div>}
                         </div>
                         {(deals.length > visibleDeals.length || showAllDeals) && <button className="tc-dhq-show-more" onClick={() => setShowAllDeals(!showAllDeals)}>{showAllDeals ? 'Hide moonshots' : moonshotCount ? `Show ${moonshotCount} moonshot${moonshotCount === 1 ? '' : 's'}` : `Show ${deals.length - visibleDeals.length} more`}</button>}
