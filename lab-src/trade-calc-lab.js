@@ -5207,6 +5207,7 @@
                         </div>
                         {expanded && (
                             <div style={{ marginTop: '8px', borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: '8px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                                <div style={{ fontSize: '0.74rem', color: 'var(--silver)', lineHeight: 1.5 }}><b style={{ color: 'var(--white)' }}>Net pts/wk:</b> <b style={{ color: (deal.netPts ?? 0) > 0.05 ? 'var(--good)' : (deal.netPts ?? 0) < -0.05 ? 'var(--bad)' : 'var(--silver)' }}>{deal.netPts == null ? '—' : `${deal.netPts >= 0 ? '+' : ''}${deal.netPts.toFixed(1)}`}</b></div>
                                 <div style={{ fontSize: '0.74rem', color: 'var(--silver)', lineHeight: 1.5 }}><b style={{ color: 'var(--white)' }}>Accept:</b> {deal.whyAccept}</div>
                                 <div style={{ fontSize: '0.74rem', color: 'var(--silver)', lineHeight: 1.5 }}><b style={{ color: 'var(--white)' }}>You:</b> {deal.whyYou}</div>
                                 <div style={{ fontSize: '0.74rem', color: 'var(--silver)', lineHeight: 1.5 }}><b style={{ color: 'var(--white)' }}>Swing:</b> {deal.swing}</div>
