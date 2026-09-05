@@ -3595,7 +3595,10 @@
         }, [finderActive, finderPoolOn, finderPool, selectedPartner, effMode, focusPlayerPid, focusPickR?.id, finderDataEpoch, finderTuningHash]);
         const finderActionable = finderDeals.filter(deal => deal.likelihood >= finderActionFloor);
         const finderMoonshotCount = Math.max(0, finderDeals.length - finderActionable.length);
-        const finderVisibleDeals = showAllDeals ? finderDeals : finderActionable.slice(0, finderPoolOn ? 8 : 6);
+        // LAB (owner report 2026-09-05): every actionable package renders — the
+        // old top-8 cap made "14 actionable" a lie you couldn't scroll to.
+        // Moonshots alone stay behind the toggle.
+        const finderVisibleDeals = showAllDeals ? finderDeals : finderActionable;
         // Alex rec feed — once per finder-result change (pooled scans publish on
         // completion with partner:null), never as a render side effect.
         const finderPublishKey = finderActive && (!finderPoolOn || finderPool.done)

@@ -122,19 +122,28 @@
                     a.total += pts; a.games++;
                 }
             });
-            function ppgOf(pid) {
+            var IDP_POS = { DL: 1, LB: 1, DB: 1 };
+            function ppgOf(pid, pos) {
                 var a = wkAgg[pid];
-                if (a && a.games) return a.total / a.games;
+                var proj = (a && a.games) ? a.total / a.games : 0;
                 var st = prev[pid];
-                if (st && st.gp) return scoreStats(st, scoring) / st.gp;
-                return 0;
+                var act = (st && st.gp) ? scoreStats(st, scoring) / st.gp : 0;
+                if (!proj) return act; // no projection at all → last season's pace
+                // v4 (owner ruling 2026-09-05): Sleeper's DEFENSIVE projections
+                // run ~80% of actual pace and scramble the ranks (Devin Bush:
+                // LB6 by 2025 actuals, LB28 projected). A proven defender keeps
+                // his proven pace — unless the projection says his role
+                // collapsed (under half his old pace), then the projection wins.
+                if (IDP_POS[pos] && act > 0 && proj >= act * 0.5) return Math.max(proj, act);
+                return proj;
             }
 
             var teams = {};
             var playersPpg = {}; // LAB v2: every rostered player's projected PPG
             rosters.forEach(function (r) {
                 var pool = (r.players || []).map(function (pid) {
-                    var p = { pid: String(pid), pos: normPos(posOf(pid)), ppg: ppgOf(pid) };
+                    var pos = normPos(posOf(pid));
+                    var p = { pid: String(pid), pos: pos, ppg: ppgOf(pid, pos) };
                     playersPpg[p.pid] = Math.round(p.ppg * 100) / 100;
                     return p;
                 }).sort(function (a, b) { return b.ppg - a.ppg; });

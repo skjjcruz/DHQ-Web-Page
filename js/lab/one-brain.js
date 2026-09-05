@@ -32,14 +32,14 @@
 
     var TIER_BANDS = [
         // Same four names + colors every surface already speaks. Bands sit
-        // higher than the old assessor's 90/80/70: under the ruled formula
-        // full-roster preseason grades cluster in the 70s-90s (everyone in a
-        // deep league drafts startable players), so the old bands called nine
-        // of sixteen teams ELITE and the word meant nothing.
-        { min: 95, tier: 'ELITE', color: '#D4AF37', bg: 'rgba(212,175,55,0.15)' },
-        { min: 85, tier: 'CONTENDER', color: '#2ECC71', bg: 'rgba(46,204,113,0.12)' },
-        { min: 75, tier: 'CROSSROADS', color: '#F0A500', bg: 'rgba(240,165,0,0.12)' },
-        { min: -1, tier: 'REBUILDING', color: '#E74C3C', bg: 'rgba(231,76,60,0.12)' },
+        // higher than the old assessor's 90/80/70 (full-roster preseason
+        // grades cluster high), and each carries a PACE GATE: no amount of
+        // depth-and-picks health makes a team a contender if its lineup
+        // can't score — pace is the price of the label.
+        { min: 97, pace: 1.00, tier: 'ELITE', color: '#D4AF37', bg: 'rgba(212,175,55,0.15)' },
+        { min: 85, pace: 0.90, tier: 'CONTENDER', color: '#2ECC71', bg: 'rgba(46,204,113,0.12)' },
+        { min: 75, pace: 0.75, tier: 'CROSSROADS', color: '#F0A500', bg: 'rgba(240,165,0,0.12)' },
+        { min: -1, pace: 0, tier: 'REBUILDING', color: '#E74C3C', bg: 'rgba(231,76,60,0.12)' },
     ];
 
     function normPos(p) {
@@ -164,7 +164,8 @@
             var capitalScore = 15 * Math.min(1, (firsts * 2 + seconds) / 9);
             var health = Math.round(paceScore + qualityScore + capitalScore);
 
-            var band = TIER_BANDS.filter(function (b) { return health >= b.min; })[0];
+            var pct = t.pctOfBar || 0;
+            var band = TIER_BANDS.filter(function (b) { return health >= b.min && pct >= b.pace; })[0];
 
             var s = r.settings || {};
             var wins = s.wins || 0, losses = s.losses || 0, ties = s.ties || 0;
