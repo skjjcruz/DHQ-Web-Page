@@ -2366,7 +2366,9 @@
             // remaining budget can't cover the whole thing the deal carries no
             // FAAB at all — never clipped down to a token $37 sweetener.
             const faabFor = (g, budget) => {
-                if (g <= 100 || g > 600) return 0;
+                // LAB12: FAAB rides only when it closes a REAL gap — the $100
+                // confetti on every card (owner note 2026-09-05) is retired.
+                if (g < 150 || g > 600) return 0;
                 const amt = Math.ceil(g / FAAB_RATE / 25) * 25;
                 return amt <= Math.min(budget || 0, 300) ? amt : 0;
             };
@@ -2559,11 +2561,31 @@
             const theirNeedPos = (partner.needs || []).map(n => n.pos);
             const myPlayers = assetsForRoster(myRosterObj).filter(p => !isUntouchableAsset(p, tuning));
             const theirPlayers = assetsForRoster(theirRosterObj);
-            const myChips = myPlayers.filter(p =>
+            // LAB12 one-brain sell law (owner order 2026-09-05): a position
+            // where MY quality-starter count is short never pays for a trade
+            // and never gets shopped — whatever the partner needs. That kills
+            // the Henry-for-a-2nd and Andrews sales the points-rank voice
+            // used to propose while the quality voice said RB/TE were thin.
+            const obMine = labBrain?.byRosterId?.[String(myRosterId)] || null;
+            const labNeedSet = new Set((obMine?.needs || []).map(n => n.pos));
+            // LAB12 handcuff law: my own starter's direct backup is insurance,
+            // not currency (the Justice Hill rule — the formula prices him ON
+            // the fact he backs up my RB1; selling him defeats the point).
+            const labIsMyHandcuff = p => {
+                if (p.pos !== 'RB' && p.pos !== 'QB') return false;
+                const pd = playersData[p.pid];
+                if (!pd || Number(pd.depth_chart_order) !== 2 || !pd.team) return false;
+                return (myRosterObj?.players || []).some(sid => {
+                    const sp = playersData[sid];
+                    return sp && sp.team === pd.team && normPos(sp.position) === p.pos && Number(sp.depth_chart_order) === 1;
+                });
+            };
+            const labSellOk = p => !labNeedSet.has(p.pos) && !labIsMyHandcuff(p);
+            const myChips = myPlayers.filter(p => labSellOk(p) && (
                 tuning.sellPositions.has(p.pos)
                 || mySurplusPos.includes(p.pos)
                 || !myNeedPos.includes(p.pos)
-            );
+            ));
             const allTheirPicks = pickAssetsForOwner(partner.ownerId);
             const allMyPicks = pickAssetsForOwner(myAssessment?.ownerId);
             const theirPicks = priPickYears.length ? allTheirPicks.filter(pk => priPickYears.some(yr => pk.label?.includes(yr))) : allTheirPicks;
@@ -2587,6 +2609,7 @@
             const shopPool = focusAsset && myPlayerIds.has(String(focusPid)) && !isUntouchableAsset(focusAsset, tuning)
                 ? [focusAsset]
                 : myPlayers.filter(p => {
+                    if (!labSellOk(p)) return false; // LAB12: need positions + my handcuffs never shop
                     if (mode === 'sellSurplus' || mode === 'shop' || mode === 'picks') {
                         return tuning.sellPositions.has(p.pos) || mySurplusPos.includes(p.pos) || theirNeedPos.includes(p.pos);
                     }
@@ -2765,7 +2788,10 @@
                 // already win. Starters in thin groups pay last.
                 const labComp = labComposition();
                 // LAB4 give law: fringe bodies and shortage positions never pay.
-                const labGiveOk = p => !labIsFringe(p) && !(labComp?.shortage?.has(p.pos));
+                // LAB12: the one brain's quality-count needs (and my own
+                // starters' handcuffs) join the wall — the blueprint count
+                // alone let thin-by-quality rooms keep paying.
+                const labGiveOk = p => !labIsFringe(p) && !(labComp?.shortage?.has(p.pos)) && labSellOk(p);
                 const labMy = labModel.ledger?.teams?.[myRosterId];
                 const labBenchFirst = (a, b) => {
                     const sp = labMy?.starterPids || [];
@@ -2842,7 +2868,7 @@
             } else if (mode === 'shop' || mode === 'sellSurplus' || mode === 'picks') {
                 shopPool.slice(0, 8).forEach(asset => addShopAsset(asset, theirPlayers, theirPicks));
                 if (candidates.length < 3) {
-                    myPlayers.slice(0, 12).forEach(asset => addShopAsset(asset, theirPlayers, allTheirPicks, 'Fallback board: '));
+                    myPlayers.filter(labSellOk).slice(0, 12).forEach(asset => addShopAsset(asset, theirPlayers, allTheirPicks, 'Fallback board: '));
                 }
             }
 
