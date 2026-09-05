@@ -1353,22 +1353,33 @@
         // Load DNA + grudges on mount
         useEffect(() => {
             if (!leagueId) return;
-            if (window.OD?.loadDNA) {
-                window.OD.loadDNA(leagueId).then(d => {
-                    const dnaMap = d || {};
-                    // Auto-apply AI DNA recommendations for owners without saved DNA
-                    if (allRosters.length && typeof computeWeightedDNA === 'function') {
-                        allRosters.forEach(r => {
-                            const rid = r.roster_id;
-                            if (!dnaMap[r.owner_id]) {
-                                const aiDna = computeWeightedDNA(rid);
-                                if (aiDna) dnaMap[r.owner_id] = aiDna.key;
-                            }
-                        });
-                    }
-                    setOwnerDna(dnaMap);
-                }).catch(() => setOwnerDna({}));
-            }
+            // LAB18 (owner report 2026-09-05: "MangaMaw is tagged as an
+            // acceptor" — and the lab couldn't see it): the site's cloud
+            // owner_dna store sits behind the owner's login (RLS), which the
+            // delinked lab doesn't have. The owner's designations ride in as
+            // a lab snapshot instead — snapshot first, then any local lab
+            // edits on top (his latest word wins), then the app's own read
+            // fills whoever is left untagged.
+            const snapLoad = fetch('js/lab/owner-dna-snapshot.json')
+                .then(r => (r.ok ? r.json() : null)).catch(() => null);
+            const localLoad = window.OD?.loadDNA
+                ? window.OD.loadDNA(leagueId).catch(() => ({}))
+                : Promise.resolve({});
+            Promise.all([snapLoad, localLoad]).then(([snap, local]) => {
+                const snapMap = (snap && String(snap.league) === String(leagueId)) ? (snap.map || {}) : {};
+                const dnaMap = { ...snapMap, ...(local || {}) };
+                // Auto-apply AI DNA recommendations for owners without saved DNA
+                if (allRosters.length && typeof computeWeightedDNA === 'function') {
+                    allRosters.forEach(r => {
+                        const rid = r.roster_id;
+                        if (!dnaMap[r.owner_id]) {
+                            const aiDna = computeWeightedDNA(rid);
+                            if (aiDna) dnaMap[r.owner_id] = aiDna.key;
+                        }
+                    });
+                }
+                setOwnerDna(dnaMap);
+            }).catch(() => setOwnerDna({}));
             setGrudges(loadGrudges(leagueId));
             if (window.DraftHistory?.loadDraftDNA) setOwnerDraftDna(window.DraftHistory.loadDraftDNA(leagueId) || {});
             if (window.DraftHistory?.syncDraftDNA) window.DraftHistory.syncDraftDNA(leagueId).then(map => setOwnerDraftDna(map || {})).catch(err => window.wrLog('tradecalc.syncDraftDNA', err));
