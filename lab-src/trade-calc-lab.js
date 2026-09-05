@@ -2580,7 +2580,16 @@
                     return sp && sp.team === pd.team && normPos(sp.position) === p.pos && Number(sp.depth_chart_order) === 1;
                 });
             };
-            const labSellOk = p => !labNeedSet.has(p.pos) && !labIsMyHandcuff(p);
+            // LAB12b: a QUALITY STARTER only sells from true surplus — at a
+            // room sitting exactly at its template need, selling him CREATES
+            // the shortage (the Andrews/TE and Humphrey/DB leak). Depth
+            // pieces at those rooms still trade fine.
+            const labQualPids = obMine?.qualityPids || {};
+            const labQualCnt = obMine?.qualityCount || {};
+            const labTmpl = labBrain?.template || {};
+            const labIsQualityStarter = p => (labQualPids[p.pos] || []).includes(String(p.pid));
+            const labSellOk = p => !labNeedSet.has(p.pos) && !labIsMyHandcuff(p)
+                && !(labIsQualityStarter(p) && (labQualCnt[p.pos] || 0) <= (labTmpl[p.pos] || 0));
             const myChips = myPlayers.filter(p => labSellOk(p) && (
                 tuning.sellPositions.has(p.pos)
                 || mySurplusPos.includes(p.pos)
