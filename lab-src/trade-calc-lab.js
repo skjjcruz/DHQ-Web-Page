@@ -740,13 +740,9 @@
         // the shared engine builds its own starter pool with the ESPN door.
 
         function getPlayerValue(pid) {
-            // LAB values v2 (ratified formula 2026-09-05): once the module has
-            // computed, every lab surface prices from it. The old engine stays
-            // as the fallback until the walk passes.
-            const v2 = window.WrLabValuesV2;
-            if (v2?.ready && v2.values && v2.values[pid] != null && v2.values[pid] > 0) {
-                return { value: v2.values[pid], source: 'v2' };
-            }
+            // LAB: no special-casing here — the lab's shared engine copy
+            // computes the ratified v2 formula natively into LI.playerScores,
+            // so the normal resolution chain below IS the v2 price.
             if (window.App?.PlayerValue?.getValue) {
                 const v = window.App.PlayerValue.getValue(pid, { skin: resolvedLeagueSkin });
                 if (v > 0) {
@@ -1467,40 +1463,9 @@
             return () => { dead = true; };
         }, [leagueId, allRosters.length, Object.keys(playersData || {}).length > 0]);
 
-        // LAB values v2: load the ratified pricing engine once the player DB
-        // is up. Rookie slot values need LeagueIntel's pick curve, so we wait
-        // for it (bounded — after 2 minutes we price without slots rather than
-        // never pricing at all). labModel.v2 joining the finder epoch reprices
-        // the whole board when the values land.
-        useEffect(() => {
-            let dead = false;
-            if (!leagueId || !allRosters.length || !Object.keys(playersData || {}).length || !window.WrLabValuesV2) return undefined;
-            const rawLg = (window.S?.leagues || []).find(l => String(l.league_id) === String(leagueId));
-            const labLeague = { ...(currentLeague || {}), ...(rawLg || {}), league_id: leagueId };
-            if (!labLeague?.scoring_settings) return undefined;
-            const start = () => {
-                if (dead) return;
-                window.WrLabValuesV2.load({
-                    league: labLeague,
-                    rosters: allRosters,
-                    playersData,
-                    pickValues: window.App?.LI?.dhqPickValues || {},
-                }).then(res => {
-                    if (dead) return;
-                    window.WrLabValuesV2.values = res.values;
-                    window.WrLabValuesV2.meta = res.meta;
-                    window.WrLabValuesV2.ready = true;
-                    if (window._labDbg) window._labDbg.v2 = Date.now();
-                    setLabModel(m => ({ ...m, v2: res.builtAt }));
-                }).catch(e => { if (window._labDbg) window._labDbg.v2Err = String(e); if (window.wrLog) window.wrLog('lab.v2', e); });
-            };
-            let tries = 0;
-            const timer = setInterval(() => {
-                if (dead) { clearInterval(timer); return; }
-                if (window.App?.LI_LOADED || tries++ > 120) { clearInterval(timer); start(); }
-            }, 1000);
-            return () => { dead = true; clearInterval(timer); };
-        }, [leagueId, allRosters.length, Object.keys(playersData || {}).length > 0]);
+        // LAB: values v2 needs no loader here — the lab's shared engine copy
+        // (reconai-shared/dhq-engine.js) computes the ratified formula as its
+        // own value step, so LI.playerScores is v2 from birth on this page.
 
         const labBrain = useMemo(() => {
             if (!labModel.ledger || !allRosters.length || !window.WrLabOneBrain) return null;
