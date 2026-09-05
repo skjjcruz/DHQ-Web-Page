@@ -4225,7 +4225,11 @@
                         <em>{intentLabel} · {finderScopeLabel}</em>
                     </div>
                     <div className="tc-dhq-panel-body" style={{ overflow: 'visible', paddingRight: 0, display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                        <div style={{ position: 'relative', minWidth: 0 }}>
+                        {/* LAB22 (owner order 2026-09-05): Focus shrinks to half
+                            width with the asset browser toggle beside it — one
+                            row instead of two, so Ready + Finder Rows move up. */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', minWidth: 0 }}>
+                        <div style={{ position: 'relative', minWidth: 0, flex: _vp.isPhone ? '1 1 100%' : '0 1 50%' }}>
                             <input
                                 type="text"
                                 value={finderSearch}
@@ -4282,6 +4286,8 @@
                                 </div>
                             )}
                         </div>
+                        <button type="button" className="tc-dhq-detail-toggle" style={{ minHeight: _vp.isPhone ? '44px' : '38px' }} onClick={() => setAssetBrowserOpen(v => !v)}>{assetBrowserOpen ? 'Hide asset browser ▴' : 'Browse assets ▾'}</button>
+                        </div>
 
                         {focusR && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
@@ -4310,9 +4316,6 @@
                             })}
                         </div>
 
-                        <div>
-                            <button type="button" className="tc-dhq-detail-toggle" onClick={() => setAssetBrowserOpen(v => !v)}>{assetBrowserOpen ? 'Hide asset browser ▴' : 'Browse assets ▾'}</button>
-                        </div>
                         {assetBrowserOpen && (assetBrowserRows.length > 0 ? (
                             <div className="tc-dhq-asset-browser">
                                 <div className="tc-dhq-browser-head">
