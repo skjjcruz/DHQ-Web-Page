@@ -1894,6 +1894,21 @@
             const after = labMyPids.filter(pid => !out.has(pid)).concat((receivePlayers || []).map(p => String(p.pid)));
             return labLineupPts(after) - labBasePts;
         }
+        // LAB20: the amber GM button — one tap from the finder chips to GM's
+        // Office, because the plan set there steers every law on this board.
+        // The Trade tab gets no tab-switcher prop, so the button drives the
+        // app's own side-menu item (click bubbles to its handler).
+        function labOpenGmOffice() {
+            try {
+                const hits = Array.from(document.querySelectorAll('button, a, [role="button"], [role="menuitem"], li, span, div'))
+                    .filter(el => {
+                        const t = (el.textContent || '').trim();
+                        return t === "GM's Office" || t === 'GM’s Office';
+                    });
+                if (hits.length) hits[hits.length - 1].click(); // innermost match
+            } catch (e) { /* no-op */ }
+        }
+
         // GM-strategy polarity (ratified): the declared plan decides which
         // way the gate faces; no declared plan (or custom) falls back to the
         // one brain's window read, and the board says so out loud.
@@ -4152,6 +4167,8 @@
                             <span>Trade Finder</span>
                             <div className="tc-dhq-modebar" role="group" aria-label="Finder intent">
                                 {finderIntents.map(i => <button key={i.key} type="button" className={finderQuery.intent === i.key ? 'is-active' : ''} onClick={() => { setFinderQuery(qr => ({ ...qr, intent: i.key })); setAssetBrowserPos('ALL'); setShowAllDeals(false); }}>{i.label}</button>)}
+                                {/* LAB20: amber GM button (owner order 2026-09-05) — the plan steers the board */}
+                                <button key="gm" type="button" onClick={labOpenGmOffice} title="Open GM's Office — your plan steers this board" style={{ background: 'rgba(255,179,0,0.16)', border: '1px solid #ffb300', color: '#ffb300', fontWeight: 700 }}>GM</button>
                             </div>
                         </div>
                         <em>{intentLabel} · {finderScopeLabel}</em>
@@ -5445,6 +5462,8 @@
                             <button key={i.key} type="button" className={finderQuery.intent === i.key ? 'is-on' : ''}
                                 onClick={() => { setFinderQuery(qr => ({ ...qr, intent: i.key })); setAssetBrowserPos('ALL'); setShowAllDeals(false); setPhFinderPanel(null); }}>{i.label}</button>
                         ))}
+                        {/* LAB20: amber GM button (owner order 2026-09-05) — same door on the phone deck */}
+                        <button key="gm" type="button" onClick={() => { setPhFinderPanel(null); labOpenGmOffice(); }} style={{ background: 'rgba(255,179,0,0.16)', border: '1px solid #ffb300', color: '#ffb300', fontWeight: 700 }}>GM</button>
                     </div>
                 );
             } else if (_pro && rosterState.isUsable && phFinderPanel === 'partner') {
