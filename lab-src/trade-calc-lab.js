@@ -4361,19 +4361,23 @@
                                     const winTxt = obMe?.tier === 'REBUILDING' ? 'REBUILDING' : obMe?.tier === 'CROSSROADS' ? 'at a CROSSROADS' : 'CONTENDING';
                                     const nudgePre = lp.declared ? '' : `you haven't set a GM plan — your roster reads as ${winTxt}, so `;
                                     const nudgePost = lp.declared ? '' : ` Set your plan in GM's Office to steer this.`;
-                                    // LAB16 header: the board states the champion's
-                                    // rules out loud — offense first in the hunt,
-                                    // picks as the wallet, defense waits its turn.
-                                    const priFocus = offNeeds.length && defNeeds.length
-                                        ? `${fmtNeeds(offNeeds)} is the front of the line — hunted with draft picks, multiple picks if that's the price. ${fmtNeeds(defNeeds)} waits behind it and fills from picks and FAAB; your skilled offense only leaves for an absolutely elite defender`
-                                        : offNeeds.length
-                                            ? `adding ${fmtNeeds(offNeeds)} — hunted with draft picks, multiple picks if that's the price, never with your skilled offense`
-                                            : defNeeds.length
-                                                ? `adding ${fmtNeeds(defNeeds)} — paid from picks and FAAB; your skilled offense only leaves for an absolutely elite defender`
-                                                : `adding starter help${strTxt ? ` — paid from your ${strTxt} surplus, spare picks, and FAAB, never from your starting core` : ''}`;
+                                    // LAB19 header (owner wording 2026-09-05): the
+                                    // header reads like a procurement brief — the
+                                    // priority list first (offense ahead of defense,
+                                    // per the need-priority law), resources second.
+                                    const orderedNeeds = [...offNeeds, ...defNeeds];
+                                    const rankTxt = i => i === 1 ? '2nd' : i === 2 ? '3rd' : `${i + 1}th`;
+                                    const priList = orderedNeeds
+                                        .map((n, i) => `${n.pos} (${n.have} of ${n.need} starters) is ${i === 0 ? 'at the top of the list for procurement' : `${rankTxt(i)} in priority`}`)
+                                        .join('. ');
+                                    const priFocus = orderedNeeds.length
+                                        ? `${priList}. Resources used to acquire are Draft Picks and FAAB`
+                                        : `no starter shortfalls — the board hunts value adds with Draft Picks and FAAB`;
                                     const priBody = lp.pol === 'rebuild'
                                         ? `${nudgePre}the board leads with converting veterans and surplus into picks and youth. Points today don't drive a rebuild — the future does.${nudgePost}`
-                                        : `${nudgePre}based on your roster shortfalls${lp.declared && lensTxt ? ` and your ${lensTxt} plan` : ''}, ${priFocus}. Every trade here adds weekly points, or it doesn't make the board.${nudgePost}`;
+                                        : lp.declared && lensTxt
+                                            ? `Based on your ${lensTxt} Strategy and roster shortfalls, ${priFocus}.`
+                                            : `${nudgePre}based on your roster shortfalls, ${priFocus}.${nudgePost}`;
                                     const restBody = lp.pol === 'rebuild'
                                         ? `win-now adds and depth moves — shown for completeness; they spend the future a rebuild is trying to bank.`
                                         : lp.pol === 'win_now'
