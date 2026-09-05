@@ -19,7 +19,14 @@ function _dhqIsSandbox(){
 // Builds IDP value from real scoring data + draft history + FAAB market
 // ══════════════════════════════════════════════════════════════════
 
-const LI_CACHE_KEY='dhq_leagueintel_labv2_1'; // v15 (2026-09-02): superflex QB market alignment — cached v14 values predate it
+// ═══ GRAFT PHASE 2: engine kill switch (owner-approved plan, 2026-09-05) ═══
+// Apps opt into the behavioral-model engine by setting
+// window.__DHQ_ENGINE_V2 = true BEFORE this file loads. Default: OFF —
+// and off means the original formula below runs byte-for-byte. The v2
+// store rides its own cache lane, so flipping the switch either way
+// never reads the other engine's cached values.
+const ENGINE_V2_FLAG=(typeof window!=='undefined'&&window.__DHQ_ENGINE_V2===true);
+const LI_CACHE_KEY=ENGINE_V2_FLAG?'dhq_leagueintel_v2_1':'dhq_leagueintel_v15'; // v15 (2026-09-02): superflex QB market alignment — cached v14 values predate it
 // LI staleness is season-aware: 8h is fine in the offseason (values drift
 // slowly), but during the regular season rosters/FAAB/trades move daily, so
 // the cache goes stale in 2h. Resolved at check time (not parse time) because
@@ -1156,18 +1163,24 @@ async function loadLeagueIntel(){
       scarcityMult[pos]=+mult.toFixed(3);
     });
 
+    // ═══ GRAFT PHASE 2 (owner-approved plan, 2026-09-05) ═══
+    // The behavioral-model engine rides behind the kill switch above.
+    // It engages only for Sleeper leagues AND only when the v2 modules
+    // are actually loaded — anything missing silently means v1, never a
+    // crash. Non-Sleeper leagues always run the original engine.
+    const engineV2=ENGINE_V2_FLAG&&platform==='sleeper'&&!!(window.WrLabValuesV2&&window.WrLabPointsLedger&&window.WrLabOneBrain);
+    let playerScores,playerMeta,recentPlayers,scoringWeight,lineupContext,posDynastyWeight,rookieCount,vetBlendCount,sourceSnapshots;
+    if(engineV2){
     // ═══════════════════════════════════════════════════════════════
-    // STEP 8 (LAB V2 ENGINE — owner order 2026-09-05): the ratified
-    // value formula IS the engine in this lab copy. The production
-    // formula that lived here (situation stack, FC blend, rank rail,
-    // SF-QB alignment, stash floors) is DELETED from this copy; the one
-    // store every surface reads is priced by WrLabValuesV2 natively.
-    // The real DHQ-Shared repo is untouched.
+    // STEP 8 (ENGINE V2 — the ratified value formula): values-v2.js
+    // prices the one store every surface reads. The original formula
+    // (situation stack, FC blend, rank rail, SF-QB alignment, stash
+    // floors) lives in the else-branch below, untouched, and owns the
+    // market leash and rookie slot rule natively here.
     // ═══════════════════════════════════════════════════════════════
-    const rosteredSet=new Set(S.rosters.flatMap(r=>r.players||[]));
+    const rosteredSetV2=new Set(S.rosters.flatMap(r=>r.players||[]));
     let pffSnap={byName:{}};
-    try{const _r=await fetch('js/lab/pff-snapshot.json');if(_r.ok)pffSnap=await _r.json();}catch(e){/* grades optional */}
-    // isSF already computed above for the scarcity table — reuse it.
+    try{if(window.DhqPffSnapshot&&window.DhqPffSnapshot.byName)pffSnap=window.DhqPffSnapshot;}catch(e){/* grades optional */}
     const pprVal=(sc.rec!=null&&sc.rec>=0.9)?1:(sc.rec!=null&&sc.rec>=0.4)?0.5:0;
     let fcRows=[];
     try{const _fr=await fetch(`https://api.fantasycalc.com/values/current?isDynasty=true&numQbs=${isSF?2:1}&numTeams=${totalTeams}&ppr=${pprVal}`);if(_fr.ok)fcRows=await _fr.json();}catch(e){/* leash optional */}
@@ -1183,31 +1196,486 @@ async function loadLeagueIntel(){
       pickValues:dhqPickValues,
       fcRows,
     });
-    const playerScores=v2.values;
-    const playerMeta=v2.meta;
-    const rookieCount=Object.keys(playerMeta).filter(pid=>playerMeta[pid].rookie).length;
-    const vetBlendCount=Object.keys(playerMeta).filter(pid=>playerMeta[pid].mkt!=null).length;
-    const sourceSnapshots={labV2:{waiver:v2.waiver,builtAt:new Date().toISOString()}};
+    playerScores=v2.values;
+    playerMeta=v2.meta;
+    rookieCount=Object.keys(playerMeta).filter(pid=>playerMeta[pid].rookie).length;
+    vetBlendCount=Object.keys(playerMeta).filter(pid=>playerMeta[pid].mkt!=null).length;
+    sourceSnapshots={labV2:{waiver:v2.waiver,builtAt:new Date().toISOString()}};
     // Slim rows + lineup context keep steps 9-11 and the AI tier tables fed.
-    const recentPlayers=Object.keys(playerMeta)
-      .filter(pid=>rosteredSet.has(pid))
+    recentPlayers=Object.keys(playerMeta)
+      .filter(pid=>rosteredSetV2.has(pid))
       .map(pid=>({pid,pos:playerMeta[pid].pos,wPPG:playerMeta[pid].ppg||0,age:playerMeta[pid].age||0}))
       .sort((a,b)=>b.wPPG-a.wPPG);
-    const scoringWeight=_dhqPositionScoringWeights(avgThresh,starterCounts,positions);
-    const lineupContext=DHQ_CORE?.buildLineupContext?DHQ_CORE.buildLineupContext({
+    scoringWeight=_dhqPositionScoringWeights(avgThresh,starterCounts,positions);
+    lineupContext=DHQ_CORE?.buildLineupContext?DHQ_CORE.buildLineupContext({
       rows:recentPlayers.map(p=>({pid:p.pid,position:p.pos,ppg:p.wPPG})),
       rosterPositions:rp,totalTeams,positions,starterCounts,includeDefense:true
     }):null;
     const _idpSt=(starterCounts.DL||0)+(starterCounts.LB||0)+(starterCounts.DB||0);
     const _idpWt=_idpSt>=6?0.80:_idpSt>=3?0.65:0.50;
-    const baseDynastyWeight={QB:1.0,RB:1.0,WR:1.0,TE:0.95,K:0.30,DL:_idpWt,LB:_idpWt,DB:_idpWt};
-    const posDynastyWeight={};
+    const baseDynastyWeightV2={QB:1.0,RB:1.0,WR:1.0,TE:0.95,K:0.30,DL:_idpWt,LB:_idpWt,DB:_idpWt};
+    posDynastyWeight={};
     positions.forEach(pos=>{
       const lineupPos=lineupContext?.position?.[pos]||null;
       const formatWeight=lineupPos?.importance||scoringWeight[pos]||1;
-      posDynastyWeight[pos]=+((baseDynastyWeight[pos]||0.80)*formatWeight).toFixed(3);
+      posDynastyWeight[pos]=+((baseDynastyWeightV2[pos]||0.80)*formatWeight).toFixed(3);
     });
-    console.log('DHQ player values (LAB V2 formula): '+Object.keys(playerScores).length+' players priced, '+rookieCount+' rookies at slot');
+    console.log('DHQ player values (ENGINE V2 formula): '+Object.keys(playerScores).length+' players priced, '+rookieCount+' rookies at slot');
+    }else{
+    playerScores={};
+    playerMeta={};
+
+    // Build set of all rostered players across the league
+    const rosteredSet=new Set(S.rosters.flatMap(r=>r.players||[]));
+    // Detect offseason: if most players have null/missing team, Sleeper hasn't updated
+    const samplePids=Object.keys(S.players).slice(0,500);
+    const nullTeamPct=samplePids.filter(id=>{const t=S.players[id]?.team;return!t||t==='null'||t===null;}).length/samplePids.length;
+    const isOffseasonTeams=nullTeamPct>0.3;
+
+	    const opportunityMap=_dhqBuildOpportunityMap(S,playerSeasons,posMapLocal);
+
+	    // Score all players with recent production
+	    // Per-position PPG ladder, built ONCE (was rebuilt + sorted per player
+	    // inside the scoring map → O(n²·log n)). rankByPid.get(pid) → posRank,
+	    // total → posTotal. Mirrors the old inline allPosPPG exactly: rank by
+	    // current-or-prior-season avg, counting only players with a curSeason or
+	    // curSeason-1 entry.
+	    const _posRankByPos={};
+	    {
+	      const _byPos={};
+	      Object.entries(playerSeasons).forEach(([pid2,pps])=>{
+	        if(!(pps.seasons[curSeason]||pps.seasons[curSeason-1]))return;
+	        (_byPos[pps.pos]||(_byPos[pps.pos]=[])).push({pid:pid2,ppg:pps.seasons[curSeason]?.avg||pps.seasons[curSeason-1]?.avg||0});
+	      });
+	      Object.keys(_byPos).forEach(pos2=>{
+	        const arr=_byPos[pos2].sort((a,b)=>b.ppg-a.ppg);
+	        const rankByPid=new Map();
+	        arr.forEach((e,i)=>rankByPid.set(e.pid,i+1));
+	        _posRankByPos[pos2]={rankByPid,total:arr.length};
+	      });
+	    }
+
+	    recentPlayers=Object.entries(playerSeasons)
+	      .filter(([pid,ps])=>{
+	        if(!(ps.seasons[curSeason]||ps.seasons[curSeason-1]||ps.seasons[curSeason-2]))return false;
+	        return true;
+	      })
+	      .map(([pid,ps])=>{
+	        const pos=ps.pos;
+	        const p=S.players[pid];
+
+	        // ─── COMPONENT 1: Production Base (40%) ───
+	        const prod=_dhqComputeProductionPPG(ps.seasons);
+	        const wPPG=prod.ppg;
+	        const bestSeason=Object.values(ps.seasons).reduce((m,s)=>s.total>m.total?s:m,{total:0,avg:0});
+
+        // Elite pedigree floor: protects PROVEN ELITE dynasty assets from one bad year.
+        // Requirements: 4+ starter seasons AND an elite best season avg (QB>22, RB/WR>16, TE>13)
+        // REDUCED for aging vets: 30+ get weaker protection, 33+ get none
+        const eliteThresh={QB:22,RB:16,WR:16,TE:13,K:9,DL:8,LB:8,DB:8};
+        const age=pAge(pid)||26;
+        // years_exp (universally mapped across Sleeper/ESPN/MFL/Yahoo) gates the
+        // early-career grace applied to trajectory + age below. null when unknown
+        // → no grace (safe: byte-identical to prior behavior for established vets).
+        const yearsExp=Number.isFinite(+p?.years_exp)?+p.years_exp:null;
+        const isEarlyCareer=yearsExp!==null&&yearsExp<=2;
+        // Compute starter seasons early so pedigree check can use it
+        const realStarterLineEarly=(avgThresh[pos]?.avgStarter||100)*0.70;
+        const starterSeasonsEarly=Object.values(ps.seasons).filter(s=>s.total>=realStarterLineEarly).length;
+        const isElitePedigree=starterSeasonsEarly>=4&&bestSeason.avg>=(eliteThresh[pos]||15);
+        let pedigreeFloor=0;
+        if(isElitePedigree){
+          // Pedigree starts fading at 30 for all positions, gone at 33 (QB: 34)
+          const pedigreeAgeStart=30;
+          const pedigreeAgeEnd=pos==='QB'?34:33;
+          if(age>=pedigreeAgeEnd) pedigreeFloor=0;
+          else if(age>=pedigreeAgeStart) pedigreeFloor=bestSeason.avg*(0.30-0.10*((age-pedigreeAgeStart)/(pedigreeAgeEnd-pedigreeAgeStart)));
+          else pedigreeFloor=bestSeason.avg*0.50;
+        }
+	        const adjustedWPPG=Math.max(wPPG, pedigreeFloor);
+
+	        // ─── COMPONENT 2: Age / Peak Curve (25%) ───
+	        const curve=_dhqCurveForPos(pos,ageCurveWindows);
+	        const [peakStart,peakEnd]=curve.peak;
+	        const declineEnd=curve.decline[1];
+	        const peakYrsLeft=Math.max(0,peakEnd-age);
+	        const ageCurvePhase=_dhqAgeCurvePhase(age,pos,ageCurveWindows);
+	        const ageFactor=_dhqAgeCurveFactor(age,pos,ageCurveWindows,decayRates);
+
+	        // Starter seasons are used by situation, opportunity, and final bonuses.
+	        const realStarterLine=(avgThresh[pos]?.avgStarter||100)*0.70;
+	        const starterSeasons=Object.values(ps.seasons).filter(s=>s.total>=realStarterLine).length;
+	        const totalSeasons=Object.keys(ps.seasons).length;
+
+	        // ─── COMPONENT 3: Situation Multiplier (20%) ───
+	        // sitMult is a left-to-right product of the layers below; every constant
+	        // lives in SITMULT_TUNING. `sf` records the multiplier each layer applied
+	        // (status/role/trajectory/youth/depth/opportunity/durability/posRank) for a
+	        // fully explainable breakdown — it ONLY mirrors what's already applied to
+	        // sitMult, so the arithmetic and ordering of sitMult are unchanged.
+	        const ST=SITMULT_TUNING;
+	        const sf={status:1,role:1,trajectory:1,youth:1,depth:1,opportunity:1,durability:1,posRank:1};
+	        let sitMult=1.0;
+	        const isRostered=rosteredSet.has(pid);
+	        const hasRealTeam=p?.team&&p.team!=='null'&&p.team!==null&&p.team!=='FA'&&p.team!=='';
+	        const statusAdj=_dhqStatusAdjustment({p,pos,age,peakEnd,declineEnd,seasons:ps.seasons,curSeason,lastCompletedSeason,isRostered,hasRealTeam,isOffseasonTeams});
+	        if(statusAdj.mult!==1){sitMult*=statusAdj.mult;sf.status*=statusAdj.mult;}
+
+	        // A) Team / roster status — smart offseason handling
+	        // During offseason, Sleeper nulls out team fields for many active players.
+	        // Use recent production as a proxy: if they played recently, they're not retired.
+	        const hasRecentProduction=!!(ps.seasons[curSeason]||ps.seasons[curSeason-1]);
+	        if(statusAdj.code==='active'&&!isRostered&&!hasRealTeam&&!isOffseasonTeams){
+	          // Mid-season: not rostered, no NFL team = effectively retired/worthless
+	          sitMult*=ST.status.activeUnrosteredNoTeamInSeason;sf.status*=ST.status.activeUnrosteredNoTeamInSeason;
+	        }else if(statusAdj.code==='active'&&!isRostered&&!hasRealTeam&&isOffseasonTeams&&hasRecentProduction){
+	          // Offseason: team data stale but player produced recently = likely unsigned FA, not retired
+	          sitMult*=ST.status.activeUnrosteredNoTeamOffseasonRecent;sf.status*=ST.status.activeUnrosteredNoTeamOffseasonRecent;
+	        }else if(statusAdj.code==='active'&&!isRostered&&!hasRealTeam&&isOffseasonTeams&&!hasRecentProduction){
+	          // Offseason: no team, no recent production = likely retired
+	          sitMult*=ST.status.activeUnrosteredNoTeamOffseasonStale;sf.status*=ST.status.activeUnrosteredNoTeamOffseasonStale;
+	        }else if(statusAdj.code==='active'&&!isRostered&&hasRealTeam){
+	          // Has an NFL team but no one in the league rosters them = available FA
+	          sitMult*=ST.status.activeUnrosteredHasTeam;sf.status*=ST.status.activeUnrosteredHasTeam;
+	        }else if(statusAdj.code==='active'&&isRostered&&!hasRealTeam&&isOffseasonTeams){
+	          // Rostered but team shows null — Sleeper offseason lag, don't penalize
+	          sitMult*=ST.status.activeRosteredNoTeamOffseason;sf.status*=ST.status.activeRosteredNoTeamOffseason;
+	        }else if(statusAdj.code==='active'&&isRostered&&!hasRealTeam&&!isOffseasonTeams){
+	          // Rostered but no team mid-season = cut/released
+	          sitMult*=ST.status.activeRosteredNoTeamInSeason;sf.status*=ST.status.activeRosteredNoTeamInSeason;
+	        }
+
+        // B) Role detection: starter vs backup vs replacement
+	        const recentPPG=prod.lastYearPPG||ps.seasons[curSeason]?.avg||ps.seasons[curSeason-1]?.avg||0;
+	        const posStarterPPG=(avgThresh[pos]?.avgStarter||100)/17;
+
+        if(recentPPG>0){
+          const pctOfStarter=recentPPG/posStarterPPG;
+          let _r=1;
+          if(pctOfStarter<ST.role.deepBackupPct){
+            _r=pos==='QB'?ST.role.deepBackup.QB:ST.role.deepBackup.other; // Deep backup (QB: rarely see the field)
+          }else if(pctOfStarter<ST.role.lowBackupPct){
+            _r=pos==='QB'?ST.role.lowBackup.QB:ST.role.lowBackup.other; // Low-end backup (QB: clipboard holder)
+          }else if(pctOfStarter<ST.role.fringePct){
+            _r=pos==='QB'?ST.role.fringe.QB:ST.role.fringe.other; // Fringe starter / high backup
+          }else if(pctOfStarter>=ST.role.premiumPct){
+            _r=ST.role.premium; // Premium starter
+          }
+          // 0.70-1.30 = starter level, no adjustment (_r stays 1)
+          if(_r!==1){sitMult*=_r;sf.role*=_r;}
+        }
+
+	        // C) Career trajectory — TIGHTENED starter definition
+	        // "Starter season" = must hit 70% of avg starter production (not just clearing the floor)
+	        let _t;
+	        if(starterSeasons>=4){
+	          _t=ST.trajectory.franchise; // Proven franchise player
+        }else if(starterSeasons>=3){
+          _t=ST.trajectory.established; // Established starter
+        }else if(starterSeasons>=2){
+          _t=ST.trajectory.twoYear; // Two-year starter
+        }else if(starterSeasons===1){
+          _t=ST.trajectory.oneYear; // One-year wonder: haven't proven anything yet
+        }else{
+          _t=ST.trajectory.zero; // Zero real starter seasons: all hype
+        }
+        // Early-career grace: only ever lift a trajectory PENALTY (_t<1) toward 1.0
+        // for players too new to have a fair track record (years_exp<=2). A high-pick
+        // sophomore with a quiet rookie year is not "all hype" — they just haven't had
+        // the seasons yet. exp>=3 is untouched. See [[project_rookie_dhq_pipeline]].
+        if(_t<1&&isEarlyCareer){
+          const g=ST.trajectory.earlyCareerGrace?.[yearsExp]??0;
+          if(g>0)_t=_t+(1-_t)*g;
+        }
+        sitMult*=_t;sf.trajectory*=_t;
+
+        // D) Youth premium: dynasty's crown jewels (folded into the `youth` factor)
+        const _y1=ST.youth;
+        if(age<=_y1.age22.maxAge&&wPPG>=posStarterPPG*_y1.age22.minPpgPct){
+          sitMult*=_y1.age22.mult;sf.youth*=_y1.age22.mult;
+        }else if(age<=_y1.age23.maxAge&&wPPG>=posStarterPPG*_y1.age23.minPpgPct){
+          sitMult*=_y1.age23.mult;sf.youth*=_y1.age23.mult;
+        }else if(age<=_y1.age25.maxAge&&wPPG>=posStarterPPG*_y1.age25.minPpgPct){
+          sitMult*=_y1.age25.mult;sf.youth*=_y1.age25.mult;
+        }
+
+        // D2) Upside multiplier: under-25 with starter-level production
+        // These are breakout candidates — dynasty's most valuable assets
+        if(age<=_y1.upsideStrong.maxAge&&wPPG>=posStarterPPG*_y1.upsideStrong.minPpgPct&&starterSeasons>=_y1.upsideStrong.minStarterSeasons){
+          sitMult*=_y1.upsideStrong.mult;sf.youth*=_y1.upsideStrong.mult; // Strong upside: young + producing at starter level
+	        }else if(age<=_y1.upsideModerate.maxAge&&wPPG>=posStarterPPG*_y1.upsideModerate.minPpgPct&&starterSeasons>=_y1.upsideModerate.minStarterSeasons){
+	          sitMult*=_y1.upsideModerate.mult;sf.youth*=_y1.upsideModerate.mult; // Moderate upside: young + approaching starter level
+	        }
+
+        // D5) Early-career development floor — stops the double-penalty that buries
+        // high-pick, slow-start sophomores: a young player still in the build/
+        // developmental age band already takes a below-peak age discount (the 25%
+        // age component), and stacking that on a thin production base double-docks
+        // them for the same youth. For years_exp<=2 we lift the EFFECTIVE age
+        // contribution (ageFactor) up to a floor via a sitMult credit (== floor/
+        // ageFactor, so ageFactor*credit==floor). Capped so it can only neutralize a
+        // discount, never manufacture a bonus above neutral. exp>=3 untouched.
+        if(isEarlyCareer&&(ageCurvePhase==='build'||ageCurvePhase==='developmental')){
+          const floorTarget=_y1.earlyCareerBuildFloor?.[yearsExp];
+          if(floorTarget&&ageFactor>0&&ageFactor<floorTarget){
+            const credit=floorTarget/ageFactor;
+            sitMult*=credit;sf.youth*=credit;
+          }
+        }
+
+	        // D3) Explicit NFL depth chart role. This moves QB1/QB2/QB3 profiles
+	        // more aggressively than production alone, and gives smaller role
+	        // nudges to RB/WR/TE/IDP where rotations are normal.
+	        const roleAdj=_dhqDepthRole(pid,p,S,posMapLocal);
+	        if(roleAdj.mult!==1){sitMult*=roleAdj.mult;sf.depth*=roleAdj.mult;}
+
+	        // D4) Same-team opportunity. A young/unproven RB/WR/TE blocked by
+	        // elite teammates keeps upside, but not the same path confidence as
+	        // an equally talented player with a clearer role.
+	        const oppAdj=_dhqOpportunityAdjustment({
+	          pid,pos,age,starterSeasons,team:p?.team,opportunityMap,roleRank:roleAdj.rank,
+	          recentPPG,posStarterPPG, // fix #7: enable symmetric clear-path reward
+	        });
+	        if(oppAdj.mult!==1){sitMult*=oppAdj.mult;sf.opportunity*=oppAdj.mult;}
+
+        // E) Durability: games played penalty
+	        const recentGP=prod.lastYearGP||ps.seasons[curSeason]?.gp||ps.seasons[curSeason-1]?.gp||17;
+        const prevGP=ps.seasons[curSeason-1]?.gp||ps.seasons[curSeason-2]?.gp||17;
+        if(recentGP<=ST.durability.gpThresh&&prevGP<=ST.durability.gpThresh&&totalSeasons>=2){
+          sitMult*=ST.durability.chronic;sf.durability*=ST.durability.chronic; // Injury-prone: missed time in multiple seasons
+        }else if(recentGP<=ST.durability.gpThresh&&totalSeasons>=1){
+          sitMult*=ST.durability.recent;sf.durability*=ST.durability.recent; // Missed time recently
+        }
+
+        // F) Elite production premium — BIGGER gaps between tiers
+        // posRank/posTotal come from _posRankByPos, built ONCE before the loop
+        // (below). This used to rebuild + sort the full position ladder per
+        // player → O(n²·log n) over the whole universe; now an O(1) Map lookup.
+        const _prEntry=_posRankByPos[pos];
+        const posRank=(_prEntry&&_prEntry.rankByPid.get(pid))||0;
+        const posTotal=_prEntry?_prEntry.total:0;
+
+	        let _pr=1;
+	        if(posRank>0&&posRank<=3)_pr=ST.posRank.top3; // Top 3: elite tier
+	        else if(posRank>0&&posRank<=5)_pr=ST.posRank.top5; // Top 5: star
+	        else if(posRank>0&&posRank<=10)_pr=ST.posRank.top10; // Top 10: solid starter
+	        // G) Replacement-level penalty — bottom quartile of starters
+	        else if(posRank>0&&posRank>posTotal*ST.posRank.bottom10PctCut)_pr=ST.posRank.bottom10Pct; // Bottom 10%: roster filler
+	        else if(posRank>0&&posRank>posTotal*ST.posRank.bottom25PctCut)_pr=ST.posRank.bottom25Pct; // Bottom 25%: replacement level
+	        if(_pr!==1){sitMult*=_pr;sf.posRank*=_pr;}
+
+        // ── CLAMP situation multiplier to reasonable range ──
+        // Capture the raw (pre-clamp) product so unexpected compounding is visible.
+        const sitMultRaw=sitMult;
+        sitMult=Math.min(ST.clamp.max,Math.max(ST.clamp.min,sitMult));
+        // (c) Audit hook: warn when the raw stack compounds outside [warn.lo, warn.hi].
+        // Pure logging — does not alter any score.
+        if(sitMultRaw<ST.warn.lo||sitMultRaw>ST.warn.hi){
+          try{console.warn('[DHQ:sitMult] extreme raw multiplier',{pid,pos,raw:+sitMultRaw.toFixed(3),clamped:+sitMult.toFixed(4),factors:sf});}catch(_e){}
+        }
+
+        // Trend: compare most recent season to prior
+        const ppgCur=ps.seasons[curSeason]?.avg||0;
+        const ppgPrev=ps.seasons[curSeason-1]?.avg||0;
+        const trend=ppgCur&&ppgPrev?+(((ppgCur-ppgPrev)/ppgPrev)*100).toFixed(0):0; // % change
+
+	        const sitMultFactors=Object.fromEntries(Object.entries(sf).map(([k,v])=>[k,+v.toFixed(4)]));
+	        return{pid,pos,name:ps.name,wPPG:adjustedWPPG,rawPPG:prod.rawPPG,bestTotal:bestSeason.total,bestAvg:bestSeason.avg,
+	          age,ageFactor:+ageFactor.toFixed(4),sitMult:+sitMult.toFixed(4),sitMultRaw:+sitMultRaw.toFixed(4),sitMultFactors,
+	          ageCurvePhase,peakYrsLeft,declineEnd,seasons:totalSeasons,starterSeasons,recentGP,posRank,posTotal,trend,
+	          prod,statusAdj,roleAdj,oppAdj};
+	      })
+      .filter(p=>p.wPPG>0)
+      .sort((a,b)=>(b.wPPG*b.ageFactor*b.sitMult)-(a.wPPG*a.ageFactor*a.sitMult)); // sort by raw composite; dynasty weight applied below
+
+    // ─── FINAL VALUE ASSEMBLY ───
+    // Combine all components into 0-10000 scale
+
+    // Dynasty market value weight by position — reflects how replaceable
+    // production is at each position. A kicker's 8 PPG is fungible (waiver
+    // kickers score 6-8), while an RB's 8 PPG represents real roster value.
+    // IDP weight scales with league format (more IDP starters = more valuable).
+    const _idpSt=(starterCounts.DL||0)+(starterCounts.LB||0)+(starterCounts.DB||0);
+    const _idpWt=_idpSt>=6?0.80:_idpSt>=3?0.65:0.50;
+    scoringWeight=_dhqPositionScoringWeights(avgThresh,starterCounts,positions);
+    lineupContext=DHQ_CORE?.buildLineupContext?DHQ_CORE.buildLineupContext({
+      rows:recentPlayers.map(p=>({pid:p.pid,position:p.pos,ppg:p.wPPG})),
+      rosterPositions:rp,
+      totalTeams,
+      positions,
+      starterCounts,
+      includeDefense:true
+    }):null;
+    const baseDynastyWeight={QB:1.0,RB:1.0,WR:1.0,TE:0.95,K:0.30,DL:_idpWt,LB:_idpWt,DB:_idpWt};
+    posDynastyWeight={};
+    positions.forEach(pos=>{
+      const lineupPos=lineupContext?.position?.[pos]||null;
+      const formatWeight=lineupPos?.importance||scoringWeight[pos]||1;
+      let baseWeight=baseDynastyWeight[pos]||0.80;
+      if(pos==='K'&&lineupPos){
+        // Kicker calibration: replacement legs stay near zero (no scarcity or
+        // peak floors), but the criticality band is wide enough that formats
+        // leaning on kickers price the proven difference-makers meaningfully
+        // (up to 0.75 weight) without returning to full skill-position money.
+        const criticality=Math.max(lineupPos.pointsRatio||0,lineupPos.marginalRatio||0);
+        const criticalityLift=Math.max(0,Math.min(1,(criticality-0.75)/3));
+        baseWeight=0.30+(0.45*criticalityLift);
+      }
+      posDynastyWeight[pos]=+(baseWeight*formatWeight).toFixed(3);
+    });
+    const lineupValuePPGFor=(p)=>{
+      const lineupPos=lineupContext?.position?.[p.pos]||null;
+      if(!lineupPos)return p.wPPG;
+      const edge=Math.max(0,p.wPPG-(lineupPos.replacementPpg||0));
+      return (p.wPPG*0.35)+(edge*0.65);
+    };
+
+    // FIX #4 — Robust normalization anchor (sandbox-gated).
+    // Legacy: coreScore=(composite/max(allComposites))*7500 — a SINGLE outlier
+    // (one player or position) sets the denominator, compresses everyone, and makes
+    // every player's value hostage to one other player. See _robustTopComposite below:
+    // we WINSORIZE the max (cap it relative to the field "shoulder") rather than move
+    // the whole scale, so normal fields are byte-identical to legacy (zero FC drift)
+    // and only a genuine #1 spike is damped. Top player still lands ~7000-8500.
+    const _composites=recentPlayers.map(p=>
+      lineupValuePPGFor(p)*p.ageFactor*p.sitMult*(posDynastyWeight[p.pos]||0.80)
+    );
+    const _legacyTopComposite=Math.max(1,..._composites);
+    // Robust anchor: WINSORIZE the single max, don't move the whole scale.
+    // The denominator is capped at a multiple (1.20×) of the mean of the 2nd/3rd
+    // composites (the "shoulder" of the field, which excludes #1 itself). When the
+    // top player is normal (max within 1.20× of the shoulder — the usual case, incl.
+    // Psycho & 1QB where max/shoulder ≈ 1.06) the cap never binds, so anchor === max
+    // and the scale is IDENTICAL to legacy (zero FC drift). Only when #1 genuinely
+    // spikes far above #2/#3 does the cap engage, preventing one outlier from
+    // single-handedly compressing everyone else's score. Sandbox-gated until proven.
+    const _sortedComposites=_composites.slice().sort((a,b)=>b-a);
+    // Shoulder = mean of the composites just below #1 (up to next 2); robust to a lone spike.
+    const _shoulderVals=_sortedComposites.slice(1,3);
+    const _shoulder=_shoulderVals.length
+      ? _shoulderVals.reduce((s,c)=>s+c,0)/_shoulderVals.length
+      : _legacyTopComposite;
+    // Cap the max at 1.20× the shoulder; below that the anchor equals the true max.
+    const _robustTopComposite=Math.max(1,Math.min(_legacyTopComposite,1.20*_shoulder));
+    const _useRobustAnchor=(typeof window!=='undefined'&&typeof window.isSandbox==='function')
+      ? window.isSandbox()
+      : (typeof window!=='undefined'&&/sandbox|localhost|127\.0\.0\.1/.test(window.location?.hostname||''));
+    const topComposite=_useRobustAnchor?_robustTopComposite:_legacyTopComposite;
+    recentPlayers.forEach((p)=>{
+      const lineupPos=lineupContext?.position?.[p.pos]||null;
+      const lineupValuePPG=lineupValuePPGFor(p);
+      const lineupReplacement=lineupPos?.replacementPpg||0;
+      const lineupEdge=Math.max(0,p.wPPG-lineupReplacement);
+      const avgLineupSlotPPG=lineupPos?.perTeamSlots?((lineupPos.perTeamPpg||0)/lineupPos.perTeamSlots):lineupReplacement;
+      const playerLineupTotal=Math.max(1,(lineupContext?.perTeamLineupPpg||1)-avgLineupSlotPPG+p.wPPG);
+      const composite=lineupValuePPG*p.ageFactor*p.sitMult*(posDynastyWeight[p.pos]||0.80);
+
+      // Production + Age + Situation (75% of value)
+      const coreScore=(composite/topComposite)*7500;
+
+      // Positional scarcity (10%) — tiered by league starter pool
+      let scarcityScore=(scarcityMult[p.pos]||1.0)*1000-500;
+      if(p.pos==='QB'&&isSF){
+        const qbStarterPool=Math.max(12,Math.round((starterCounts.QB||1)*totalTeams));
+        const qbPremiumLine=Math.max(12,Math.round(qbStarterPool*0.40));
+        if(p.posRank>0&&p.posRank<=qbPremiumLine)scarcityScore=750;
+        else if(p.posRank>0&&p.posRank<=qbStarterPool)scarcityScore=500;
+        else if(p.posRank>0&&p.posRank<=qbStarterPool+8)scarcityScore=200;
+        else scarcityScore=75;
+      }
+
+      // Peak years remaining bonus (5%): ~120 per year, capped at 1000
+      // GATED: only players with starter-level production get the full bonus
+      // Backups get a reduced bonus — youth alone isn't enough
+      const productionPct = p.wPPG / Math.max(1, (avgThresh[p.pos]?.avgStarter || 100) / 17);
+      const peakMult = productionPct >= 0.70 ? 1.0 :   // Starter-level: full peak bonus
+                       productionPct >= 0.40 ? 0.40 :  // Fringe: reduced bonus
+                       productionPct >= 0.20 ? 0.15 :  // Backup: minimal bonus
+                       0.0;                             // Deep backup: no peak bonus
+      // Kicker calibration: scarcity and peak-years floors stay OFF (any waiver
+      // leg replaces the position's floor, and youth isn't kicker capital), but
+      // consistency and durability stay ON — those are exactly what separates a
+      // proven game-changing kicker from a JAG. Result: elite proven kickers
+      // price meaningfully high, replacement legs stay near zero.
+      const isKicker=p.pos==='K';
+      const peakBonus = isKicker ? 0 : Math.min(1000, p.peakYrsLeft * 120 * peakMult);
+
+      // Consistency bonus — but NOT for unrostered players (nobody wants them)
+      const isUnrostered=!rosteredSet.has(p.pid);
+      const consistencyBonus=isUnrostered?0:(p.starterSeasons>=4?400:p.starterSeasons>=3?300:p.starterSeasons>=2?150:0);
+
+      // Durability micro-bonus (not for unrostered)
+      const durabilityBonus=isUnrostered?0:(p.recentGP>=16?100:p.recentGP>=13?50:0);
+
+      // Scarcity doesn't apply to unrostered players
+      // ALSO reduced for players below starter threshold — backups don't create scarcity
+      const leagueStarterPool=Math.max(1,Math.round((starterCounts[p.pos]||1)*totalTeams));
+      const insideLeagueStarterPool=p.posRank>0&&p.posRank<=leagueStarterPool;
+      const scarcityFinal = (isUnrostered || isKicker) ? 0 :
+                           (productionPct >= 0.50 || insideLeagueStarterPool) ? scarcityScore :
+                           productionPct >= 0.30 ? Math.round(scarcityScore * 0.25) :
+                           0; // Deep backups (and kickers) get zero scarcity premium
+
+      // Trend modifier — in-season only, capped at ±8%
+      // A +30% trending player gets ~+5% DHQ boost; -30% gets ~-5% penalty
+      const nflSt=S.nflState?.season_type;
+      const inSeason=nflSt==='regular'||nflSt==='post';
+      const trendMod=inSeason&&p.trend?Math.max(-0.08,Math.min(0.08,p.trend/100*0.25)):0;
+
+	      let raw=(coreScore+scarcityFinal+peakBonus+consistencyBonus+durabilityBonus)*(1+trendMod);
+	      if(p.statusAdj?.cap!=null)raw=Math.min(raw,p.statusAdj.cap);
+	      const val=Math.round(Math.min(10000,Math.max(0,raw)));
+	      playerScores[p.pid]=val;
+	      playerMeta[p.pid]={
+	        pos:p.pos,ppg:p.wPPG,age:p.age,
+	        ageFactor:p.ageFactor,sitMult:p.sitMult,
+	        // Fully-explainable per-layer breakdown of sitMult (each value is the
+	        // multiplier that layer applied; product ≈ sitMultRaw before clamp).
+	        sitMultRaw:p.sitMultRaw,sitMultFactors:p.sitMultFactors,
+	        ageCurvePhase:p.ageCurvePhase,
+	        peakYrsLeft:p.peakYrsLeft,declineEnd:p.declineEnd,
+	        starterSeasons:p.starterSeasons,
+	        recentGP:p.recentGP,
+	        leagueStarterPool,
+	        replacementLinePPG:+(((avgThresh[p.pos]?.avgStarter||0)/17)||0).toFixed(2),
+	        lineupReplacementPPG:+lineupReplacement.toFixed(2),
+	        lineupEdgePPG:+lineupEdge.toFixed(2),
+	        lineupValuePPG:+lineupValuePPG.toFixed(2),
+	        playerLineupPointShare:+(p.wPPG/playerLineupTotal).toFixed(4),
+	        positionLineupPointShare:lineupPos?.pointShare||0,
+	        positionLineupMarginalShare:lineupPos?.marginalShare||0,
+	        positionLineupSlotShare:lineupPos?.slotShare||0,
+	        lineupImportance:lineupPos?.importance||1,
+	        posDynastyWeight:posDynastyWeight[p.pos]||0.80,
+	        scoringWeight:scoringWeight[p.pos]||1,
+	        productionModel:'75_25_last_year_career',
+	        lastYear:p.prod?.lastYear,
+	        lastYearPPG:p.prod?.lastYearPPG,
+	        lastYearAdjPPG:p.prod?.lastYearAdj,
+	        careerPPG:p.prod?.careerPPG,
+	        ppgReliability:p.prod?.reliability,
+	        roleLabel:p.roleAdj?.label||'',
+	        roleMult:p.roleAdj?.mult||1,
+	        roleSource:p.roleAdj?.source||'',
+	        opportunityLabel:p.oppAdj?.label||'',
+	        opportunityMult:p.oppAdj?.mult||1,
+	        opportunityBlockers:p.oppAdj?.blockers||[],
+	        statusCode:p.statusAdj?.code||'active',
+	        statusReason:p.statusAdj?.reason||'',
+	        statusCap:p.statusAdj?.cap,
+	        // Trend: compare most recent season PPG to prior
+	        trend:(()=>{
+	          const ps=playerSeasons[p.pid];if(!ps)return 0;
+          const cur=ps.seasons[curSeason]?.avg||0;
+          const prev=ps.seasons[curSeason-1]?.avg||ps.seasons[curSeason-2]?.avg||0;
+          if(!cur||!prev)return 0;
+          const pctChange=((cur-prev)/prev)*100;
+          return +pctChange.toFixed(0); // e.g., +15 means 15% improvement, -20 means 20% decline
+        })()
+      };
+    });
+    console.log('DHQ player values: '+Object.keys(playerScores).length+' players scored');
+    }
 
     // ═══════════════════════════════════════════════════════════════
     // STEP 9: Aggregate FAAB data (already fetched/cached above)
@@ -1426,13 +1894,415 @@ async function loadLeagueIntel(){
       };
     });
 
+    if(!engineV2){
     // ═══════════════════════════════════════════════════════════════
-    // STEPS 12-12d DELETED IN THE LAB COPY (owner order 2026-09-05):
-    // FC veteran blend, FC/prospect rookie pricing, the rank-sanity
-    // rail, superflex QB alignment, and early-career stash floors are
-    // all retired here — the v2 formula owns the market leash and the
-    // rookie slot rule natively. The real DHQ-Shared repo is untouched.
+    // STEP 12: FantasyCalc market consensus blend
+    //   Rookies (no DHQ score): 100% FC value (scaled to DHQ range)
+    //   Veterans (have DHQ score): 70% DHQ + 30% FC market consensus
+    //   FC weight rises with disagreement, but is capped when the format has
+    //   scoring or roster rules FantasyCalc cannot represent.
     // ═══════════════════════════════════════════════════════════════
+    rookieCount=0;
+    vetBlendCount=0;
+    sourceSnapshots={};
+    try{
+      const pprVal = (sc.rec != null && sc.rec >= 0.9) ? 1 : (sc.rec != null && sc.rec >= 0.4) ? 0.5 : 0;
+      const marketCompatibility=DHQ_CORE?.fantasyCalcCompatibility?DHQ_CORE.fantasyCalcCompatibility({
+        mode:'dynasty',
+        teams:totalTeams,
+        ppr:pprVal,
+        rosterPositions:rp,
+        scoring:sc
+      }):{score:1,supported:true,custom:false,extremeCustom:false,reasons:[]};
+      const fcRequest=window.App?.Intelligence?.buildFantasyCalcRequest
+        ? window.App.Intelligence.buildFantasyCalcRequest({
+          league:{league_id:S.currentLeagueId,scoring_settings:sc,roster_positions:rp,type:'dynasty'},
+          rosters:S.rosters||[],
+          teams:totalTeams,
+          isDynasty:true,
+          numQbs:isSF?2:1,
+          ppr:pprVal,
+        })
+        : null;
+      const fcUrl=fcRequest?.url||`https://api.fantasycalc.com/values/current?isDynasty=true&numQbs=${isSF?2:1}&numTeams=${totalTeams}&ppr=${pprVal}`;
+      const fcSnapshot=window.App?.Intelligence?.fetchFantasyCalcSnapshot
+        ? await window.App.Intelligence.fetchFantasyCalcSnapshot({
+          league:{league_id:S.currentLeagueId,scoring_settings:sc,roster_positions:rp,type:'dynasty'},
+          rosters:S.rosters||[],
+          teams:totalTeams,
+          isDynasty:true,
+          numQbs:isSF?2:1,
+          ppr:pprVal,
+          request:fcRequest,
+        })
+        : null;
+      const fcData=fcSnapshot?.rawRows?.length
+        ? fcSnapshot.rawRows
+        : await fetch(fcUrl).then(r=>r.ok?r.json():[]).catch(()=>[]);
+      sourceSnapshots.fantasycalc={
+        sourceKey:'fantasycalc',
+        sourceLabel:'FantasyCalc',
+        url:fcSnapshot?.url||fcUrl,
+        params:fcSnapshot?.params||fcRequest?.params||{isDynasty:'true',numQbs:String(isSF?2:1),numTeams:String(totalTeams),ppr:String(pprVal)},
+        fetchedAt:fcSnapshot?.fetchedAt||new Date().toISOString(),
+        count:fcSnapshot?.count||fcData.length||0,
+        playerCount:fcSnapshot?.playerCount||fcData.filter(d=>d.player?.sleeperId&&d.player.position!=='PICK').length,
+        pickCount:fcSnapshot?.pickCount||fcData.filter(d=>d.player?.position==='PICK').length,
+        compatibility:marketCompatibility,
+        evidence:fcSnapshot?.evidence||[],
+      };
+      if(fcData.length){
+        // ── SCALE FACTOR: use median ratio of top-20 matched players ──
+        // More robust than single max-player ratio (avoids outlier skew)
+        const fcMatched=fcData.filter(d=>d.player?.sleeperId&&d.player.position!=='PICK'&&d.value>0&&playerScores[d.player.sleeperId])
+          .map(d=>({sid:d.player.sleeperId,fcVal:d.value,dhqVal:playerScores[d.player.sleeperId]}))
+          .sort((a,b)=>b.fcVal-a.fcVal);
+        let scaleFactor;
+        if(fcMatched.length>=10){
+          const ratios=fcMatched.slice(0,20).map(m=>m.dhqVal/m.fcVal).sort((a,b)=>a-b);
+          scaleFactor=ratios[Math.floor(ratios.length/2)]; // median
+        }else{
+          const fcTop=Math.max(...fcData.filter(d=>d.player?.sleeperId).map(d=>d.value||0),1);
+          const dhqTop=Math.max(...Object.values(playerScores),1);
+          scaleFactor=dhqTop/fcTop;
+        }
+
+        const fcRookieRows=[];
+        fcData.forEach(d=>{
+          const sid=d.player?.sleeperId;
+          const pos=d.player?.position;
+          const val=d.value||0;
+          if(!sid||!pos||pos==='PICK'||val<=0)return;
+          const mappedPos=posMapLocal(pos);
+          if(!positions.includes(mappedPos))return;
+          const fcScaled=Math.round(val*scaleFactor);
+
+          if(playerScores[sid]){
+            // ── VETERAN BLEND: deviation-aware FC weight ──
+            // Base: 70% DHQ / 30% FC. Meaningful disagreement moves to
+            // 65/35, major disagreement can reach 60/40 in FC-compatible
+            // formats, and custom formats cap the FC anchor lower.
+            const dhqVal=playerScores[sid];
+            const deviation=Math.abs(dhqVal-fcScaled)/Math.max(dhqVal,fcScaled,1);
+            const fcWt=_dhqMarketBlendWeight(deviation,marketCompatibility);
+            const blended=Math.round(dhqVal*(1-fcWt)+fcScaled*fcWt);
+            playerScores[sid]=Math.min(10000,Math.max(0,blended));
+            if(playerMeta[sid]){
+              playerMeta[sid].fcValue=val;
+              playerMeta[sid].fcScaled=fcScaled;
+              playerMeta[sid].dhqRaw=dhqVal;
+              playerMeta[sid].fcWeight=Math.round(fcWt*100);
+              playerMeta[sid].fcCompatibilityScore=marketCompatibility.score;
+              playerMeta[sid].fcCompatibilityReasons=marketCompatibility.reasons;
+              playerMeta[sid].fcUpdatedAt=sourceSnapshots.fantasycalc.fetchedAt;
+              playerMeta[sid].source='DHQ_FC_BLEND';
+            }
+            vetBlendCount++;
+          }else{
+            fcRookieRows.push({d,sid,mappedPos,val,fcScaled});
+          }
+        });
+
+        const veteranLadderCache={};
+        const getVeteranLadder=pos=>{
+          if(veteranLadderCache[pos])return veteranLadderCache[pos];
+          veteranLadderCache[pos]=Object.entries(playerScores)
+            .filter(([pid,score])=>{
+              if(!score||score<=0)return false;
+              if(playerMeta[pid]?.pos!==pos)return false;
+              return S.players?.[pid]?.years_exp!==0;
+            })
+            .sort((a,b)=>b[1]-a[1])
+            .map(([pid,score],idx)=>({pid,score,rank:idx+1}));
+          return veteranLadderCache[pos];
+        };
+        const rookieBandPct=(pos,posRank)=>{
+          if(pos==='QB')return posRank<=8?0.10:posRank<=24?0.08:0.07;
+          if(pos==='RB')return posRank<=8?0.16:posRank<=24?0.12:0.09;
+          if(pos==='WR')return posRank<=12?0.14:posRank<=36?0.10:0.08;
+          if(pos==='TE')return posRank<=6?0.16:posRank<=18?0.12:0.09;
+          return 0.10;
+        };
+        const clamp=(val,min,max)=>Math.min(max,Math.max(min,val));
+
+        fcRookieRows.forEach(({d,sid,mappedPos,val,fcScaled})=>{
+          // ── ROOKIE: market-rank bounded DHQ mapping ──
+          // FC already accounts for league size, PPR, and Superflex via the request
+          // params. DHQ can reshape the value, but it should not move a rookie far
+          // outside the consensus position-rank neighborhood.
+          const isIDPPos=['DL','LB','DB'].includes(mappedPos);
+          const hasIDP=(starterCounts.DL||0)>0||(starterCounts.LB||0)>0||(starterCounts.DB||0)>0;
+          if(isIDPPos&&!hasIDP)return;
+
+          let anchorDHQ=null;
+          if(fcMatched.length>=5){
+            let bestDist=Infinity;
+            for(const m of fcMatched){
+              const dist=Math.abs(m.fcVal-val);
+              if(dist<bestDist){bestDist=dist;anchorDHQ=playerScores[m.sid]||m.dhqVal;}
+            }
+          }
+
+          const fcRank=d.overallRank||999;
+          const fcPosRank=d.positionRank||999;
+          const ladder=getVeteranLadder(mappedPos);
+          const marketSlot=ladder.length
+            ? ladder[Math.min(Math.max(fcPosRank,1)-1,ladder.length-1)]
+            : null;
+          const marketTargetDHQ=marketSlot?.score||anchorDHQ||fcScaled;
+          const bandPct=rookieBandPct(mappedPos,fcPosRank);
+          const marketFloor=Math.round(marketTargetDHQ*(1-bandPct));
+          const marketCeil=Math.round(marketTargetDHQ*(1+bandPct));
+          const baseDHQ=anchorDHQ!==null
+            ? Math.round(anchorDHQ*0.55+fcScaled*0.45)
+            : fcScaled;
+          const discount=fcRank<=5?0.97:fcRank<=15?0.93:fcRank<=30?0.90:fcRank<=60?0.87:0.82;
+          let rookieDHQ=Math.round(baseDHQ*discount);
+          rookieDHQ=clamp(rookieDHQ,marketFloor,marketCeil);
+
+          if(rookieDHQ<100)return;
+          const rookieAge=S.players[sid]?.age||21;
+          const rookieCurve=_dhqCurveForPos(mappedPos,ageCurveWindows);
+          playerScores[sid]=Math.min(10000,rookieDHQ);
+          playerMeta[sid]={
+            pos:mappedPos,ppg:0,age:rookieAge,
+            ageFactor:1.0,sitMult:1.0,
+            ageCurvePhase:_dhqAgeCurvePhase(rookieAge,mappedPos,ageCurveWindows),
+            peakYrsLeft:Math.max(0,rookieCurve.peak[1]-rookieAge),
+            declineEnd:rookieCurve.decline[1],
+            starterSeasons:0,recentGP:0,
+            source:'FC_ROOKIE',fcValue:val,fcRank:fcRank,fcPosRank,
+            fcUpdatedAt:sourceSnapshots.fantasycalc.fetchedAt,
+            anchorDHQ,fcScaled,marketTargetDHQ,marketBand:[marketFloor,marketCeil],
+            marketSlotPid:marketSlot?.pid||null,unprovenDiscount:discount
+          };
+          rookieCount++;
+        });
+
+        // Log top 10 rookies for verification
+        const topRookies=Object.entries(playerMeta).filter(([,m])=>m.source==='FC_ROOKIE')
+          .map(([sid,m])=>({name:S.players[sid]?.full_name||sid,dhq:playerScores[sid],fc:m.fcValue,rank:m.fcRank,posRank:m.fcPosRank}))
+          .sort((a,b)=>b.dhq-a.dhq).slice(0,10);
+        console.log('Top rookies:',topRookies.map(r=>r.name+' '+r.dhq+' (FC:'+r.fc+', pos:'+r.posRank+')').join(', '));
+        console.log(`FC blend: ${vetBlendCount} veterans (deviation-aware, compatibility ${marketCompatibility.score}), ${rookieCount} rookies (scale: ${scaleFactor.toFixed(3)}, matched: ${fcMatched.length})`);
+      }
+    }catch(e){console.warn('FC blend failed:',e);}
+
+    // ═══════════════════════════════════════════════════════════════
+    // STEP 12b: IDP & K rookie values (FC doesn't cover these positions)
+    //   FantasyCalc only returns QB/RB/WR/TE — IDP and K rookies need
+    //   a separate path using prospect consensus rank + veteran ladder.
+    // ═══════════════════════════════════════════════════════════════
+    try{
+      const hasIDP=(starterCounts.DL||0)>0||(starterCounts.LB||0)>0||(starterCounts.DB||0)>0;
+      const hasK=rp.includes('K');
+      if(hasIDP||hasK){
+        // Build position ladders from scored veterans
+        const ladders={};
+        ['DL','LB','DB','K'].forEach(pos=>{
+          ladders[pos]=Object.entries(playerScores)
+            .filter(([pid])=>playerMeta[pid]?.pos===pos&&playerScores[pid]>0)
+            .sort((a,b)=>b[1]-a[1]).map(([,val])=>val);
+        });
+
+        const idpKPositions=new Set(hasIDP?['DL','LB','DB']:[]);
+        if(hasK)idpKPositions.add('K');
+
+        // Vet offsets: how many vets rank above #1 rookie at each pos in startups
+        const vetOffsets={DL:8,LB:6,DB:8,K:2};
+        let idpKRookieCount=0;
+
+        Object.entries(S.players||{}).forEach(([pid,p])=>{
+          if(p.years_exp!==0)return;
+          if(playerScores[pid])return;
+          const rawPos=p.position||'';
+          const pos=posMapLocal(rawPos);
+          if(!idpKPositions.has(pos))return;
+
+          // Get prospect rank from CSV data
+          const prospect=typeof window.findProspect==='function'
+            ?window.findProspect(p.full_name||((p.first_name||'')+' '+(p.last_name||'')).trim())
+            :null;
+          // Identity guard: a fuzzy alias match may enrich a card, but must never
+          // SEED VALUES — "Dominic Bailey" once priced off David Bailey's R1
+          // consensus via the "d bailey" alias. Reject when both first names are
+          // full words and neither is a prefix of the other (keeps Cam/Cameron).
+          if(prospect){
+            const _fTok=s=>String(s||'').toLowerCase().replace(/[^a-z\s]/g,'').trim().split(/\s+/)[0]||'';
+            const _a=_fTok(p.full_name||p.first_name),_b=_fTok(prospect.name);
+            if(_a.length>2&&_b.length>2&&_a!==_b&&!_a.startsWith(_b)&&!_b.startsWith(_a))return;
+          }
+          // Require a real consensus match. Sleeper's player universe contains
+          // hundreds of years_exp===0 UDFA nobodies; without this guard each one
+          // gets pinned to the bottom of the veteran ladder and floods the
+          // leaderboard. Only rookies that appear in the prospect consensus
+          // (with an actual rank) earn a DHQ value here.
+          const consensusRank=prospect?.consensusRank||prospect?.rank||null;
+          if(!consensusRank||consensusRank>=999)return;
+
+          // Position rank among rookies at this position
+          const posRank=prospect?.rookiePosRank||Math.ceil(consensusRank/(pos==='K'?8:4));
+          const offset=vetOffsets[pos]||8;
+          const ladder=ladders[pos]||[];
+
+          let rookieDHQ;
+          if(ladder.length>=3){
+            const idx=Math.min(posRank+offset-1,ladder.length-1);
+            // Decay deep prospects below the veteran floor instead of pinning
+            // them flat to the worst rostered vet — a consensus-rank-50 LB should
+            // not equal the league's #15 starter.
+            const floorVal=ladder[idx]||ladder[ladder.length-1]||0;
+            const overflow=(posRank+offset-1)-(ladder.length-1);
+            rookieDHQ=overflow>0?Math.round(floorVal*Math.max(0.15,1-overflow*0.08)):floorVal;
+          }else{
+            // Sparse ladder fallback: rank-based estimate scaled by position weight
+            const posWeight={DL:0.55,LB:0.45,DB:0.50,K:0.20};
+            const topDHQ=Math.max(...Object.values(playerScores),1);
+            rookieDHQ=Math.round(topDHQ*(posWeight[pos]||0.3)*Math.max(0.05,(120-consensusRank)/120));
+          }
+
+          // Unproven discount (same tiers as FC rookies)
+          const discount=consensusRank<=5?0.97:consensusRank<=15?0.93:consensusRank<=32?0.90:consensusRank<=64?0.87:0.82;
+          rookieDHQ=Math.round(rookieDHQ*discount);
+
+          if(rookieDHQ<50)return;
+          const rookieAge=p.age||21;
+          const rookieCurve=_dhqCurveForPos(pos,ageCurveWindows);
+          playerScores[pid]=Math.min(10000,rookieDHQ);
+          playerMeta[pid]={
+            pos,ppg:0,age:rookieAge,
+            ageFactor:1.0,sitMult:1.0,
+            ageCurvePhase:_dhqAgeCurvePhase(rookieAge,pos,ageCurveWindows),
+            peakYrsLeft:Math.max(0,rookieCurve.peak[1]-rookieAge),
+            declineEnd:rookieCurve.decline[1],
+            starterSeasons:0,recentGP:0,
+            source:'PROSPECT_ROOKIE',consensusRank,
+            unprovenDiscount:discount
+          };
+          idpKRookieCount++;
+        });
+        if(idpKRookieCount){
+          rookieCount+=idpKRookieCount;
+          console.log(`IDP/K rookies: ${idpKRookieCount} valued from prospect data`);
+        }
+      }
+    }catch(e){console.warn('IDP/K rookie step failed:',e);}
+
+    // ═══════════════════════════════════════════════════════════════
+    // STEP 12c: Ranking-sanity rail — nudge ONLY the few high-value assets
+    // whose DHQ rank diverges wildly from the FantasyCalc market rank, toward
+    // market, leaving the rest of the board untouched. Validated (rho 0.892→
+    // ~0.915, ~50/2001 assets moved, DHQ's defensible reads preserved) and
+    // PROMOTED TO PRODUCTION 2026-06-03.
+    // ═══════════════════════════════════════════════════════════════
+    try{ _dhqApplyRankSanityRail(playerScores,playerMeta); }
+    catch(e){window.dhqLog?.('rankRail',e);}
+
+    // ═══════════════════════════════════════════════════════════════
+    // STEP 12c-2: SUPERFLEX QB MARKET ALIGNMENT (owner ruling 2026-09-02).
+    // In 2-QB formats the QB is the most valuable position on the field and
+    // the FantasyCalc feed is ALREADY priced for 2-QB leagues — yet the
+    // engine ran QBs on the same position weight as RB/WR and priced them
+    // 20-40% under that market (Burrow was priced below George Pickens).
+    // Two moves, SF leagues only, both fail-soft:
+    //   1. UPWARD market alignment — when the 2-QB market prices a QB above
+    //      DHQ, move 65% of the way up to it. Never pulls down (the sanity
+    //      rail already handles overrated QBs).
+    //   2. Live-starter floor — a QB starting for his NFL club (ESPN feed)
+    //      never prices below 40% of the median starting-QB value: "even
+    //      older QBs who are starters have value." Covers the age-cliff
+    //      case (Stafford) without touching the age curve itself.
+    if(isSF){
+      try{
+        const _qbPids=Object.keys(playerScores).filter(pid=>playerMeta[pid]?.pos==='QB'&&playerScores[pid]>0);
+        const _fcPids=Object.keys(playerScores).filter(pid=>(playerMeta[pid]?.fcValue||0)>0&&playerScores[pid]>0);
+        const _fcQb=_qbPids.filter(pid=>(playerMeta[pid].fcValue||0)>0);
+        if(_fcQb.length>=8&&_fcPids.length){
+          const _maxDHQ=Math.max(..._fcPids.map(pid=>playerScores[pid]));
+          const _maxFC=Math.max(..._fcPids.map(pid=>playerMeta[pid].fcValue));
+          const _scale=_maxFC>0?_maxDHQ/_maxFC:1;
+          _fcQb.forEach(pid=>{
+            const fcScaled=Math.round(playerMeta[pid].fcValue*_scale);
+            const before=playerScores[pid];
+            if(fcScaled>before){
+              playerScores[pid]=Math.min(10000,Math.round(before+(fcScaled-before)*0.65));
+              playerMeta[pid].sfQbAlign={before,market:fcScaled,after:playerScores[pid]};
+            }
+          });
+        }
+        const _roles=window.App?.NflRoles;
+        if(_roles?.settled?.()&&(_roles.count?.()||0)>0){
+          const _qbSlots=Math.max(totalTeams*2,16);
+          const _sorted=_qbPids.map(pid=>playerScores[pid]).sort((a,b)=>b-a);
+          const _median=_sorted[Math.floor(Math.min(_qbSlots,_sorted.length)/2)]||0;
+          const _floor=Math.round(_median*0.40);
+          if(_floor>0)_qbPids.forEach(pid=>{
+            const P=S.players?.[pid];
+            if(P&&playerScores[pid]<_floor&&_roles.starterRole(P)){
+              playerMeta[pid].sfQbFloor={before:playerScores[pid],floor:_floor};
+              playerScores[pid]=_floor;
+            }
+          });
+        }
+      }catch(e){window.dhqLog?.('sfQbAlign',e);}
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // STEP 12d: Early-career stash floor — inject the draft-capital / upside
+    // signal the production-anchored veteran engine is blind to, so a 2nd/3rd-year
+    // player who flashed but sits behind a depth chart can't crater to a deep-bench
+    // score. Hybrid: real NFL draft capital where resolvable, FantasyCalc market as
+    // the universal backstop. FLOOR ONLY + stash-capped + bust-guarded + exp-decayed.
+    // Knobs in EARLY_CAREER_FLOOR_TUNING. See [[project_sophomore_dhq_fix]].
+    // ═══════════════════════════════════════════════════════════════
+    try{
+      const ECF=EARLY_CAREER_FLOOR_TUNING;
+      let stashFloorCount=0;
+      Object.keys(playerScores).forEach(sid=>{
+        const meta=playerMeta[sid]; if(!meta)return;
+        const p=S.players?.[sid]; if(!p)return;
+        if(!ECF.floorPositions.includes(meta.pos))return; // OFFENSE skill only — never K/DEF/IDP (see tuning)
+        // null / undefined / '' years_exp → null (skip); a literal 0 or numeric string stays numeric.
+        const rawExp=p.years_exp;
+        const yx=(rawExp===null||rawExp===undefined||rawExp==='')?null:(Number.isFinite(+rawExp)?+rawExp:null);
+        if(yx===null||yx<ECF.minYearsExp||yx>ECF.maxYearsExp)return; // unknown exp / not 2nd-3rd-year → skip (no-op)
+        const decay=ECF.expDecay?.[yx]??0; if(decay<=0)return;
+        const cur=playerScores[sid]||0;
+        const fcScaled=+meta.fcScaled||0; // format-scaled dynasty-market value (0 if FC didn't list him)
+
+        // (a) capital-based floor — keyed to NFL draft round, reality-checked against the market:
+        //   • FC ranks him → cap at marketGuardMult × his market value (discounted pick can't over-float)
+        //   • FC dropped/never-listed him (fcScaled==0, the strongest write-off signal) → cap at
+        //     capitalNoMarketCeiling so a delisted bust can't ride raw pedigree to a near-hold value.
+        let capitalFloor=0; const cap=_dhqResolveDraftCapital(p);
+        if(cap){
+          capitalFloor=(ECF.roundFloor?.[cap.round]||0)*decay;
+          capitalFloor=fcScaled>0
+            ? Math.min(capitalFloor,fcScaled*ECF.marketGuardMult)
+            : Math.min(capitalFloor,ECF.capitalNoMarketCeiling);
+        }
+        // (b) market backstop — a capped fraction of the dynasty-market value
+        const marketFloor=fcScaled>0?fcScaled*ECF.marketFloorFrac*decay:0;
+
+        let floor,basis;
+        if(capitalFloor>=marketFloor){floor=capitalFloor;basis=cap?`capital:R${cap.round}(${cap.source})`:'';}
+        else{floor=marketFloor;basis=cap?`market(+capital:R${cap.round})`:'market';} // keep capital context in the audit tag
+        if(floor<=0)return;
+        floor=Math.min(ECF.stashCeiling,floor);
+        if(floor>cur){
+          playerScores[sid]=Math.round(floor);
+          meta.dhqPreStashFloor=cur;
+          meta.stashFloor=Math.round(floor);
+          meta.stashFloorBasis=basis;
+          meta.source=(meta.source?meta.source+'+':'')+'EARLY_CAREER_FLOOR';
+          stashFloorCount++;
+        }
+      });
+      if(stashFloorCount)console.log(`Early-career stash floor: lifted ${stashFloorCount} young players (capital + market backstop)`);
+    }catch(e){window.dhqLog?.('earlyCareerFloor',e);}
+    }
+    // ENGINE V2: FC blend, rank rail, SF-QB alignment and stash floors are
+    // owned by the v2 formula natively (market leash + rookie slot rule).
 
     // ═══════════════════════════════════════════════════════════════
     // STORE EVERYTHING
@@ -1491,11 +2361,17 @@ async function loadLeagueIntel(){
   ${faabTxns.length} FAAB transactions
   ${(tradeTxns||[]).length} trade transactions across ${Object.keys(ownerProfiles).length} owners
   ${uniqueYears.length} seasons scored (${uniqueYears.join(',')})
-  Top player: ${pName(topPlayer?.pid)||topPlayer?.pid} (${topPlayer?.pos}) wPPG=${topPlayer?.wPPG} DHQ=${playerScores[topPlayer?.pid]}
+  Top player: ${pName(topPlayer?.pid)||topPlayer?.name||topPlayer?.pid} (${topPlayer?.pos}) wPPG=${topPlayer?.wPPG} DHQ=${playerScores[topPlayer?.pid]}
   Pick 1.01 value: ${dhqPickValues[1]?.value}, R7 last pick: ${dhqPickValues[maxPicks]?.value}`);
 
     // Notify subscribers that LeagueIntel is ready (replaces direct render calls)
     if(window.DhqEvents)window.DhqEvents.emit('li:loaded',{source:'fresh'});
+
+    // ═══ GRAFT PHASE 2: one-brain bridge (flag-guarded) ═══
+    // With the v2 engine on, the ratified assessment brain computes
+    // after values land; team-assess overlays it when present. Any
+    // failure logs and leaves the original assessments untouched.
+    if(engineV2){_dhqComputeOneBrain(S).catch(e=>window.dhqLog?.('oneBrain',e));}
 
   }catch(e){
     console.warn('LeagueIntel error:',e);
@@ -1611,3 +2487,45 @@ window.livScore = livScore;
 window.livFAABRange = livFAABRange;
 window.livDraftADP = livDraftADP;
 window.faabBidStr = faabBidStr;
+
+
+// ═══ GRAFT PHASE 2: one-brain bridge (owner-approved plan, 2026-09-05) ═══
+// Runs only when the v2 engine is on. Computes the ratified assessment
+// brain (points ledger + one-brain) for the current league and posts it
+// at window.DhqBrain; team-assess.js overlays it onto assessments.
+function _dhqBrainPicksByOwner(S,curSeason){
+  const out={};
+  const years=[curSeason+1,curSeason+2,curSeason+3];
+  const rounds=5;
+  const ownerByKey={};
+  const byRid={};
+  (S.rosters||[]).forEach(r=>{
+    byRid[String(r.roster_id)]=r;
+    years.forEach(y=>{for(let rd=1;rd<=rounds;rd++)ownerByKey[y+'-'+rd+'-'+r.roster_id]=String(r.owner_id);});
+  });
+  (S.tradedPicks||[]).forEach(tp=>{
+    const y=Number(tp.season);if(years.indexOf(y)<0)return;
+    const key=y+'-'+tp.round+'-'+tp.roster_id;
+    const owner=byRid[String(tp.owner_id)];
+    if(key in ownerByKey&&owner)ownerByKey[key]=String(owner.owner_id);
+  });
+  Object.keys(ownerByKey).forEach(k=>{
+    const parts=k.split('-');
+    (out[ownerByKey[k]]=out[ownerByKey[k]]||[]).push({year:+parts[0],round:+parts[1]});
+  });
+  return out;
+}
+async function _dhqComputeOneBrain(S){
+  if(!window.WrLabPointsLedger||!window.WrLabOneBrain)return;
+  const lid=S.currentLeagueId;
+  const rawLg=(S.leagues||[]).find(l=>String(l.league_id)===String(lid));
+  if(!rawLg||!rawLg.scoring_settings)return;
+  const posOf=pid=>{const p=S.players&&S.players[pid];return p?p.position:null;};
+  const ledger=await window.WrLabPointsLedger.load({league:rawLg,rosters:S.rosters,posOf});
+  const curSeason=parseInt(rawLg.season,10)||new Date().getFullYear();
+  const brain=window.WrLabOneBrain.compute({ledger,leagueInfo:rawLg,rosters:S.rosters,posOf,picksByOwner:_dhqBrainPicksByOwner(S,curSeason)});
+  brain.leagueId=String(lid);
+  window.DhqBrain=brain;
+  try{if(window.DhqEvents)window.DhqEvents.emit('li:loaded',{source:'one-brain'});}catch(e){/* no-op */}
+  try{window.dispatchEvent(new CustomEvent('dhq:situation-changed',{detail:{source:'one-brain'}}));}catch(e){/* no-op */}
+}
