@@ -224,6 +224,13 @@
                     .filter(function (g) { return t.rank[g] <= Math.ceil(n / 4); });
             });
 
+            // v4 guard: a load where every lineup filled empty means the
+            // caller's position lookup wasn't ready (player DB race). Hand the
+            // result back but do NOT cache it — the next call must retry.
+            var anyPoints = rosters.some(function (r) { return (teams[r.roster_id] || {}).total > 0; });
+            var hasBodies = rosters.some(function (r) { return (r.players || []).length > 0; });
+            if (!anyPoints && hasBodies) delete _cache[key];
+
             return {
                 season: season, bars: BARS, barTotal: barTotal, groups: groups,
                 teams: teams, leagueAvg: leagueAvg, teamCount: n,

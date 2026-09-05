@@ -1435,7 +1435,13 @@
             // patch the prop's fields over it as a fallback.
             const rawLg = (window.S?.leagues || []).find(l => String(l.league_id) === String(leagueId));
             const labLeague = { ...(currentLeague || {}), ...(rawLg || {}), league_id: leagueId };
+            // Owner device 2026-09-04: the tab can mount before the player DB
+            // arrives — posOf then returns null for everyone, the optimal fill
+            // goes empty, and a zero-point ledger got cached for the session
+            // (every team read REBUILDING, no pts line). Wait for the DB; the
+            // playersData dep below re-fires the load once it lands.
             if (!leagueId || !labLeague?.scoring_settings || !allRosters.length || !window.WrLabPointsLedger) return undefined;
+            if (!Object.keys(playersData || {}).length) return undefined;
             window._labDbg = { started: Date.now() };
             window.WrLabPointsLedger.load({
                 league: labLeague,
@@ -1452,7 +1458,7 @@
                 }
             }).catch(e => { window._labDbg.ledgerErr = String(e); if (window.wrLog) window.wrLog('lab.ledger', e); });
             return () => { dead = true; };
-        }, [leagueId, allRosters.length]);
+        }, [leagueId, allRosters.length, Object.keys(playersData || {}).length > 0]);
 
         const labBrain = useMemo(() => {
             if (!labModel.ledger || !allRosters.length || !window.WrLabOneBrain) return null;
