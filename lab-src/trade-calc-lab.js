@@ -2256,9 +2256,45 @@
             return 'Draft capital and FAAB shape the deal more than roster fit.';
         }
 
+        // ═══ LAB17 — OWNER DNA TAXES DRIVE THE DEAL (owner order 2026-09-05) ═══
+        // The designation that counts is the owner's: his manual input when he
+        // set one, the app's weighted read from trade history when he didn't.
+        // The taxes then hit BOTH dials — acceptance (psych taxes, as before,
+        // now on the effective DNA) and PRICE: a Fleecer or Dominator inflates
+        // the ask on everything he owns until many deals are cost-prohibitive
+        // ("dealing with Fleecers or Dominators, you never win"), while the
+        // Desperate, Stalwarts and Acceptors are the rooms worth working.
+        // conf scales how hard the tax bites: a manual designation is the
+        // owner's word — full weight. The app's read carries its own
+        // confidence (22-92), so a thin two-trade hunch taxes lightly and a
+        // proven pattern taxes in full.
+        function labEffDna(partner) {
+            const manual = ownerDna[partner?.ownerId];
+            if (manual && manual !== 'NONE') return { key: manual, conf: 1 };
+            try {
+                const ai = computeWeightedDNA(partner?.rosterId);
+                if (ai?.key) return { key: ai.key, conf: Math.max(0, Math.min(1, (ai.confidence || 0) / 100)) };
+            } catch (e) { /* no read */ }
+            return { key: 'NONE', conf: 0 };
+        }
+        function labEffDnaKey(partner) { return labEffDna(partner).key; }
+        // ask = what buying from this room really costs (his tax inflates the
+        // sticker); bid = what he'll really pay for my assets. Sell-side bids
+        // below fair are never modeled — I don't take less, his acceptance
+        // taxes kill the row instead.
+        const LAB17_DNA_PRICE = {
+            FLEECER: { ask: 1.18, bid: 0.85 },
+            DOMINATOR: { ask: 1.25, bid: 0.82 },
+            STALWART: { ask: 1.06, bid: 0.97 },
+            ACCEPTOR: { ask: 0.95, bid: 1.05 },
+            DESPERATE: { ask: 0.95, bid: 1.08 },
+            NONE: { ask: 1.0, bid: 1.0 },
+        };
+
         function buildDeal(partner, input) {
             if (!partner || !myAssessment) return null;
-            const dnaKey = ownerDna[partner.ownerId] || 'NONE';
+            const labDnaRead = labEffDna(partner);
+            const dnaKey = labDnaRead.key;
             const dna = DNA_TYPES[dnaKey] || DNA_TYPES.NONE;
             const posture = calcOwnerPosture(partner, dnaKey);
             const taxes = calcPsychTaxes(myAssessment, partner, dnaKey, posture);
@@ -2312,6 +2348,10 @@
             const _recvDisc = receive.total > 0 && receive.market < receive.total * 0.85;
             if (_giveDisc || _recvDisc) caution.push('Priced at market — IDP/K trade discount applied');
             if (likelihood < 40) caution.push('Low acceptance odds');
+            // LAB17: the tax is named on the card — an owner should see WHY
+            // this room runs expensive before he opens negotiations.
+            if (dnaKey === 'FLEECER') caution.push(`Fleecer room — ask priced +${Math.round(18 * labDnaRead.conf)}%, you rarely win here`);
+            if (dnaKey === 'DOMINATOR') caution.push(`Dominator room — ask priced +${Math.round(25 * labDnaRead.conf)}%, he has to "win" the deal`);
             if (posture.key === 'LOCKED') caution.push('Locked roster');
             if (userGain < -Math.max(500, receive.total * 0.12)) caution.push('Meaningful overpay');
             if (!swing.includes('need') && !swing.includes('gap')) caution.push('Weak roster-fit signal');
@@ -2627,6 +2667,16 @@
             const lowRatio = 0.90 - aggression * 0.18;
             const highRatio = 1.08 + aggression * 0.24;
 
+            // LAB17: this partner's DNA sets the real exchange rate. Buying
+            // from him costs sticker × ask (a Fleecer's +18% and a Dominator's
+            // +25% price many rooms out entirely); selling to him fetches
+            // sticker × bid, but never below fair — I don't model taking less,
+            // his acceptance taxes bury those rows instead.
+            const labDna17 = labEffDna(partner);
+            const labDnaPrice17 = LAB17_DNA_PRICE[labDna17.key] || LAB17_DNA_PRICE.NONE;
+            const labDnaAsk = 1 + (labDnaPrice17.ask - 1) * labDna17.conf;
+            const labDnaBid = Math.max(1, 1 + (labDnaPrice17.bid - 1) * labDna17.conf);
+
             const tp = alexSettings.tradePriority || {};
             const priPos = Object.entries(tp.positions || {}).filter(([, v]) => v).map(([k]) => k);
             const priPickYears = Object.entries(tp.picks || {}).filter(([, v]) => v).map(([k]) => k);
@@ -2763,7 +2813,7 @@
             }
 
             function addAcquireTarget(target, playerPool, pickPool, reasonPrefix = '') {
-                const targetMkt = assetMarketValue(target);
+                const targetMkt = assetMarketValue(target) * labDnaAsk; // LAB17: his tax is in the price
                 const packages = sideCombos(playerPool, pickPool, targetMkt, { allowPickOnly: true, deepPicks: true });
                 const banded = packages
                     .filter(pkg => pkg.market >= targetMkt * lowRatio && pkg.market <= targetMkt * highRatio);
@@ -2806,9 +2856,10 @@
             // from builder totals, print "undefined" in copy, and invert the
             // pick-collector/spender acceptance deltas in evaluateBehaviorTradeFit.
             function addAcquirePickTarget(pick, playerPool, pickPool, reasonPrefix = '') {
-                const packages = sideCombos(playerPool, pickPool, pick.value, { allowPickOnly: true });
+                const pickAskVal = pick.value * labDnaAsk; // LAB17: his tax is in the price
+                const packages = sideCombos(playerPool, pickPool, pickAskVal, { allowPickOnly: true });
                 packages
-                    .filter(pkg => pkg.market >= pick.value * lowRatio && pkg.market <= pick.value * highRatio)
+                    .filter(pkg => pkg.market >= pickAskVal * lowRatio && pkg.market <= pickAskVal * highRatio)
                     .slice(0, 4)
                     .forEach(pkg => {
                         const faab = balanceFaab(partner, pkg.players, [], pkg.picks, [pick]);
@@ -2832,11 +2883,12 @@
             }
 
             function addShopPickAsset(pick, returnPlayers, returnPicks, reasonPrefix = '') {
-                const returns = sideCombos(returnPlayers, returnPicks, pick.value, { allowPickOnly: true });
+                const pickBidVal = pick.value * labDnaBid; // LAB17: a desperate/acceptor buyer pays up
+                const returns = sideCombos(returnPlayers, returnPicks, pickBidVal, { allowPickOnly: true });
                 const returnLow = 0.72 - aggression * 0.08;
                 const returnHigh = 1.04 + aggression * 0.18;
                 returns
-                    .filter(pkg => pkg.market >= pick.value * returnLow && pkg.market <= pick.value * returnHigh)
+                    .filter(pkg => pkg.market >= pickBidVal * returnLow && pkg.market <= pickBidVal * returnHigh)
                     .slice(0, 4)
                     .forEach(pkg => {
                         const faab = balanceFaab(partner, [], pkg.players, [pick], pkg.picks);
@@ -2856,7 +2908,7 @@
             }
 
             function addShopAsset(asset, returnPlayers, returnPicks, reasonPrefix = '') {
-                const assetMkt = assetMarketValue(asset);
+                const assetMkt = assetMarketValue(asset) * labDnaBid; // LAB17: a desperate/acceptor buyer pays up
                 const returns = sideCombos(returnPlayers, returnPicks, assetMkt, { allowPickOnly: true });
                 const returnLow = mode === 'picks' ? 0.50 : 0.72 - aggression * 0.08;
                 const returnHigh = 1.04 + aggression * 0.18;
@@ -3561,7 +3613,10 @@
             return assessments
                 .filter(a => a.rosterId !== myRosterId)
                 .map(a => {
-                    const dnaKey = ownerDna[a.ownerId] || 'NONE';
+                    // LAB17: the board runs on the effective designation —
+                    // the owner's input, else the app's weighted read.
+                    const dnaRead = labEffDna(a);
+                    const dnaKey = dnaRead.key;
                     const dna = DNA_TYPES[dnaKey] || DNA_TYPES.NONE;
                     const posture = calcOwnerPosture(a, dnaKey);
                     const compat = calcComplementarity(myAssessment, a);
@@ -3594,12 +3649,21 @@
                         : ((labMyMode === 'win_now' || labMyMode === 'compete') && labRead.cls === 'rebuilding') ? 14
                         : (labMyMode === 'rebuild' && labRead.cls === 'win_now') ? 14
                         : 3;
-                    const rawScore = compat * 0.62 + mutualNeedFit * 13 + theyHaveNeed * 10 + panicScore + pickCapitalScore + Math.min(7, tradeVol) + behaviorScore + labFit + (posture.key === 'LOCKED' ? -18 : 0);
+                    // LAB17 (owner ruling): "dealing with Fleecers or Dominators,
+                    // you never win — it's all about desperate, stalwarts or
+                    // acceptors." The DNA read moves the partner score directly.
+                    const labDnaScore = ({ FLEECER: -15, DOMINATOR: -18, STALWART: 4, ACCEPTOR: 8, DESPERATE: 10 }[dnaKey] || 0) * dnaRead.conf;
+                    const rawScore = compat * 0.62 + mutualNeedFit * 13 + theyHaveNeed * 10 + panicScore + pickCapitalScore + Math.min(7, tradeVol) + behaviorScore + labFit + labDnaScore + (posture.key === 'LOCKED' ? -18 : 0);
                     const fitCap = compat >= 80 ? 99 : compat >= 65 ? 94 : compat >= 50 ? 88 : compat >= 35 ? 78 : 68;
                     const score = Math.round(clampNum(rawScore, 0, fitCap, 0));
                     const tag = score >= 85 ? 'Attack' : score >= 68 ? 'Prime' : score >= 48 ? 'Possible' : a.panic >= 3 ? 'Monitor' : 'Long shot';
                     const tagColor = tag === 'Attack' || tag === 'Prime' ? 'var(--good)' : tag === 'Possible' ? 'var(--warn)' : tag === 'Monitor' ? 'var(--k-bb8fce, #bb8fce)' : 'var(--silver)';
                     const scoreReasons = [];
+                    const dnaSrc = ownerDna[a.ownerId] && ownerDna[a.ownerId] !== 'NONE' ? 'your designation' : `app read, ${Math.round(dnaRead.conf * 100)}% sure`;
+                    if (dnaKey === 'FLEECER' || dnaKey === 'DOMINATOR') scoreReasons.push(`${dna.label.replace('The ', '').toLowerCase()} (${dnaSrc}) — his tax makes every deal expensive`);
+                    else if (dnaKey === 'DESPERATE') scoreReasons.push(`desperate (${dnaSrc}) — overpays for immediate help`);
+                    else if (dnaKey === 'ACCEPTOR') scoreReasons.push(`acceptor (${dnaSrc}) — sells current assets for futures`);
+                    else if (dnaKey === 'STALWART') scoreReasons.push(`stalwart (${dnaSrc}) — slow but honest on fair value`);
                     if (mutualNeedFit > 0) scoreReasons.push(`your surplus matches ${mutualNeedFit} need${mutualNeedFit === 1 ? '' : 's'}`);
                     if (compat >= 60) scoreReasons.push(`${compat}% roster fit`);
                     if (behaviorTags.has('active-trader')) scoreReasons.push('active trader');
@@ -3609,9 +3673,21 @@
                     // LEADS the reasons line (the card shows only the first 3).
                     if (labRead?.softLine) scoreReasons.unshift(labRead.softLine);
                     if (!scoreReasons.length) scoreReasons.push('limited roster-fit signal');
-                    return { assessment:a, dnaKey, dna, posture, compat, mutualNeedFit, theyHaveNeed, pickAssets, pickCapital, profile, behaviorProfile, behaviorScore, score, tag, tagColor, scoreReasons };
+                    return { assessment:a, dnaKey, dnaConf: dnaRead.conf, dna, posture, compat, mutualNeedFit, theyHaveNeed, pickAssets, pickCapital, profile, behaviorProfile, behaviorScore, score, tag, tagColor, scoreReasons };
                 })
-                .sort((a, b) => b.score - a.score || b.compat - a.compat);
+                .sort((a, b) => b.score - a.score || b.compat - a.compat)
+                .map((row, i, arr) => {
+                    // LAB17 debug tap: the effective DNA read per rival, so the
+                    // rig (and a curious owner in the console) can audit which
+                    // designation taxed each room.
+                    if (i === arr.length - 1) {
+                        try {
+                            window._labDbg = window._labDbg || {};
+                            window._labDbg.dnaReads = arr.map(r => ({ name: r.assessment.ownerName, dna: r.dnaKey, conf: Math.round((r.dnaConf || 0) * 100), score: r.score, tag: r.tag }));
+                        } catch (e) { /* no-op */ }
+                    }
+                    return row;
+                });
         }
 
         // ── Finder results (Phase 4b) — memoized per-partner eval + league-wide loop ──
