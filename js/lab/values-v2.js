@@ -268,8 +268,56 @@
 
     root.WrLabValuesV2 = {
         load: load,
-        values: null, // populated by the lab engine once load resolves
+        values: null, // populated once load resolves
         ready: false,
         _normPos: normPos, // exposed for tests
     };
+
+    // ── LAB AUTOPRICE BOOTSTRAP ─────────────────────────────────────
+    // One brain, every surface (owner report 2026-09-05: "doesn't look any
+    // different" — v2 was wired into the Trade Center's price function only,
+    // while Analytics/My Roster/etc. read the shared LI.playerScores store).
+    // This bootstrap waits for the app + old engine, computes v2, then
+    // OVERWRITES LI.playerScores for every rostered player, keeping the old
+    // board at LI.playerScoresV1 for comparison. It re-emits li:loaded so
+    // every listening surface re-renders on the new prices. Lab only.
+    if (typeof window !== 'undefined') (function bootstrap() {
+        var lastLid = null;
+        var timer = setInterval(function () {
+            try {
+                var S = window.S || (window.App && window.App.S);
+                var lid = S && S.currentLeagueId;
+                if (!lid || lid === lastLid) return;
+                if (!S.rosters || !S.rosters.length || !S.players) return;
+                if (!window.App || !window.App.LI_LOADED) return; // old engine first (pick curve + baseline)
+                lastLid = lid;
+                var rawLg = (S.leagues || []).filter(function (l) { return String(l.league_id) === String(lid); })[0];
+                if (!rawLg || !rawLg.scoring_settings) { lastLid = null; return; }
+                _cache = null; // league switch → fresh compute
+                load({
+                    league: rawLg,
+                    rosters: S.rosters,
+                    playersData: S.players,
+                    pickValues: (window.App.LI && window.App.LI.dhqPickValues) || {},
+                }).then(function (res) {
+                    var LI = window.App.LI || {};
+                    if (!LI.playerScoresV1) LI.playerScoresV1 = Object.assign({}, LI.playerScores || {});
+                    LI.playerScores = LI.playerScores || {};
+                    for (var pid in res.values) LI.playerScores[pid] = res.values[pid];
+                    LI.valuesEngine = 'v2';
+                    root.WrLabValuesV2.values = res.values;
+                    root.WrLabValuesV2.meta = res.meta;
+                    root.WrLabValuesV2.ready = true;
+                    if (window._labDbg) window._labDbg.v2Global = Date.now();
+                    try { if (window.DhqEvents) window.DhqEvents.emit('li:loaded', { source: 'lab-v2' }); } catch (_e) { /* non-fatal */ }
+                }).catch(function (e) {
+                    lastLid = null; // allow retry
+                    if (window._labDbg) window._labDbg.v2Err = String(e);
+                    if (window.wrLog) window.wrLog('lab.v2', e);
+                });
+            } catch (_e) { /* poll survives everything */ }
+        }, 1000);
+        // never clears: cheap, and it re-fires automatically on league switch
+        void timer;
+    })();
 })(typeof window !== 'undefined' ? window : globalThis);
