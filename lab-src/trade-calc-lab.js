@@ -2323,11 +2323,8 @@
             const dnaKey = labDnaRead.key;
             const dna = DNA_TYPES[dnaKey] || DNA_TYPES.NONE;
             const posture = calcOwnerPosture(partner, dnaKey);
-            const taxes = calcPsychTaxes(myAssessment, partner, dnaKey, posture);
+            const psychTaxesBase = calcPsychTaxes(myAssessment, partner, dnaKey, posture);
             const grudge = calcGrudgeTax(myAssessment.ownerId, partner.ownerId, grudges, dnaKey);
-            const acceptanceTaxes = grudge.total
-                ? [...taxes, { name:'Grudge Tax', impact:grudge.total, type: grudge.total > 0 ? 'BONUS' : 'TAX' }]
-                : taxes;
             const givePlayers = input.givePlayers || [];
             const receivePlayers = input.receivePlayers || [];
             const givePicks = input.givePicks || [];
@@ -2337,6 +2334,54 @@
             const give = sideBreakdown(givePlayers, givePicks, giveFaab);
             const receive = sideBreakdown(receivePlayers, receivePicks, receiveFaab);
             if (give.total <= 0 || receive.total <= 0) return null;
+            // ═══ LAB21 — DNA TAXES ACTIVATED IN ACCEPTANCE (owner order
+            // 2026-09-05: "address the Owner DNA taxes and activate them in
+            // the chances-of-acceptance process"). The old engine's fleecer
+            // endowment was a token -5; these bite at designation strength
+            // (conf 1.0 for the owner's own tags, scaled for app reads).
+            const labDnaTaxes = [];
+            const _c21 = labDnaRead.conf;
+            if (_c21 > 0) {
+                const ppgOf = pid => labModel.ledger?.playersPpg?.[String(pid)] || 0;
+                if (dnaKey === 'FLEECER') labDnaTaxes.push({ name: 'Fleecer Premium', impact: -Math.round(20 * _c21), type: 'TAX', desc: 'Only accepts when he is clearly winning the deal.' });
+                if (dnaKey === 'DOMINATOR') labDnaTaxes.push({ name: 'Dominator Ego', impact: -Math.round(25 * _c21), type: 'TAX', desc: 'Must visibly win the trade or he walks.' });
+                if (dnaKey === 'STALWART' && receivePlayers.length) labDnaTaxes.push({ name: 'Stalwart Attachment', impact: -Math.round(10 * _c21), type: 'TAX', desc: 'Emotionally slow to move his own players.' });
+                if (dnaKey === 'ACCEPTOR' && (givePicks.length || givePlayers.some(p => (Number(p.age ?? playersData?.[p.pid]?.age) || 99) <= 25))) {
+                    labDnaTaxes.push({ name: 'Acceptor Appetite', impact: Math.round(10 * _c21), type: 'BONUS', desc: 'Happily converts current assets into picks and youth.' });
+                }
+                if (dnaKey === 'DESPERATE' && givePlayers.some(p => ppgOf(p.pid) >= 8)) {
+                    labDnaTaxes.push({ name: 'Desperation Buy', impact: Math.round(15 * _c21), type: 'BONUS', desc: 'Overpays for immediate starters.' });
+                }
+            }
+            // Starter Grip (the Hendrickson law): no owner hands over one of
+            // his QUALITY STARTERS for change — the return must carry a
+            // near-starter-caliber player or a premium pick (round 1-2).
+            // Fleecers and dominators grip hardest; sellers loosen, never let go.
+            const obTheirs21 = labBrain?.byRosterId?.[String(partner.rosterId)];
+            const theirQualSet21 = new Set(Object.values(obTheirs21?.qualityPids || {}).flat().map(String));
+            const gripStarters = receivePlayers.filter(p => theirQualSet21.has(String(p.pid)));
+            let gripTax = null;
+            if (gripStarters.length) {
+                const topGrip = Math.max(...gripStarters.map(p => p.value || 0));
+                const starterCaliberBack = givePlayers.some(p => (p.value || 0) >= topGrip * 0.8)
+                    || givePicks.some(pk => (pk.round || 9) <= 2);
+                if (!starterCaliberBack) {
+                    const gripMult = (dnaKey === 'FLEECER' || dnaKey === 'DOMINATOR') ? 1.3
+                        : dnaKey === 'STALWART' ? 1.15
+                        : dnaKey === 'ACCEPTOR' ? 0.5
+                        : dnaKey === 'DESPERATE' ? 0.6 : 1.0;
+                    gripTax = { name: 'Starter Grip', impact: -Math.round(25 * gripMult), type: 'TAX', desc: `They'd be handing over a starting ${gripStarters[0].pos} without a starter-caliber player or premium pick back.` };
+                    labDnaTaxes.push(gripTax);
+                }
+            }
+            // The lab DNA taxes bite AFTER the base formula (see below), not
+            // inside it — the base likelihood clamps at 95, so a deep
+            // value-overpay saturates it and swallows any tax fed in early
+            // (the Hendrickson-at-95% bug). Display still lists every tax.
+            const taxes = [...psychTaxesBase, ...labDnaTaxes];
+            const acceptanceTaxes = grudge.total
+                ? [...psychTaxesBase, { name:'Grudge Tax', impact:grudge.total, type: grudge.total > 0 ? 'BONUS' : 'TAX' }]
+                : psychTaxesBase;
             const pieceCount = givePlayers.length + receivePlayers.length + givePicks.length + receivePicks.length;
             // Acceptance is priced on MARKET totals (liquidity-adjusted): a side
             // stuffed with mid-tier IDP value doesn't buy what raw DHQ says it does.
@@ -2356,7 +2401,10 @@
                     userGain,
                 })
                 : null;
-            const likelihood = Math.round(Math.max(5, Math.min(95, baseLikelihood + (behaviorFit?.acceptanceDelta || 0))));
+            // LAB21: DNA taxes land at full designation strength on the FINAL
+            // number — "the Fleecer tax alone would kill the deal."
+            const labDnaTaxTotal = labDnaTaxes.reduce((s, t) => s + (Number(t.impact) || 0), 0);
+            const likelihood = Math.round(Math.max(3, Math.min(95, Math.max(5, Math.min(95, baseLikelihood + (behaviorFit?.acceptanceDelta || 0))) + labDnaTaxTotal)));
             const fit = myAssessment ? calcComplementarity(myAssessment, partner) : 0;
             const valueScore = Math.max(0, Math.min(100, 50 + (userGain / Math.max(give.total, receive.total, 1)) * 120));
             const confidenceScore = Math.round(Math.max(0, Math.min(100, likelihood * 0.45 + fit * 0.25 + valueScore * 0.30 + (behaviorFit?.scoreDelta || 0))));
@@ -2374,6 +2422,9 @@
             const _recvDisc = receive.total > 0 && receive.market < receive.total * 0.85;
             if (_giveDisc || _recvDisc) caution.push('Priced at market — IDP/K trade discount applied');
             if (likelihood < 40) caution.push('Low acceptance odds');
+            // LAB21: the grip is named on the card — this is the Hendrickson
+            // rule made visible.
+            if (gripTax) caution.push(`They'd be giving up a starting ${gripStarters[0].pos} — ${dnaKey === 'FLEECER' || dnaKey === 'DOMINATOR' ? `${dna.label.replace('The ', '')} rooms don't do that cheap` : 'that costs real assets, not change'}`);
             // LAB17: the tax is named on the card — an owner should see WHY
             // this room runs expensive before he opens negotiations.
             if (dnaKey === 'FLEECER') caution.push(`Fleecer room — ask priced +${Math.round(18 * labDnaRead.conf)}%, you rarely win here`);
