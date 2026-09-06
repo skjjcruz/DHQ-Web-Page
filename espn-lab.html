@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="robots" content="noindex">
+    <title>ESPN Door — Lab</title>
+    <!-- ══════════════════════════════════════════════════════════════
+         espn-lab.html — LAB25: the ESPN front door, Lab only.
+         Owner approval 2026-09-06: "wire them to the Lab only and we'll
+         test before adding to website and then native app."
+         This page is a TEST HARNESS: connect a real ESPN league through
+         the same shared connector the website would use (espn-api.js +
+         the deployed espn-proxy for private leagues), run the real
+         engine, and grade the result — crosswalk match rate, values,
+         team assessments, and proof the ESPN league rides the v1
+         formula path (the v2 behavioral engine is Sleeper-only by
+         design; this harness verifies that guard holds).
+         ══════════════════════════════════════════════════════════════ -->
+    <script>
+      // Lab auto-auth on local rigs (mirrors trade-lab.html).
+      (function () {
+        try {
+          if (['localhost', '127.0.0.1'].includes(location.hostname)
+              && !localStorage.getItem('od_auth_v1')) {
+            localStorage.setItem('od_auth_v1', JSON.stringify({ username: 'skjjcruz', sleeperUsername: 'skjjcruz' }));
+          }
+        } catch (e) { /* noop */ }
+      })();
+    </script>
+    <script src="js/shared/shared-loader.js?v=1dd259c0db"></script>
+    <script>
+window.DYNASTY_HQ_APP = 'warroom';
+// The graft flag stays ON here on purpose: an ESPN league must ride the
+// v1 formula path EVEN WITH the flag up (the engine's own platform
+// guard) — that guard is one of the things this harness tests.
+window.__DHQ_ENGINE_V2 = true;
+WRShared.configure({ version: 'graft3-20260905' });
+const WR_SHARED_FILES = [
+  'app-config.js',
+  'bug-capture.js',
+  'constants.js',
+  'utils.js',
+  'storage.js',
+  'event-bus.js',
+  'platform-provider.js',
+  'sleeper-api.js',
+  'espn-api.js',
+  'supabase-client.js',
+  'tier.js',
+  'pick-value-model.js',
+  'dhq-providers.js',
+  'dhq-core.js',
+  'intelligence-context.js',
+  'points-ledger.js',
+  'one-brain.js',
+  'values-v2.js',
+  'pff-snapshot.js',
+  'dhq-engine.js',
+  'nfl-fit.js',
+  'nfl-roles.js',
+  'team-assess.js',
+  'strategy.js',
+];
+WRShared.preloadMany(WR_SHARED_FILES);
+    </script>
+    <style>
+        :root { --gold:#D4AF37; --black:#0a0a0a; --off-black:#141414; --silver:#c9c9c9; --good:#8fe3a5; --bad:#ff9d9d; --warn:#ffb300; }
+        * { box-sizing: border-box; }
+        body { margin:0; background:var(--black); color:var(--silver); font:15px/1.55 -apple-system,'Segoe UI',Roboto,sans-serif; padding:20px 14px 60px; }
+        .wrap { max-width:900px; margin:0 auto; }
+        h1 { color:var(--gold); font-size:1.3rem; letter-spacing:0.05em; margin:0 0 2px; }
+        .sub { opacity:0.7; font-size:0.8rem; margin-bottom:18px; }
+        .card { background:var(--off-black); border:1px solid rgba(212,175,55,0.4); border-radius:12px; padding:14px 16px; margin-bottom:14px; }
+        label { display:block; font-size:0.75rem; letter-spacing:0.04em; color:var(--gold); margin:10px 0 3px; }
+        input { width:100%; background:#000; border:1px solid rgba(255,255,255,0.2); border-radius:8px; color:#eee; padding:9px 10px; font-size:0.95rem; }
+        .hint { font-size:0.75rem; opacity:0.65; margin-top:3px; }
+        button { margin-top:14px; background:var(--gold); color:#000; border:none; border-radius:8px; padding:10px 18px; font-weight:700; font-size:0.95rem; cursor:pointer; }
+        button:disabled { opacity:0.5; cursor:default; }
+        .step { padding:5px 0; font-family:ui-monospace,monospace; font-size:0.82rem; }
+        .ok { color:var(--good); } .bad { color:var(--bad); } .warn { color:var(--warn); }
+        table { width:100%; border-collapse:collapse; font-size:0.82rem; }
+        th,td { text-align:left; padding:5px 8px; border-bottom:1px solid rgba(255,255,255,0.07); }
+        th { color:var(--gold); font-weight:600; letter-spacing:0.03em; }
+        .verdict { font-size:1.05rem; font-weight:700; padding:12px 16px; border-radius:10px; margin-bottom:14px; }
+        .verdict.pass { background:#173a22; color:var(--good); } .verdict.fail { background:#4a1a1a; color:var(--bad); }
+        .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:8px; }
+        .tile { border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:8px 10px; font-size:0.82rem; }
+        .tile b { color:#fff; }
+        #buildtag { position:fixed; bottom:2px; right:6px; font:700 9px/1.4 monospace; color:rgba(212,175,55,0.55); pointer-events:none; }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <h1>ESPN DOOR — LAB TEST HARNESS</h1>
+    <div class="sub">Connects a real ESPN league through the same shared connector the website would use, runs the real engine, and grades the result. Lab only — nothing here touches the live site.</div>
+
+    <div class="card" id="authNote" style="display:none;border-color:var(--warn)">Sign in on the main lab page first (trade-lab.html), then come back.</div>
+
+    <div class="card">
+        <label>ESPN League ID</label>
+        <input id="fLeague" inputmode="numeric" placeholder="e.g. 12345678">
+        <div class="hint">The number after <b>leagueId=</b> in your ESPN league's web address.</div>
+        <label>Season</label>
+        <input id="fYear" inputmode="numeric" value="2026">
+        <label>espn_s2 cookie (private leagues only)</label>
+        <input id="fS2" placeholder="leave blank for a public league" autocomplete="off">
+        <label>SWID cookie (private leagues only)</label>
+        <input id="fSwid" placeholder="{XXXXXXXX-XXXX-...}" autocomplete="off">
+        <div class="hint">Private leagues: on a computer, sign in at fantasy.espn.com, press F12 → Application → Cookies → copy <b>espn_s2</b> and <b>SWID</b>. Public leagues need neither.</div>
+        <button id="btnRun">RUN FULL CHECK</button>
+        <button id="btnReset" style="background:transparent;color:var(--silver);border:1px solid rgba(255,255,255,0.25)">Reset</button>
+    </div>
+
+    <div class="card" id="log" style="display:none"></div>
+    <div id="verdict"></div>
+    <div class="card" id="readout" style="display:none"></div>
+</div>
+<div id="buildtag">LAB25</div>
+
+<script>WRShared.loadMany(WR_SHARED_FILES);</script>
+<script>
+(function () {
+    'use strict';
+    var authed = false;
+    try { authed = !!JSON.parse(localStorage.getItem('od_auth_v1') || 'null'); } catch (e) { /* noop */ }
+    if (!authed) { document.getElementById('authNote').style.display = 'block'; }
+
+    var logEl = document.getElementById('log');
+    var pageErrors = [];
+    window.addEventListener('error', function (e) { pageErrors.push(String(e.message || e.error || 'error')); });
+
+    function step(msg, cls) {
+        logEl.style.display = 'block';
+        var d = document.createElement('div');
+        d.className = 'step ' + (cls || '');
+        d.textContent = msg;
+        logEl.appendChild(d);
+        return d;
+    }
+    function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+    async function fetchSleeperPlayers() {
+        // Same DB the apps use; cached an hour so re-runs are instant.
+        try {
+            var c = JSON.parse(localStorage.getItem('lab_espn_players_v1') || 'null');
+            if (c && Date.now() - c.ts < 3600000 && c.n > 5000) {
+                var idb = await caches.open('lab-espn-players').then(function (cache) { return cache.match('players'); }).then(function (r) { return r ? r.json() : null; }).catch(function () { return null; });
+                if (idb) return idb;
+            }
+        } catch (e) { /* noop */ }
+        var r = await fetch('https://api.sleeper.app/v1/players/nfl');
+        if (!r.ok) throw new Error('Sleeper players DB HTTP ' + r.status);
+        var data = await r.json();
+        try {
+            var cache = await caches.open('lab-espn-players');
+            await cache.put('players', new Response(JSON.stringify(data)));
+            localStorage.setItem('lab_espn_players_v1', JSON.stringify({ ts: Date.now(), n: Object.keys(data).length }));
+        } catch (e) { /* noop */ }
+        return data;
+    }
+
+    async function run() {
+        document.getElementById('btnRun').disabled = true;
+        logEl.innerHTML = ''; document.getElementById('verdict').innerHTML = '';
+        document.getElementById('readout').style.display = 'none';
+        pageErrors = [];
+        var checks = [];
+        var mark = function (name, pass, detail) { checks.push({ name: name, pass: pass, detail: detail || '' }); };
+
+        var leagueId = document.getElementById('fLeague').value.trim().replace(/\D/g, '');
+        var year = document.getElementById('fYear').value.trim() || '2026';
+        var s2 = document.getElementById('fS2').value.trim() || null;
+        var swid = document.getElementById('fSwid').value.trim() || null;
+        if (!leagueId) { step('Enter an ESPN league ID first.', 'bad'); document.getElementById('btnRun').disabled = false; return; }
+
+        try {
+            step('1/6 Waiting for shared modules…');
+            var t0 = Date.now();
+            while ((!window.ESPN || !window.loadLeagueIntel) && Date.now() - t0 < 20000) { await new Promise(function (r) { setTimeout(r, 200); }); }
+            if (!window.ESPN) throw new Error('espn-api.js did not load');
+            mark('Shared connector loaded', true);
+            step('   connector + engine modules up', 'ok');
+
+            step('2/6 Loading Sleeper player database (for name matching)…');
+            window.S = window.S || {};
+            window.S.players = await fetchSleeperPlayers();
+            var dbN = Object.keys(window.S.players).length;
+            mark('Player DB', dbN > 5000, dbN + ' players');
+            step('   ' + dbN.toLocaleString() + ' players', dbN > 5000 ? 'ok' : 'bad');
+
+            step('3/6 Connecting ESPN league ' + leagueId + ' (' + year + ')' + (s2 ? ' via private-league proxy…' : ' — public fetch…'));
+            var res = await window.ESPN.connectLeague(leagueId, year, s2, swid);
+            var lg = res.league;
+            var rosters = res.rosters || [];
+            mark('ESPN connect', rosters.length > 1, rosters.length + ' teams');
+            step('   "' + (lg.name || 'league') + '" — ' + rosters.length + ' teams', 'ok');
+
+            // NFL state so the engine knows the week.
+            try {
+                var st = await fetch('https://api.sleeper.app/v1/state/nfl').then(function (r) { return r.json(); });
+                window.S.nflState = st; window.S.currentWeek = st.week || 1;
+            } catch (e) { /* engine tolerates absence */ }
+
+            // Crosswalk quality: unmatched players carry synthetic espn_ ids.
+            var allPids = [], unmatched = 0;
+            rosters.forEach(function (r) { (r.players || []).forEach(function (pid) { allPids.push(String(pid)); if (String(pid).indexOf('espn_') === 0) unmatched++; }); });
+            var matchPct = allPids.length ? Math.round(100 * (allPids.length - unmatched) / allPids.length) : 0;
+            mark('Player name matching', matchPct >= 90, matchPct + '% matched (' + unmatched + ' of ' + allPids.length + ' unmatched)');
+            step('   player matching: ' + matchPct + '% (' + unmatched + ' unmatched)', matchPct >= 90 ? 'ok' : 'warn');
+
+            step('4/6 Running the engine…');
+            await window.loadLeagueIntel();
+            var scored = 0, top = [];
+            allPids.forEach(function (pid) {
+                var v = 0; try { v = Number(window.dynastyValue(pid)) || 0; } catch (e) { /* noop */ }
+                if (v > 0) { scored++; top.push({ pid: pid, v: v }); }
+            });
+            top.sort(function (a, b) { return b.v - a.v; });
+            var scoredPct = allPids.length ? Math.round(100 * scored / allPids.length) : 0;
+            mark('Values computed', scoredPct >= 70, scoredPct + '% of rostered players valued');
+            step('   values on ' + scoredPct + '% of rostered players', scoredPct >= 70 ? 'ok' : 'bad');
+
+            step('5/6 Team assessments…');
+            var assess = [];
+            try { assess = window.assessAllTeamsFromGlobal ? (window.assessAllTeamsFromGlobal() || []) : []; } catch (e) { step('   assess error: ' + e.message, 'bad'); }
+            mark('Team assessments', assess.length === rosters.length, assess.length + '/' + rosters.length + ' teams assessed');
+            step('   ' + assess.length + '/' + rosters.length + ' teams assessed', assess.length === rosters.length ? 'ok' : 'warn');
+
+            step('6/6 Engine-path guard…');
+            var lid = String(window.S.currentLeagueId || '');
+            var v2Active = !!(window.DhqBrain && String(window.DhqBrain.leagueId || '') === lid);
+            mark('ESPN rides the v1 formula path (v2 guard held)', !v2Active, v2Active ? 'v2 brain ran on an ESPN league — GUARD FAILED' : 'v2 stayed off for ESPN, as designed');
+            step('   ' + (v2Active ? 'v2 brain ran — guard FAILED' : 'v1 path confirmed (v2 is Sleeper-only, as designed)'), v2Active ? 'bad' : 'ok');
+
+            mark('No page errors', pageErrors.length === 0, pageErrors.slice(0, 3).join(' | '));
+
+            // ── Verdict + readout ──
+            var failed = checks.filter(function (c) { return !c.pass; });
+            document.getElementById('verdict').innerHTML =
+                '<div class="verdict ' + (failed.length ? 'fail' : 'pass') + '">'
+                + (failed.length ? '✗ ' + failed.length + ' check(s) failed — not ready for the website yet' : '✓ ALL CHECKS PASSED — this league works end to end in the Lab')
+                + '</div>';
+
+            var nameOf = function (pid) {
+                var p = window.S.players[pid] || {};
+                return (p.full_name || ((p.first_name || '') + ' ' + (p.last_name || '')).trim()) || pid;
+            };
+            var topRows = top.slice(0, 15).map(function (t, i) {
+                var p = window.S.players[t.pid] || {};
+                return '<tr><td>' + (i + 1) + '</td><td>' + esc(nameOf(t.pid)) + '</td><td>' + esc(p.position || '?') + '</td><td>' + Math.round(t.v).toLocaleString() + '</td></tr>';
+            }).join('');
+            var teamRows = assess.map(function (a) {
+                return '<tr><td>' + esc(a.teamName || a.ownerName || ('Roster ' + a.rosterId)) + '</td><td>' + esc(a.tier || a.window || '—') + '</td><td>' + esc((a.needs || []).map(function (n) { return n.pos || n; }).join(', ') || '—') + '</td></tr>';
+            }).join('');
+            var checkTiles = checks.map(function (c) {
+                return '<div class="tile"><b class="' + (c.pass ? 'ok' : 'bad') + '">' + (c.pass ? '✓' : '✗') + '</b> ' + esc(c.name) + (c.detail ? ' — <span style="opacity:0.75">' + esc(c.detail) + '</span>' : '') + '</div>';
+            }).join('');
+            document.getElementById('readout').style.display = 'block';
+            document.getElementById('readout').innerHTML =
+                '<div class="grid">' + checkTiles + '</div>'
+                + '<h3 style="color:var(--gold);font-size:0.9rem;margin:16px 0 6px">TOP 15 BY ENGINE VALUE</h3><table><tr><th>#</th><th>Player</th><th>Pos</th><th>Value</th></tr>' + topRows + '</table>'
+                + (teamRows ? '<h3 style="color:var(--gold);font-size:0.9rem;margin:16px 0 6px">TEAM READS</h3><table><tr><th>Team</th><th>Tier</th><th>Needs</th></tr>' + teamRows + '</table>' : '');
+        } catch (err) {
+            step('FAILED: ' + (err && err.message || err), 'bad');
+            document.getElementById('verdict').innerHTML = '<div class="verdict fail">✗ ' + esc(err && err.message || 'Connection failed') + '</div>';
+        }
+        document.getElementById('btnRun').disabled = false;
+    }
+
+    document.getElementById('btnRun').addEventListener('click', run);
+    document.getElementById('btnReset').addEventListener('click', function () { location.reload(); });
+})();
+</script>
+</body>
+</html>
