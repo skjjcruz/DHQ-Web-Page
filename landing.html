@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="robots" content="noindex">
+    <title>DHQ Lab</title>
+    <!-- The lab's home page. The app shell's DHQ logo navigates to
+         landing.html (same as production); the lab repo had no such file, so
+         the logo dead-ended on a GitHub 404 (owner report 2026-09-06). This
+         hub is the lab's front door: every lab surface, one tap away. -->
+    <style>
+        :root { --gold:#D4AF37; --black:#0a0a0a; --off-black:#141414; --silver:#c9c9c9; }
+        * { box-sizing: border-box; }
+        body { margin:0; background:var(--black); color:var(--silver); font:16px/1.6 -apple-system,'Segoe UI',Roboto,sans-serif; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
+        .hub { max-width:480px; width:100%; text-align:center; }
+        h1 { color:var(--gold); font-size:1.7rem; letter-spacing:0.12em; margin:0; }
+        .sub { opacity:0.65; font-size:0.85rem; margin:6px 0 28px; }
+        a.card { display:block; background:var(--off-black); border:1px solid rgba(212,175,55,0.45); border-radius:14px; padding:18px 20px; margin-bottom:14px; text-decoration:none; color:var(--silver); text-align:left; }
+        a.card:active { background:#1c1c1c; }
+        a.card b { display:block; color:var(--gold); font-size:1.05rem; letter-spacing:0.05em; margin-bottom:3px; }
+        a.card span { font-size:0.85rem; opacity:0.8; }
+        .foot { margin-top:22px; font-size:0.78rem; opacity:0.5; }
+        .foot a { color:var(--gold); text-decoration:none; }
+    </style>
+</head>
+<body>
+<div class="hub">
+    <h1>DHQ LAB</h1>
+    <div class="sub">The test bench. Nothing here is the live product.</div>
+    <a class="card" href="trade-lab.html"><b>TRADE LAB</b><span>The full trade room on the real engine — plus the Cutdown Desk (LAB26).</span></a>
+    <a class="card" href="espn-lab.html"><b>ESPN DOOR</b><span>Connect a real ESPN league and grade the run end to end (LAB25).</span></a>
+    <a class="card" href="index.html"><b>DRAFT WAR ROOM</b><span>The lab's original draft tools.</span></a>
+    <div class="foot">The real site lives at <a href="https://dhqfootball.com">dhqfootball.com</a>.</div>
+</div>
+</body>
+</html>

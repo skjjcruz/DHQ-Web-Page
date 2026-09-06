@@ -234,10 +234,26 @@
     // ── Render ────────────────────────────────────────────────────────
     function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
+    // The desk belongs to the Trade Center only, and it lines up with the
+    // board column instead of sliding under the app sidebar (owner report
+    // 2026-09-06: it rendered clipped, and on every tab).
+    function syncPlacement(host) {
+        const stage = document.querySelector('.tc-dhq-deal-stage') || document.querySelector('.tc-dhq-panel');
+        if (!stage) { host.style.display = 'none'; return false; }
+        const r = stage.getBoundingClientRect();
+        host.style.display = 'block';
+        host.style.margin = '18px 0 40px';
+        host.style.maxWidth = 'none';
+        host.style.width = Math.max(320, Math.round(r.width)) + 'px';
+        host.style.marginLeft = Math.max(0, Math.round(r.left + window.scrollX)) + 'px';
+        return true;
+    }
+
     function render() {
         const d = compute();
         const host = document.getElementById('lab-cutdown');
         if (!host) return;
+        if (!syncPlacement(host)) { host.innerHTML = ''; return; }
         if (!d) { host.innerHTML = ''; return; }
         if (d.waiting) { host.innerHTML = '<div class="lc-head"><span>CUTDOWN DESK</span><em>LAB26</em></div><div class="lc-note">Waiting for the engine to finish valuing the league…</div>'; return; }
         if (d.error) { host.innerHTML = '<div class="lc-note">' + esc(d.error) + '</div>'; return; }
@@ -305,11 +321,19 @@
             window.DhqEvents.on?.('strategy:changed', () => render());
         }
         window.addEventListener('dhq:situation-changed', () => setTimeout(render, 400));
-        // League switches re-run intel; a slow poll catches anything missed.
+        window.addEventListener('hashchange', () => setTimeout(render, 600));
+        window.addEventListener('resize', () => { const h = document.getElementById('lab-cutdown'); if (h) syncPlacement(h); });
+        // Tab switches and league loads don't all announce themselves — a slow
+        // poll keeps visibility and placement honest.
         setInterval(() => {
             const h = document.getElementById('lab-cutdown');
-            if (h && (!h.innerHTML || h.innerHTML.indexOf('Waiting for the engine') !== -1)) render();
-        }, 5000);
+            if (!h) return;
+            const onBoard = !!(document.querySelector('.tc-dhq-deal-stage') || document.querySelector('.tc-dhq-panel'));
+            const showing = h.style.display !== 'none' && h.innerHTML;
+            if (onBoard && (!showing || h.innerHTML.indexOf('Waiting for the engine') !== -1)) render();
+            else if (!onBoard && showing) { h.style.display = 'none'; }
+            else if (onBoard && showing) syncPlacement(h);
+        }, 3000);
     }
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true });
