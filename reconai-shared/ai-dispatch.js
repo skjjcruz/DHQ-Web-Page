@@ -106,7 +106,10 @@ const AI_ROUTES = {
   'trade-chat': 'premium',
   'trade-scout': 'premium',
   'draft-scout': 'premium',
-  'pick-analysis': 'premium',
+  // Draft-night burst valve (2026-09-07): per-pick reactions ride the fast
+  // tier so a busy draft lives on the roomiest free lanes — mirrors the
+  // server's ai-analyze route table, which is the real authority.
+  'pick-analysis': 'fast',
   'player-scout': 'premium',
   'deep-analysis': 'deep',
   'league-report': 'deep',
@@ -384,7 +387,14 @@ async function callClaude(messages, useWebSearch=false, _retries=2, maxTok=600, 
   }
 
   // ── CLIENT-SIDE PATH: direct API calls with user's key ─────
-  if(!S.apiKey) throw new Error('No AI available. Connect your account or add an API key in Settings.');
+  if(!S.apiKey){
+    // A signed-out visitor at the AI door is an invitation, not breakage:
+    // server AI needs an account by design (so strangers can't drain the
+    // shared quota). Friendly copy + dhqCode so the capture layer skips it.
+    const gate = new Error('AI analysis is free with a DHQ account — sign in to turn it on, or add your own API key in Settings.');
+    gate.dhqCode = 'signin_required';
+    throw gate;
+  }
 
   // Fallback: if saved provider was removed (groq/grok), default to gemini
   const provider = PROVIDERS[effectiveProvider] ? effectiveProvider : 'gemini';

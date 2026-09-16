@@ -2,6 +2,44 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <!-- DHQ LAB GATE (owner ruling 2026-09-04, mirror edition 2026-09-16).
+         Injected into every page by scripts/publish-lab.cjs. An access code is
+         checked in-page; the right code unlocks this device and the page renders
+         as the real product would. A wrong code or cancel leaves a dead blank
+         page. The Lab no longer seeds a guest session: the real doors
+         (landing -> sign in -> connect) work here exactly as on the website, so
+         a signed-in owner gets the real server features, AI included. -->
+    <meta name="robots" content="noindex,nofollow">
+    <script>
+    (function () {
+      var KEY = 'dhq_lab_key_v2';
+      var HASH = 'd017d4b5086e39a4f4b065301f1e6eefac302734df8b82fa196a6d588637b6bd';
+      var have = null;
+      try { have = localStorage.getItem(KEY); } catch (e) {}
+      if (have === HASH) return; // unlocked on this device — render
+      // Locked: stop the page cold (no further loading), then ask for the code.
+      document.documentElement.style.display = 'none';
+      try { window.stop(); } catch (e) {}
+      function sha256hex(str) {
+        var data = new TextEncoder().encode(str);
+        return crypto.subtle.digest('SHA-256', data).then(function (buf) {
+          return Array.prototype.map.call(new Uint8Array(buf), function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+        });
+      }
+      function ask(triesLeft) {
+        var v = prompt('Access code');
+        if (v == null || !triesLeft) { document.title = ''; return; } // dead end, no navigation
+        sha256hex(v.trim()).then(function (h) {
+          if (h === HASH) {
+            try { localStorage.setItem(KEY, HASH); } catch (e) {}
+            location.reload();
+          } else { ask(triesLeft - 1); }
+        }).catch(function () { document.title = ''; });
+      }
+      if (window.crypto && crypto.subtle) setTimeout(function () { ask(4); }, 50);
+    })();
+    </script>
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="robots" content="noindex">
     <title>ESPN Door — Lab</title>
@@ -28,7 +66,7 @@
         } catch (e) { /* noop */ }
       })();
     </script>
-    <script src="js/shared/shared-loader.js?v=1dd259c0db"></script>
+    <script src="js/shared/shared-loader.js?v=1912b72542"></script>
     <script>
 window.DYNASTY_HQ_APP = 'warroom';
 // The graft flag stays ON here on purpose: an ESPN league must ride the

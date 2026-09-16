@@ -73,7 +73,11 @@ const STORAGE_KEYS = {
 // error, evict only the rebuildable caches below, then retry the write
 // once. Never touches auth, prefs, boards, strategies, or custom events.
 const PURGEABLE_CACHE_PREFIXES = [
-  'dhq_hist_',           // per-league history cache (the whale; refetched on demand)
+  // The whale now lives in IndexedDB (2026-09-07): evicting it here forced a
+  // ~200-call cold rebuild of 5 seasons of league history, which a live draft
+  // then queued behind — the 20-25s draft-room wait. Only stray legacy
+  // localStorage copies are swept now; the IndexedDB copy is never touched.
+  'dhq_hist_',           // legacy per-league history copies (superseded by IndexedDB)
   'wr_compare_h2h_v3_',  // compare tab H2H meetings cache
   'wr_adp_market_v2_',   // ADP market cache (18h TTL)
   'fw_stats_',           // legacy season-stats blobs (superseded by IndexedDB)
@@ -279,6 +283,220 @@ DhqStorage.idbRemove = async function (key) {
     });
   } catch (e) { return false; }
 };
+
+// ── Draft recap archive mirror (quota diet round 2, 2026-09-07) ──────────
+// Recap archives (wr_draft_recap_archive_<league>, up to 25 full drafts per
+// league) were the last big tenant left in localStorage's ~5MB allowance —
+// draftState.archiveRecap threw QuotaExceededError archiving a real draft.
+// They live in the IndexedDB blob store now, behind a synchronous in-memory
+// mirror so every caller keeps its sync read/write shape. Writes that land
+// while hydration is still in flight are queued and MERGED (never replace):
+// a pre-hydration caller computed its rows against an empty read, and a
+// blind replace would drop every recap already in the blob store.
+// If IndexedDB is unavailable the old localStorage lane keeps working.
+const RECAP_BLOB_KEY = 'wr_draft_recap_archive_all_v1';
+const RECAP_KEY_PREFIX = 'wr_draft_recap_archive_';
+const RECAP_MAX = 25;
+const _recapMirror = { lane: 'ls', ready: false, hydrating: false, data: {}, queue: [] };
+
+function _recapLsRead(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) { return []; }
+}
+
+function _recapMergeRows(base, extra) {
+  const byId = new Map();
+  [].concat(base || [], extra || []).forEach((row) => {
+    if (!row) return;
+    const id = row.id || ('recap_' + (row.savedAt || ''));
+    const prev = byId.get(id);
+    if (!prev || Number(row.archivedAt || row.savedAt || 0) >= Number(prev.archivedAt || prev.savedAt || 0)) byId.set(id, row);
+  });
+  return Array.from(byId.values())
+    .sort((a, b) => Number(b.savedAt || b.archivedAt || 0) - Number(a.savedAt || a.archivedAt || 0))
+    .slice(0, RECAP_MAX);
+}
+
+function _recapFlush() {
+  if (_recapMirror.lane !== 'idb') return;
+  DhqStorage.idbSet(RECAP_BLOB_KEY, _recapMirror.data).then((ok) => {
+    if (!ok) _log('recapArchive.flush', new Error('idbSet failed'));
+  });
+}
+
+function _recapApplyQueued(entry) {
+  if (_recapMirror.lane === 'idb') {
+    const cur = _recapMirror.data[entry.key];
+    _recapMirror.data[entry.key] = entry.op === 'delete'
+      ? (Array.isArray(cur) ? cur.filter((r) => r && r.id !== entry.recapId) : [])
+      : _recapMergeRows(cur, entry.rows);
+  } else {
+    const cur = _recapLsRead(entry.key);
+    const next = entry.op === 'delete'
+      ? cur.filter((r) => r && r.id !== entry.recapId)
+      : _recapMergeRows(cur, entry.rows);
+    try { localStorage.setItem(entry.key, JSON.stringify(next)); } catch (e) { _log('recapArchive.apply:' + entry.key, e); }
+  }
+}
+
+function _recapFinishHydration() {
+  const queued = _recapMirror.queue.splice(0);
+  queued.forEach(_recapApplyQueued);
+  _recapMirror.ready = true;
+  return queued.length;
+}
+
+function _recapHydrate() {
+  if (_recapMirror.hydrating) return;
+  _recapMirror.hydrating = true;
+  if (typeof window.indexedDB === 'undefined' || typeof localStorage === 'undefined') {
+    _recapFinishHydration(); // stays on the localStorage lane
+    return;
+  }
+  DhqStorage.idbGet(RECAP_BLOB_KEY).then((saved) => {
+    _recapMirror.lane = 'idb';
+    _recapMirror.data = (saved && typeof saved === 'object' && !Array.isArray(saved)) ? saved : {};
+    // One-time migration: lift archives still in localStorage into the blob
+    // store (newest copy of each recap wins), then free their quota.
+    let lifted = 0;
+    try {
+      Object.keys(localStorage).filter((k) => k.indexOf(RECAP_KEY_PREFIX) === 0).forEach((k) => {
+        const rows = _recapLsRead(k);
+        if (rows.length) { _recapMirror.data[k] = _recapMergeRows(_recapMirror.data[k], rows); lifted++; }
+        try { localStorage.removeItem(k); } catch (e) { /* leave it for the next boot */ }
+      });
+    } catch (e) { /* localStorage scan unavailable */ }
+    const applied = _recapFinishHydration();
+    if (lifted || applied) _recapFlush();
+    try { window.dispatchEvent(new CustomEvent('dhq:recap-archive-ready')); } catch (e) { /* no listeners yet */ }
+  }).catch(() => { _recapFinishHydration(); /* stays on the localStorage lane */ });
+}
+
+// ── Big-blob mirror (draft resume snapshots, 2026-09-09) ────────────
+// draftState.save threw QuotaExceededError 30 times during one live draft:
+// the mid-draft resume snapshot (300 pool rows + 600 slim rows + every pick)
+// is another whale in localStorage's ~5MB allowance, and losing it costs a
+// drafter their place. Same medicine as the recap archive: IndexedDB behind
+// a synchronous in-memory mirror, so save/load keep their sync shape.
+// Generic on purpose — any oversized rebuildable blob can ride this.
+const _blobMirror = { ready: false, hydrating: false, data: {}, queue: [] };
+
+function _blobKeys() {
+  // Keys this mirror owns. Anything matching migrates out of localStorage.
+  return ['wr_draft_cc_current_'];
+}
+
+function _blobOwns(key) {
+  return _blobKeys().some(p => String(key || '').indexOf(p) === 0);
+}
+
+function _blobFlush() {
+  DhqStorage.idbSet(BLOB_STORE_KEY, _blobMirror.data).then((ok) => {
+    if (!ok) _log('blobMirror.flush', new Error('idbSet failed'));
+  });
+}
+
+const BLOB_STORE_KEY = 'dhq_blob_mirror_v1';
+
+function _blobHydrate() {
+  if (_blobMirror.hydrating) return;
+  _blobMirror.hydrating = true;
+  if (typeof window.indexedDB === 'undefined' || typeof localStorage === 'undefined') {
+    _blobMirror.queue.splice(0); // no IndexedDB: callers stay on localStorage
+    return;
+  }
+  DhqStorage.idbGet(BLOB_STORE_KEY).then((saved) => {
+    _blobMirror.data = (saved && typeof saved === 'object' && !Array.isArray(saved)) ? saved : {};
+    // One-time lift of any legacy localStorage copies, then free that quota.
+    let lifted = 0;
+    try {
+      Object.keys(localStorage).filter(_blobOwns).forEach((k) => {
+        if (_blobMirror.data[k] === undefined) {
+          try { _blobMirror.data[k] = JSON.parse(localStorage.getItem(k)); lifted++; } catch (e) { /* unreadable */ }
+        }
+        try { localStorage.removeItem(k); } catch (e) { /* next boot */ }
+      });
+    } catch (e) { /* storage unreadable */ }
+    // Writes that landed mid-hydration win — they are newer than anything on disk.
+    const queued = _blobMirror.queue.splice(0);
+    queued.forEach((entry) => {
+      if (entry.op === 'remove') delete _blobMirror.data[entry.key];
+      else _blobMirror.data[entry.key] = entry.value;
+    });
+    _blobMirror.ready = true;
+    if (lifted || queued.length) _blobFlush();
+    try { window.dispatchEvent(new CustomEvent('dhq:blob-mirror-ready')); } catch (e) { /* no listeners */ }
+  }).catch(() => { _blobMirror.queue.splice(0); /* stays on localStorage */ });
+}
+
+DhqStorage.blob = {
+  owns: _blobOwns,
+  get(key) {
+    if (_blobMirror.ready) {
+      const v = _blobMirror.data[key];
+      return v === undefined ? null : v;
+    }
+    // Pre-hydration (or no IndexedDB): the legacy localStorage copy still serves.
+    try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+  },
+  set(key, value) {
+    if (!_blobMirror.ready) {
+      _blobMirror.queue.push({ op: 'set', key, value });
+      // Best-effort local copy so a reload before hydration still resumes.
+      try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* quota — the mirror carries it */ }
+      return true;
+    }
+    _blobMirror.data[key] = value;
+    _blobFlush();
+    return true;
+  },
+  remove(key) {
+    if (!_blobMirror.ready) _blobMirror.queue.push({ op: 'remove', key });
+    else { delete _blobMirror.data[key]; _blobFlush(); }
+    try { localStorage.removeItem(key); } catch (e) { /* already gone */ }
+  },
+};
+_blobHydrate();
+
+DhqStorage.recapArchive = {
+  keyFor(leagueId) { return RECAP_KEY_PREFIX + (leagueId || 'default'); },
+  get(key) {
+    if (!_recapMirror.ready || _recapMirror.lane !== 'idb') return _recapLsRead(key);
+    const rows = _recapMirror.data[key];
+    return Array.isArray(rows) ? rows : [];
+  },
+  set(key, rows) {
+    const clean = Array.isArray(rows) ? rows : [];
+    if (!_recapMirror.ready) { _recapMirror.queue.push({ op: 'merge', key, rows: clean }); return clean; }
+    if (_recapMirror.lane !== 'idb') {
+      try { localStorage.setItem(key, JSON.stringify(clean)); } catch (e) { _log('recapArchive.set:' + key, e); }
+      return clean;
+    }
+    _recapMirror.data[key] = clean;
+    _recapFlush();
+    return clean;
+  },
+  remove(key, recapId) {
+    if (!_recapMirror.ready) {
+      _recapMirror.queue.push({ op: 'delete', key, recapId });
+      return _recapLsRead(key).filter((r) => r && r.id !== recapId);
+    }
+    if (_recapMirror.lane !== 'idb') {
+      const next = _recapLsRead(key).filter((r) => r && r.id !== recapId);
+      try { localStorage.setItem(key, JSON.stringify(next)); } catch (e) { _log('recapArchive.remove:' + key, e); }
+      return next;
+    }
+    const cur = _recapMirror.data[key];
+    const next = (Array.isArray(cur) ? cur : []).filter((r) => r && r.id !== recapId);
+    _recapMirror.data[key] = next;
+    _recapFlush();
+    return next;
+  },
+};
+_recapHydrate();
 
 window.App.STORAGE_KEYS = STORAGE_KEYS;
 window.App.DhqStorage   = DhqStorage;

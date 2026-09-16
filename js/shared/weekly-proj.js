@@ -38,8 +38,46 @@
             if (byPid[pid]) _ctx.projLines[w + '|' + pid] = byPid[pid];
         }
     }
+    // Any field whose presence means Sleeper is actually projecting production.
+    // Deliberately broad: a quarterback line can carry passing yards and
+    // touchdowns without an attempt count, and a kicker only field goals, so
+    // testing a narrow set would throw away real projections. Scoring totals,
+    // volume and yardage all count. Draft-ADP placeholders do not appear here,
+    // which is the whole point.
+    const PUBLISHED_VOLUME_FIELDS = [
+        'pts_ppr', 'pts_half_ppr', 'pts_std',
+        'pass_att', 'pass_yd', 'pass_td', 'pass_cmp',
+        'rush_att', 'rush_yd', 'rush_td',
+        'rec', 'rec_tgt', 'rec_yd', 'rec_td',
+        'fga', 'fgm', 'xpm',
+        'idp_tkl', 'idp_tkl_solo', 'idp_sack', 'idp_int', 'idp_pass_def',
+        'def_st_td', 'def_td', 'sack', 'int', 'tkl',
+    ];
+
+    // Sleeper returns a row for EVERY player, so the row existing proves
+    // nothing. Players it is not projecting come back carrying only a draft-ADP
+    // placeholder (adp_dd_ppr: 1000) and no projected volume whatsoever. A line
+    // only counts as published when it actually projects something to happen.
     function projLine(pid, week) {
-        return _ctx.projLines[(Number(week) || 0) + '|' + pid] || null;
+        const line = _ctx.projLines[(Number(week) || 0) + '|' + pid] || null;
+        if (!line) return null;
+        for (const f of PUBLISHED_VOLUME_FIELDS) {
+            if (Number(line[f]) > 0) return line;
+        }
+        return null;
+    }
+    // The latest week we actually hold published Sleeper lines for, or 0 when
+    // none have loaded yet. Consumers that must not guess (rest-of-season
+    // value, waiver ranking) key off this instead of the calendar week, so
+    // they never ask for a week Sleeper has not published and then quietly
+    // fill the silence with an estimate.
+    function loadedProjWeek() {
+        let best = 0;
+        for (const k of Object.keys(_ctx.projLines)) {
+            const w = Number(String(k).split('|')[0]);
+            if (w > best) best = w;
+        }
+        return best;
     }
     function teamWeekCtx(team, week) {
         return _ctx.byTeamWeek[`${String(team || '').toUpperCase()}|${week}`] || null;
@@ -171,9 +209,15 @@
     }
 
     // Project one player for a given week, scored through `scoring`.
-    function projectPlayer(pid, { playersData, statsData, priorData, scoring, week }) {
+    // requireSleeper: return null unless Sleeper has published a real weekly
+    // projection for this player. Callers that rank, price or recommend must
+    // pass it — an estimate built from last season is not a projection, and
+    // Sleeper declining to publish one is itself the answer (the player is not
+    // in a role worth projecting).
+    function projectPlayer(pid, { playersData, statsData, priorData, scoring, week, requireSleeper }) {
         const ss = SS();
         if (!ss || !pid) return null;
+        if (requireSleeper && !projLine(pid, week)) return null;
         const player = (playersData && playersData[pid]) || null;
         const pos = (App.normPos && App.normPos(player && player.position)) || (player && player.position) || '';
         const season = (statsData && statsData[pid]) || null;
@@ -202,6 +246,12 @@
             roleNote: ctx ? ctx.roleNote : '',
         });
         const scored = ss.scoreProjection(proj, scoring);
+        // Every projection now declares where its number came from. 'estimate'
+        // is the home-grown line built from season stats + form; it is a guess,
+        // and callers that must not guess (waiver ranking, rest-of-season value)
+        // are required to check this before using the number. Upgraded to
+        // 'sleeper' below when Sleeper has actually published a line.
+        if (scored) scored.projSource = 'estimate';
 
         // ── One voice: prefer Sleeper's published weekly projection ──
         // The home-grown baseline (season stats + form) is our progressive-
@@ -293,7 +343,7 @@
     }
 
     App.WeeklyProj = App.WeeklyProj || {
-        setContext, setProjections, projLine, currentWeek, fantasyWeek, recentPPG, weeklyHistory, formStats, buildBaseline,
+        setContext, setProjections, projLine, loadedProjWeek, currentWeek, fantasyWeek, recentPPG, weeklyHistory, formStats, buildBaseline,
         projectPlayer, projectRoster, optimalForRoster,
         objectiveForMode, modeFor,
         _ctx,

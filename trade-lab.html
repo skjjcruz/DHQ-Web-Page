@@ -2,26 +2,23 @@
 
 <html lang="en">
 <head>
-    <!-- TRADE LAB GATE v3 (owner ruling 2026-09-04): fully self-contained.
-         No logins borrowed from the product, no redirect anywhere — an access
-         code checked in-page. The right code seeds the lab's own session (the
-         same state the E2E rig proved boots the whole app) and renders; a
-         wrong code or cancel leaves a dead blank page. -->
+    <meta charset="UTF-8">
+    <!-- DHQ LAB GATE (owner ruling 2026-09-04, mirror edition 2026-09-16).
+         Injected into every page by scripts/publish-lab.cjs. An access code is
+         checked in-page; the right code unlocks this device and the page renders
+         as the real product would. A wrong code or cancel leaves a dead blank
+         page. The Lab no longer seeds a guest session: the real doors
+         (landing -> sign in -> connect) work here exactly as on the website, so
+         a signed-in owner gets the real server features, AI included. -->
+    <meta name="robots" content="noindex,nofollow">
     <script>
     (function () {
       var KEY = 'dhq_lab_key_v2';
       var HASH = 'd017d4b5086e39a4f4b065301f1e6eefac302734df8b82fa196a6d588637b6bd';
-      function seed() {
-        try {
-          if (!localStorage.getItem('od_auth_v1')) localStorage.setItem('od_auth_v1', JSON.stringify({ username: 'skjjcruz', sleeperUsername: 'skjjcruz' }));
-          if (!localStorage.getItem('dynastyhq_username')) localStorage.setItem('dynastyhq_username', 'skjjcruz');
-          localStorage.setItem('wr_guest_v1', '1');
-        } catch (e) {}
-      }
       var have = null;
       try { have = localStorage.getItem(KEY); } catch (e) {}
-      if (have === HASH) { seed(); return; } // unlocked on this device — render
-      // Locked: stop the app cold (no further loading), then ask for the code.
+      if (have === HASH) return; // unlocked on this device — render
+      // Locked: stop the page cold (no further loading), then ask for the code.
       document.documentElement.style.display = 'none';
       try { window.stop(); } catch (e) {}
       function sha256hex(str) {
@@ -36,7 +33,6 @@
         sha256hex(v.trim()).then(function (h) {
           if (h === HASH) {
             try { localStorage.setItem(KEY, HASH); } catch (e) {}
-            seed();
             location.reload();
           } else { ask(triesLeft - 1); }
         }).catch(function () { document.title = ''; });
@@ -44,9 +40,8 @@
       if (window.crypto && crypto.subtle) setTimeout(function () { ask(4); }, 50);
     })();
     </script>
-    <meta charset="UTF-8">
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, viewport-fit=cover">
-    <meta name="robots" content="noindex,nofollow">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://skjjcruz.github.io https://browser.sentry-cdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://sxshiqyxhhifvtfqawbq.supabase.co https://api.sleeper.app https://api.myfantasyleague.com https://*.myfantasyleague.com https://lm-api-reads.fantasy.espn.com https://site.web.api.espn.com https://fantasysports.yahooapis.com https://api.fantasycalc.com https://*.sentry.io; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; object-src 'none';">
 
     <!-- Early auth gate: bounce signed-out visitors to the sign-in page BEFORE the
@@ -119,7 +114,7 @@
     <link rel="preload" as="script" href="vendor/supabase.min.js">
     <link rel="preload" as="script" href="vendor/react.production.min.js">
     <link rel="preload" as="script" href="vendor/react-dom.production.min.js">
-    <script src="js/shared/shared-loader.js?v=1dd259c0db"></script>
+    <script src="js/shared/shared-loader.js?v=1912b72542"></script>
     <!-- Season-rollover cache hygiene — must run early, before any surface reads caches. -->
     <script src="js/shared/season-guard.js?v=988bfb076d"></script>
     <!-- Native-shell external-link guard: outside links must never strand the WKWebView. -->
@@ -151,13 +146,12 @@ if (_isLocalDev) {
     },
   };
 }
-// ═══ GRAFT PHASE 3 (owner-approved plan, 2026-09-05): this lab now runs
-// the REAL DHQ-Shared engine — canonical bytes vendored into
-// reconai-shared/ — with the v2 kill switch ON. The lab's own surgical
-// engine copy and the conductor are retired; the brain rides the
-// engine's bridge + team-assess overlay, exactly as production will.
+// ═══ GRAFT PHASE 4 (owner-approved, 2026-09-05): the behavioral-model
+// engine is ON for this site. Sleeper leagues price through values-v2
+// and assess through the one brain; non-Sleeper leagues automatically
+// stay on the original engine (the switch is per-provider inside
+// dhq-engine.js). Rollback: set this to false — one line.
 window.__DHQ_ENGINE_V2 = true;
-WRShared.configure({ version: 'graft3-20260905' }); // bust reconai-shared cache — bump on every engine edit
 const WR_SHARED_FILES = [
   'app-config.js',
   'bug-capture.js',
@@ -177,6 +171,7 @@ const WR_SHARED_FILES = [
   'one-brain.js',
   'values-v2.js',
   'pff-snapshot.js',
+  'intent-reads.js',
   'dhq-engine.js',
   'nfl-fit.js',
   'nfl-roles.js',
@@ -194,7 +189,10 @@ const WR_SHARED_FILES = [
 ];
 // MFL is GA on production (mirrors MFL_ENABLED=true in js/app.js). ESPN/Yahoo stay sandbox-only beta.
 WR_SHARED_FILES.splice(7, 0, 'mfl-api.js');
-if (WR_PLATFORM_SANDBOX_ACCESS) WR_SHARED_FILES.splice(7, 0, 'espn-api.js', 'yahoo-api.js');
+// ESPN is GA on the website (2026-09-09) — its module loads for everyone, the
+// same way MFL does. Yahoo stays sandbox-only.
+WR_SHARED_FILES.splice(7, 0, 'espn-api.js');
+if (WR_PLATFORM_SANDBOX_ACCESS) WR_SHARED_FILES.splice(7, 0, 'yahoo-api.js');
 WRShared.preloadMany(WR_SHARED_FILES);
     </script>
     <style>
@@ -2963,7 +2961,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <!-- 0. Theme engine — must load before any widget/component (plain JS, no Babel needed) -->
 <script src="js/theme.js?v=e827d463e4"></script>
 <!-- 0b. Alex voice helper — seeded phrase variation + template-first AI upgrade (plain JS) -->
-<script src="js/shared/alex-voice.js?v=4e4aff95ec"></script>
+<script src="js/shared/alex-voice.js?v=882d4f6ede"></script>
 <!-- (removed unused 'Press Start 2P' web font — it was a render-blocking request but referenced by no font-family) -->
 
 <!-- War Room modules — loaded in dependency order by Babel standalone -->
@@ -2989,7 +2987,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <!-- 2d. GM Mode helper (Phase 1) — window.WR.GmMode — canonical mode/preset source of truth -->
 <script src="js/shared/gm-mode.js?v=4e60342750"></script>
 <script src="js/shared/startsit-engine.js?v=35b259534b"></script>
-<script src="js/shared/weekly-proj.js?v=67d27393e3"></script>
+<script src="js/shared/weekly-proj.js?v=95373be36d"></script>
 <script src="js/shared/sleeper-proj.js?v=76bf9e3979"></script>
 <script src="js/shared/nfl-context.js?v=d6f0ac9e4c"></script>
 <script src="js/shared/matchup.js?v=770ee90e33"></script>
@@ -3023,16 +3021,9 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <!-- AI Conductor foundation — one shared team-state + change-fingerprint (window.WR.SituationRoom). Additive + flagged off; nothing consumes it yet. -->
 <script src="js/shared/situation-room.js?v=732ee8bffc"></script>
 <!-- AI Conductor Phase 2 — the command brief's "what changed" line (window.WR.BriefPulse), flag-gated. -->
-<script src="js/shared/rank-history.js?v=3582f0d6ed"></script>
+<script src="js/shared/rank-history.js?v=4cebaac48a"></script>
 <script src="js/shared/qb-trade-rules.js?v=12c376f03a"></script>
 <script src="js/shared/elite-skill-trade-rules.js?v=8a8943111f"></script>
-<script src="js/shared/qb-trade-rules-v2.js?v=8358213da3"></script>
-<script src="js/shared/gm-trade-engine.js?v=38b2da7bc6"></script>
-<!-- GRAFT PHASE 3: points-ledger / one-brain / values-v2 now load from the
-     vendored canonical set (reconai-shared/, see WR_SHARED_FILES); the lab
-     conductor is retired — the engine bridge + team-assess overlay carry
-     the brain, exactly as production will. -->
-<script src="js/lab/intent-reads.js?v=88c497ba76"></script>
 <script src="js/shared/brief-pulse.js?v=df91c0cc53"></script>
 <!-- AI Conductor Phase 3 — the reusable "explain this screen" line (window.WR.SurfaceRead), flag-gated. -->
 <script src="js/shared/surface-read.js?v=aabd90404c"></script>
@@ -3048,7 +3039,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <script src="js/shared/txn-store.js?v=1976999bb6"></script>
 <!-- 3. Shared utilities: player valuation constants + projection engine -->
 <script src="js/utils/sos-engine.js?v=a988d9091c"></script>
-<script src="js/utils/player-value.js?v=b5254e3e25"></script>
+<script src="js/utils/player-value.js?v=9963ba3265"></script>
 <!-- 4. Feature modules (no internal dependencies between these) -->
 <!-- data-wr-defer scripts are DEFERRED: emitted INERT (type="text/wr-deferred" by
      every build/serve pipeline) so the browser does NOT parse/execute them at app
@@ -3056,10 +3047,10 @@ WRShared.preloadMany(WR_SHARED_FILES);
      group, when the owning surface first calls wrLoadModuleGroup('<group>'). -->
 <script src="js/module-loader.js?v=b16c21d6f6"></script>
 <script src="js/settings.js?v=d5f6229eee"></script>
-<script type="text/wr-deferred" data-wr-defer="trade" src="js/trade-calc-lab.js?v=20260905lab24"></script>
-<script src="js/lab-cutdown.js?v=20260906lab27"></script>
-<script src="js/post-draft.js?v=384acd8367"></script>
-<script type="text/wr-deferred" data-wr-defer="fa" src="js/free-agency.js?v=51c6aa887f"></script>
+<script type="text/wr-deferred" data-wr-defer="trade" src="js/trade-calc.js?v=801997c835"></script>
+<script src="js/lab-cutdown.js?v=cd15d7635f"></script>
+<script src="js/post-draft.js?v=61bcda3c71"></script>
+<script type="text/wr-deferred" data-wr-defer="fa" src="js/free-agency.js?v=d8b1dbf7fb"></script>
 <!-- Season Odds panel loads with Game Day (owner ruling 2026-07-30) — must
      precede lineup.js in the group so window.WrSeasonOdds exists on first render. -->
 <script type="text/wr-deferred" data-wr-defer="lineup" src="js/components/season-odds-panel.js?v=4fb87405c7"></script>
@@ -3070,11 +3061,11 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/styles.js?v=456c35bb55"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/scouting.js?v=43370e82ed"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/trade-helpers.js?v=8df2437674"></script>
-<script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/context.js?v=821bc3901f"></script>
+<script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/context.js?v=791653bde4"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/persona.js?v=0b4dbbc0cb"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/cpu-engine.js?v=9ea00c9c23"></script>
-<script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/state.js?v=a51a566829"></script>
-<script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/big-board.js?v=fff9351989"></script>
+<script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/state.js?v=10910b2da5"></script>
+<script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/big-board.js?v=d9d0eaa377"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/draft-grid.js?v=fc375aeee4"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/opponent-intel.js?v=1eaf3176b6"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/alex-stream.js?v=f3a6770586"></script>
@@ -3094,7 +3085,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/live-decision-engine.js?v=90b271dbe2"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/analyst-mock.js?v=91b4e236cd"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/command-center.js?v=de229ea928"></script>
-<script type="text/wr-deferred" data-wr-defer="draft" src="js/draft-room.js?v=cdb6b4e7e9"></script>
+<script type="text/wr-deferred" data-wr-defer="draft" src="js/draft-room.js?v=b70369e131"></script>
 <!-- 5. League detail tab components (extracted from league-detail.js) -->
 <!-- v2 widget modules (load before dashboard.js which consumes them) -->
 <script src="js/widgets/roster-pulse.js?v=c80df61d34"></script>
@@ -3102,7 +3093,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <script src="js/widgets/window-forecast.js?v=efebefe605"></script>
 <script src="js/widgets/gap-plan.js?v=cc0e7f7a06"></script>
 <script src="js/widgets/league-landscape.js?v=c4d383ee19"></script>
-<script src="js/widgets/txn-ticker.js?v=132c3a8efe"></script>
+<script src="js/widgets/txn-ticker.js?v=ba41865d65"></script>
 <script src="js/widgets/market-radar.js?v=9b9da396e1"></script>
 <script src="js/widgets/faab-command.js?v=0621874088"></script>
 <script src="js/widgets/draft-capital.js?v=e4c0700713"></script>
@@ -3110,7 +3101,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <script src="js/widgets/player-tags.js?v=0459e56074"></script>
 <!-- Phase 3: League intel widgets (Competitive Tiers, Power Rankings) — ex-League Map -->
 <script src="js/widgets/competitive-tiers.js?v=ab205d3f49"></script>
-<script src="js/widgets/power-rankings.js?v=ab9e45b1e1"></script>
+<script src="js/widgets/power-rankings.js?v=9d0f93fa7b"></script>
 <!-- Phase 9: My Trophies widget -->
 <script src="js/widgets/my-trophies.js?v=947128399d"></script>
 <!-- League Calendar widget — depends on window.WrCalendar (js/tabs/calendar.js) -->
@@ -3139,7 +3130,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <!-- 7. League detail: coordinator shell, depends on all above -->
     <script src="js/league-detail.js?v=f27ed49f89"></script>
 <!-- 8. App: OwnerDashboard + ReactDOM.render (loads last) -->
-<script src="js/app.js?v=7b9187e1a6"></script>
+<script src="js/app.js?v=977b18c616"></script>
 
 <!-- All JSX code extracted to js/ modules. Only bootstrap remains. -->
 <script>
@@ -3207,7 +3198,7 @@ window.addEventListener('appinstalled', () => {
 <!-- Deploy tag (owner ask 2026-08-19): a tiny always-visible build code so the
      owner can read back exactly which version his device is running before
      testing — kills the stale-cache guessing game. Bump the code every deploy. -->
-<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.55);pointer-events:none;user-select:none;">LAB29</div>
+<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b123 · LAB</div>
 </body>
 </html>
-<!-- build 1789563283 -->
+<!-- build 1774212614 -->
