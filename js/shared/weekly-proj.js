@@ -300,11 +300,13 @@
         return out;
     }
 
-    // GM mode → optimization objective. win_now plays it safe (floor),
-    // rebuild chases upside (ceiling), everyone else optimizes the median.
-    function objectiveForMode(mode) {
-        if (mode === 'win_now') return 'floor';
-        if (mode === 'rebuild') return 'ceiling';
+    // Optimization objective: Sleeper's number, always (owner ruling
+    // 2026-09-16, the truth law). The optimizer used to tilt by GM mode —
+    // win_now optimized the FLOOR (three-quarters of Sleeper's projection),
+    // rebuild the CEILING (a quarter above it) — so the Proj column and the
+    // optimal lineup stopped matching what the owner saw in Sleeper. The
+    // floor/ceiling band still renders as context; it never picks the lineup.
+    function objectiveForMode() {
         return 'median';
     }
     function modeFor(leagueId) {
