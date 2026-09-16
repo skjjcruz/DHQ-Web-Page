@@ -252,25 +252,33 @@
             }
             var seen = {}; return c.filter(function (f) { if (seen[f]) return false; seen[f] = 1; return true; });
         }
-        // The league's veteran ladder (values already priced above, rookies
-        // excluded) and, per ADP field, the sorted ADPs of those veterans.
-        var vetVals = [], vetPids = [];
-        for (var pv in values) { if (Number((players[pv] || {}).years_exp) !== 0 && values[pv] > 0) { vetVals.push(values[pv]); vetPids.push(pv); } }
-        vetVals.sort(function (a, b) { return b - a; });
-        var vetAdpCache = {};
-        function vetAdps(field) {
-            if (vetAdpCache[field]) return vetAdpCache[field];
-            var arr = [];
-            vetPids.forEach(function (vp) { var a = adpOf(vp, field); if (a != null) arr.push(a); });
-            arr.sort(function (a, b) { return a - b; });
-            return (vetAdpCache[field] = arr);
+        // Per ADP field: the veterans that ladder ranks (values already priced
+        // above, rookies excluded) — their ADPs low→high and their values
+        // high→low. A rookie is priced among THESE veterans: the ones the
+        // market actually ranks, so a rookie the market puts behind all of
+        // them lands below them, not at some mid-ladder rung.
+        var vetPids = [];
+        for (var pv in values) { if (Number((players[pv] || {}).years_exp) !== 0 && values[pv] > 0) vetPids.push(pv); }
+        var vetLadderCache = {};
+        function vetLadder(field) {
+            if (vetLadderCache[field]) return vetLadderCache[field];
+            var adps = [], vals = [];
+            vetPids.forEach(function (vp) { var a = adpOf(vp, field); if (a != null) { adps.push(a); vals.push(values[vp]); } });
+            adps.sort(function (a, b) { return a - b; });
+            vals.sort(function (a, b) { return b - a; });
+            return (vetLadderCache[field] = { adps: adps, vals: vals });
         }
         function ladderValue(field, adp) {
-            var arr = vetAdps(field);
-            if (arr.length < 20 || !vetVals.length) return 0; // too thin to be a market
-            var lo = 0, hi = arr.length; // veterans the market ranks ahead of him
-            while (lo < hi) { var mid = (lo + hi) >> 1; if (arr[mid] < adp) lo = mid + 1; else hi = mid; }
-            return vetVals[Math.min(lo, vetVals.length - 1)];
+            var L = vetLadder(field);
+            if (L.adps.length < 20) return 0; // too thin to be a market
+            var lo = 0, hi = L.adps.length; // veterans the market ranks ahead of him
+            while (lo < hi) { var mid = (lo + hi) >> 1; if (L.adps[mid] < adp) lo = mid + 1; else hi = mid; }
+            if (lo < L.vals.length) return L.vals[lo];
+            // Past the last ranked veteran: fall away in proportion to how far
+            // past him the market puts the rookie (ADP 600 vs a last rung at 300
+            // = half of that rung), never below zero.
+            var lastAdp = L.adps[L.adps.length - 1], lastVal = L.vals[L.vals.length - 1];
+            return Math.round(lastVal * Math.min(1, lastAdp / Math.max(adp, lastAdp)));
         }
         // Rookie ADP ladders (every rookie on an NFL club), for the prospect
         // fallback: consensus rank r → the ADP of the r-th ranked rookie.
