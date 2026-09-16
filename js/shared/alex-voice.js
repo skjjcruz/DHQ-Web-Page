@@ -138,6 +138,10 @@
   }
 
   var _cache = new Map();
+  // Answers still in the air, keyed the same way. Kept SEPARATE from _cache on
+  // purpose: getCached() hands its value straight to render code, so a promise
+  // must never land in there.
+  var _inflight = new Map();
 
   function getCached(key) {
     return key && _cache.has(key) ? _cache.get(key) : null;
@@ -163,8 +167,24 @@
     var key = opts.cacheKey;
     if (key && _cache.has(key)) return Promise.resolve(_cache.get(key));
     if (!hasAI()) return Promise.resolve(fallback);
+
+    // A screen that re-renders while its answer is still in the air used to ask
+    // the SAME question again, every time, because the cache is only written
+    // once a reply lands. The lineup note did this seven times in five seconds
+    // as projections and the schedule streamed in — seven identical calls, one
+    // question — which is what tripped the provider's per-minute ceiling and
+    // produced the 429s. Hand later callers the answer already on its way.
+    if (key && _inflight.has(key)) {
+      return _inflight.get(key).then(function (v) {
+        return v === undefined ? fallback : v;
+      });
+    }
+
     var ai = getAI();
-    return Promise.resolve()
+    // Resolves to the real value, or undefined meaning "no value" — never to a
+    // fallback. Callers sharing this promise each substitute their OWN
+    // fallback below, so one caller's template can never be handed to another.
+    var run = Promise.resolve()
       .then(function () {
         return ai(opts.type || 'strategy-analysis', opts.message || '', opts.context || '', opts.options);
       })
@@ -173,18 +193,27 @@
           ? reply
           : (reply && (reply.text || reply.response || reply.analysis)) || '';
         raw = sanitize(raw);
-        if (!raw) return fallback;
+        if (!raw) return undefined;
         var value = raw;
         if (typeof opts.transform === 'function') {
           try {
             value = opts.transform(raw);
-            if (!value) return fallback;
-          } catch (e) { return fallback; }
+            if (!value) return undefined;
+          } catch (e) { return undefined; }
         }
         if (key) _cache.set(key, value);
         return value;
       })
-      .catch(function () { return fallback; });
+      .catch(function () { return undefined; });
+
+    if (key) {
+      _inflight.set(key, run);
+      // Drop it the moment it settles. A failure must never be cached — the
+      // next render has to be free to ask again.
+      var release = function () { _inflight.delete(key); };
+      run.then(release, release);
+    }
+    return run.then(function (v) { return v === undefined ? fallback : v; });
   }
 
   // ── Shared AI-text formatter ─────────────────────────────────────
