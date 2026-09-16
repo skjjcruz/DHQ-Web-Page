@@ -151,12 +151,17 @@
         }
         function availMult(p, isRostered) {
             var st = String(p.status || '').toLowerCase();
-            if (st.indexOf('retired') >= 0 || st.indexOf('inactive') >= 0) return 0;
             var inj = String(p.injury_status || '').toLowerCase();
+            if (st.indexOf('retired') >= 0) return 0;
+            // Sleeper stamps every IR / PUP / NFI player "Inactive" — still under
+            // contract, still an asset. That reads as the injury haircut below,
+            // never a zero (owner ruling 2026-09-16: Tyson, Brazzell). An
+            // "Inactive" player with no club and no injury is genuinely gone.
+            if (st.indexOf('inactive') >= 0 && !inj && !p.team) return 0;
             var m = 1;
             if (!p.team) m *= 0.3; // no NFL club
             if (!isRostered) m *= 0.55; // free agent in this league — nobody pays roster space for him yet
-            if (inj === 'out' || inj.indexOf('ir') >= 0) m *= 0.7; // down right now
+            if (inj === 'out' || inj.indexOf('ir') >= 0 || inj === 'pup' || inj === 'nfi' || (st.indexOf('inactive') >= 0 && inj)) m *= 0.7; // down right now
             return m;
         }
 
