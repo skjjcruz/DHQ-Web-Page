@@ -221,13 +221,21 @@
       } catch { return 'web'; }
     }
     function trackConnectEvent(eventName, username, metadata) {
+      // This page posts with the anonymous key, and the insert policy only
+      // accepts a null account name from an anonymous writer — a filled
+      // username was rejected silently, so every connect ever made here
+      // vanished from Mission Control (owner ask 2026-09-17). The Sleeper
+      // handle rides in metadata.sleeperUsername instead, which the report
+      // already reads; the account-name column stays null.
+      var hasLogin = false;
+      try { var _s = JSON.parse(localStorage.getItem('fw_session_v1') || 'null'); hasLogin = !!(_s && _s.token); } catch (e) {}
       try {
         fetch(TRACK_URL, {
           method: 'POST',
           headers: { apikey: TRACK_KEY, Authorization: 'Bearer ' + TRACK_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
           body: JSON.stringify([{
             event_id: 'evt_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10),
-            username: username || null,
+            username: null,
             league_id: null,
             session_id: trackSessionId(),
             platform: 'warroom',
@@ -239,7 +247,8 @@
             entity_id: null,
             metadata: {
               route: '/connect-sleeper.html',
-              guest: false,
+              guest: !hasLogin,
+              sleeperUsername: username || null,
               surface: detectSurface(),
               host: location.hostname || null,
               ...(metadata || {}),

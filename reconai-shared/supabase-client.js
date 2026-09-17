@@ -1904,6 +1904,17 @@ function normalizeQueuedAnalyticsEvent(evt, username) {
     const parsedTs = rawTs != null
         ? (typeof rawTs === 'number' ? new Date(rawTs) : new Date(String(rawTs)))
         : null;
+    const meta = Object.assign({}, safeAnalyticsMeta(evt?.metadata || {}));
+    if (!activeUsername && !evt?.user_id) {
+        // Guest lane (owner ask 2026-09-17): no login, but the device knows the
+        // Sleeper handle the guest connected with. Carry it in metadata — the
+        // account-name column stays null, which is what the insert policy
+        // allows an anonymous writer. Sleeper handles are public.
+        try {
+            const handle = getCurrentUsername();
+            if (handle && meta.sleeper == null) { meta.sleeper = String(handle).slice(0, 64); meta.guest = true; }
+        } catch {}
+    }
     return {
         event_id: String(eventId),
         username: activeUsername && (!evt?.username || evt.username === activeUsername) ? activeUsername : null,
@@ -1918,7 +1929,7 @@ function normalizeQueuedAnalyticsEvent(evt, username) {
         duration_ms: Number.isFinite(duration) ? duration : null,
         entity_type: evt?.entity_type || evt?.entityType || null,
         entity_id: entityId != null ? String(entityId) : null,
-        metadata: safeAnalyticsMeta(evt?.metadata || {}),
+        metadata: meta,
     };
 }
 
