@@ -3101,7 +3101,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <script src="js/widgets/player-tags.js?v=0459e56074"></script>
 <!-- Phase 3: League intel widgets (Competitive Tiers, Power Rankings) — ex-League Map -->
 <script src="js/widgets/competitive-tiers.js?v=ab205d3f49"></script>
-<script src="js/widgets/power-rankings.js?v=9d0f93fa7b"></script>
+<script src="js/widgets/power-rankings.js?v=59d98c558f"></script>
 <!-- Phase 9: My Trophies widget -->
 <script src="js/widgets/my-trophies.js?v=947128399d"></script>
 <!-- League Calendar widget — depends on window.WrCalendar (js/tabs/calendar.js) -->
@@ -3110,7 +3110,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <script src="js/tabs/flash-brief.js?v=b068789af9"></script>
 <!-- Group "analysis": analytics.js embeds LeagueMapTab, so both defer together
      (league-map.js first — DOM order is execution order within a group). -->
-<script type="text/wr-deferred" data-wr-defer="analysis" src="js/tabs/league-map.js?v=e4ccce8a98"></script>
+<script type="text/wr-deferred" data-wr-defer="analysis" src="js/tabs/league-map.js?v=0fc587f8e7"></script>
 <script type="text/wr-deferred" data-wr-defer="myteam" src="js/tabs/my-team.js?v=fd7f12982a"></script>
 <!-- Compare: extracted from My Roster's former sub-view, now a top-level ROSTER-group tab. -->
 <script type="text/wr-deferred" data-wr-defer="compare" src="js/tabs/compare.js?v=c229513d72"></script>
@@ -3198,7 +3198,7 @@ window.addEventListener('appinstalled', () => {
 <!-- Deploy tag (owner ask 2026-08-19): a tiny always-visible build code so the
      owner can read back exactly which version his device is running before
      testing — kills the stale-cache guessing game. Bump the code every deploy. -->
-<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b127 · LAB</div>
+<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b128 · LAB</div>
 </body>
 </html>
 <!-- build 1774212614 -->
