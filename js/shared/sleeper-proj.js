@@ -36,6 +36,20 @@
         return r.json();
     }
 
+    // A week's payload counts as published when a real number of rows carry
+    // projected volume (attempts, targets, kicks, tackles) or points — not just
+    // the draft-ADP placeholder every player row carries year-round.
+    const VOLUME_FIELDS = ['pts_ppr', 'pts_half_ppr', 'pts_std', 'pass_att', 'rush_att', 'rec_tgt', 'fga', 'xpm', 'idp_tkl', 'idp_sack'];
+    function looksPublished(byPid) {
+        if (!byPid || typeof byPid !== 'object') return false;
+        let live = 0;
+        for (const pid in byPid) {
+            const row = byPid[pid];
+            if (row && VOLUME_FIELDS.some(k => Number(row[k]) > 0) && ++live >= 50) return true;
+        }
+        return false;
+    }
+
     // Load the upcoming week's Sleeper projections and hand them to WeeklyProj.
     // Cached per (season, week). Returns the loaded week, or null on failure.
     async function loadCurrent(season) {
@@ -46,8 +60,21 @@
         const key = yr + '|' + wk;
         if (_done[key]) return wk;
         try {
-            const byPid = await fetchWeek(yr, wk);
-            if (byPid && typeof byPid === 'object' && Object.keys(byPid).length) {
+            let byPid = await fetchWeek(yr, wk);
+            // Sleeper returns a row for every player even before it has
+            // published the week's lines — placeholder rows with an ADP and
+            // no volume. A payload like that is NOT the week's projections:
+            // it must not be handed to the projector (every surface would fall
+            // back to estimates) and must not be marked done. The shared cache
+            // can hold such a payload for hours, so go straight to the network
+            // once before giving up (owner report 2026-09-17).
+            if (!looksPublished(byPid)) {
+                try {
+                    const r = await fetch(SLEEPER + '/projections/nfl/regular/' + yr + '/' + wk);
+                    if (r.ok) byPid = await r.json();
+                } catch (e) { /* keep the cached payload for the check below */ }
+            }
+            if (looksPublished(byPid)) {
                 WP.setProjections(wk, byPid);
                 _done[key] = true;
                 try { root.dispatchEvent && root.dispatchEvent(new CustomEvent('wr:proj-updated', { detail: { week: wk, season: yr } })); } catch (e) { /* no window */ }

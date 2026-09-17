@@ -2987,8 +2987,8 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <!-- 2d. GM Mode helper (Phase 1) — window.WR.GmMode — canonical mode/preset source of truth -->
 <script src="js/shared/gm-mode.js?v=4e60342750"></script>
 <script src="js/shared/startsit-engine.js?v=35b259534b"></script>
-<script src="js/shared/weekly-proj.js?v=d42f4ad82f"></script>
-<script src="js/shared/sleeper-proj.js?v=76bf9e3979"></script>
+<script src="js/shared/weekly-proj.js?v=c1ef1c16bb"></script>
+<script src="js/shared/sleeper-proj.js?v=fce29dbc33"></script>
 <script src="js/shared/nfl-context.js?v=d6f0ac9e4c"></script>
 <script src="js/shared/matchup.js?v=770ee90e33"></script>
 <!-- Season Odds engines (lab port 2026-08-16): plain Node-testable scripts —
@@ -3055,7 +3055,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
      precede lineup.js in the group so window.WrSeasonOdds exists on first render. -->
 <script type="text/wr-deferred" data-wr-defer="lineup" src="js/components/season-odds-panel.js?v=4fb87405c7"></script>
 <script src="js/components/chop-block-panel.js?v=17dccc36a5"></script>
-<script type="text/wr-deferred" data-wr-defer="lineup" src="js/tabs/lineup.js?v=aa0fbf6114"></script>
+<script type="text/wr-deferred" data-wr-defer="lineup" src="js/tabs/lineup.js?v=7f80e0cc9d"></script>
 <!-- 4b. Draft Command Center modules — group "draft" (~28 scripts, ~1.26MB),
      loaded on first Draft-tab open. -->
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/styles.js?v=456c35bb55"></script>
@@ -3089,7 +3089,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <!-- 5. League detail tab components (extracted from league-detail.js) -->
 <!-- v2 widget modules (load before dashboard.js which consumes them) -->
 <script src="js/widgets/roster-pulse.js?v=c80df61d34"></script>
-<script src="js/widgets/lineup-check.js?v=5923567656"></script>
+<script src="js/widgets/lineup-check.js?v=ae0a8d446e"></script>
 <script src="js/widgets/window-forecast.js?v=efebefe605"></script>
 <script src="js/widgets/gap-plan.js?v=cc0e7f7a06"></script>
 <script src="js/widgets/league-landscape.js?v=c4d383ee19"></script>
@@ -3106,12 +3106,12 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <script src="js/widgets/my-trophies.js?v=947128399d"></script>
 <!-- League Calendar widget — depends on window.WrCalendar (js/tabs/calendar.js) -->
 <script src="js/widgets/league-calendar.js?v=74e7808f06"></script>
-<script src="js/tabs/dashboard.js?v=2fb5720f96"></script>
+<script src="js/tabs/dashboard.js?v=28d9992894"></script>
 <script src="js/tabs/flash-brief.js?v=4f6638d872"></script>
 <!-- Group "analysis": analytics.js embeds LeagueMapTab, so both defer together
      (league-map.js first — DOM order is execution order within a group). -->
 <script type="text/wr-deferred" data-wr-defer="analysis" src="js/tabs/league-map.js?v=e4ccce8a98"></script>
-<script type="text/wr-deferred" data-wr-defer="myteam" src="js/tabs/my-team.js?v=882b7dceed"></script>
+<script type="text/wr-deferred" data-wr-defer="myteam" src="js/tabs/my-team.js?v=fd7f12982a"></script>
 <!-- Compare: extracted from My Roster's former sub-view, now a top-level ROSTER-group tab. -->
 <script type="text/wr-deferred" data-wr-defer="compare" src="js/tabs/compare.js?v=c229513d72"></script>
 <script type="text/wr-deferred" data-wr-defer="analysis" src="js/tabs/analytics.js?v=ca189e3799"></script>
@@ -3198,7 +3198,7 @@ window.addEventListener('appinstalled', () => {
 <!-- Deploy tag (owner ask 2026-08-19): a tiny always-visible build code so the
      owner can read back exactly which version his device is running before
      testing — kills the stale-cache guessing game. Bump the code every deploy. -->
-<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b125 · LAB41</div>
+<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b125 · LAB42</div>
 </body>
 </html>
 <!-- build 1774212614 -->
