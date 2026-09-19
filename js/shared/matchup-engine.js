@@ -109,7 +109,7 @@
         if (!sc || share == null) return null;
         return clamp(((share - sc[0]) / (sc[1] - sc[0])) * 2 - 1, -1, 1);
     }
-    const ordinal = (n) => n + (n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th');
+    const ordinal = (n) => { const m = n % 100, d = n % 10; return n + ((m >= 11 && m <= 13) ? 'th' : d === 1 ? 'st' : d === 2 ? 'nd' : d === 3 ? 'rd' : 'th'); };
     const pct = (v) => Math.round(v * 100) + '%';
 
     function scoreRole(input) {
@@ -180,7 +180,9 @@
         const s = clamp((rank - 16.5) / 15.5, -1, 1);
         const who = o.abbr ? ' vs ' + o.abbr : '';
         const label = s >= 0.5 ? 'Soft matchup' : s >= 0.15 ? 'Favorable matchup' : s > -0.15 ? 'Neutral matchup' : s > -0.5 ? 'Tough matchup' : 'Elite unit';
-        return { score: s, note: label + who + ' (rank ' + Math.round(rank) + ' of 32)' };
+        // detail: the evidence behind the rank (points allowed, PFF unit
+        // grade, last season, team quality), built by the inputs layer.
+        return { score: s, note: label + who + ' (rank ' + Math.round(rank) + ' of 32)' + (o.detail ? ' · ' + o.detail : '') };
     }
 
     function scoreGame(input) {
@@ -249,13 +251,18 @@
 
     // mine / theirs: 0..100 unit grades from the PLAYER'S side of the ball.
     // Offense: my OL vs their DL. IDP: my DL vs their OL. Feeds pick the pair.
+    // t.score (-1..1) is the league-ranked gap built by the inputs layer:
+    // my line's percentile among 32 teams minus their front's. Without it,
+    // fall back to the raw grade gap. mineRank / theirsRank feed the note.
     function scoreTrench(input) {
         const t = input.trench || {};
         const mine = num(t.mine), theirs = num(t.theirs);
         if (mine == null || theirs == null) return { score: null, note: 'No line grades' };
-        const s = clamp((mine - theirs) / 40, -1, 1);
+        const s = num(t.score) != null ? clamp(num(t.score), -1, 1) : clamp((mine - theirs) / 40, -1, 1);
         const label = s > 0.25 ? 'Wins the trenches' : s < -0.25 ? 'Loses the trenches' : 'Even in the trenches';
-        return { score: s, note: label + ' (' + Math.round(mine) + ' vs ' + Math.round(theirs) + ')' };
+        const rk = (r) => num(r) != null ? ' (' + ordinal(Math.round(r)) + ')' : '';
+        const what = t.mineLabel && t.theirsLabel ? t.mineLabel + ' ' + Math.round(mine) + rk(t.mineRank) + ' vs ' + t.theirsLabel + ' ' + Math.round(theirs) + rk(t.theirsRank) : Math.round(mine) + rk(t.mineRank) + ' vs ' + Math.round(theirs) + rk(t.theirsRank);
+        return { score: s, note: label + ': ' + what };
     }
 
     function scoreTrend(input) {

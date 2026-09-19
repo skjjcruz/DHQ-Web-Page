@@ -213,3 +213,16 @@ test('role: kickers and team defenses sit the factor out', () => {
     assert.equal(projectWith({ position: 'K', role: { posRank: 1 } }).mult, 1);
     assert.equal(projectWith({ position: 'DEF', role: { posRank: 1 } }).mult, 1);
 });
+
+test('opponent note carries the evidence behind the rank', () => {
+    const p = projectWith({ opponent: { abbr: 'KC', rankVsPos: 7, detail: '7th in pts to RBs · run D 61 (14th) · 2-0, PFF 3rd' } });
+    assert.equal(p.factors.find(f => f.key === 'opponent').note, 'Elite unit vs KC (rank 7 of 32) · 7th in pts to RBs · run D 61 (14th) · 2-0, PFF 3rd');
+});
+
+test('trench uses the league-ranked score when given and shows both ranks', () => {
+    const ranked = projectWith({ position: 'RB', trench: { mine: 84, theirs: 61, score: 0.4, mineRank: 2, theirsRank: 14, mineLabel: 'IND run block', theirsLabel: 'KC run D' } });
+    const raw = projectWith({ position: 'RB', trench: { mine: 84, theirs: 61 } });
+    assert.equal(ranked.factors.find(f => f.key === 'trench').note, 'Wins the trenches: IND run block 84 (2nd) vs KC run D 61 (14th)');
+    assert.ok(ranked.mult !== raw.mult, 'the ranked score is what counts when present');
+    assert.ok(projectWith({ position: 'RB', trench: { mine: 60, theirs: 60, score: -0.9 } }).mult < 1);
+});
