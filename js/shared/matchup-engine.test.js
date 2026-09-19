@@ -35,9 +35,17 @@ test('a ruled-out or bye player projects zero and is unavailable', () => {
 
 test('questionable trims the number and cuts the floor harder than the ceiling', () => {
     const p = projectWith({ health: { status: 'Q' } });
-    assert.ok(p.points.median < 15);
+    assert.ok(p.points.median < 15 * 0.92 + 1e-9, 'flat availability trim plus the factor');
     assert.ok(p.points.floor / 11 < p.points.ceiling / 21, 'floor loses more than ceiling');
     assert.equal(p.available, true);
+});
+
+test('doubtful is treated as out for the lineup call', () => {
+    const p = projectWith({ health: { status: 'Doubtful' } });
+    assert.equal(p.available, false);
+    assert.equal(p.verdict, 'out');
+    assert.deepEqual(p.points, { median: 0, floor: 0, ceiling: 0 });
+    assert.match(p.factors.find(f => f.key === 'health').note, /Doubtful, treated as out/);
 });
 
 test('a factor can never move the number more than weight × SWING percent', () => {

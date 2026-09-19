@@ -155,10 +155,13 @@
         const h = input.health;
         const status = String(h.status || '').trim().toUpperCase();
         if (OUT_STATUSES.has(status)) return { score: -1, note: status === 'BYE' ? 'Bye week' : 'Ruled out (' + status + ')', out: true };
+        // A Doubtful player misses far more often than he plays, so for a
+        // lineup call he is out (owner ruling 2026-09-19: the tool had put
+        // two Doubtful players in a "would start" list).
+        if (status === 'D' || status === 'DOUBTFUL') return { score: -1, note: 'Doubtful, treated as out', out: true };
         let s = 0;
         const notes = [];
-        if (status === 'D' || status === 'DOUBTFUL') { s -= 0.85; notes.push('Doubtful'); }
-        else if (status === 'Q' || status === 'QUESTIONABLE') { s -= 0.35; notes.push('Questionable'); }
+        if (status === 'Q' || status === 'QUESTIONABLE') { s -= 0.35; notes.push('Questionable'); }
         const practice = String(h.practice || '').toUpperCase();
         if (practice === 'DNP') { s -= 0.2; notes.push('Did not practice'); }
         else if (practice === 'LP') { s -= 0.1; notes.push('Limited in practice'); }
@@ -360,10 +363,15 @@
         const health = factors.find(f => f.key === 'health');
         const floorPenalty = health && health.score != null && health.score < 0 ? Math.min(0.3, -health.score * 0.3) : 0;
 
+        // Questionable players sit out roughly one game in five; trim the
+        // whole line for that chance, on top of the health factor's nudge.
+        // Same 0.92 the app's start/sit engine uses.
+        const st = String(input.health && input.health.status || '').trim().toUpperCase();
+        const availMult = (st === 'Q' || st === 'QUESTIONABLE') ? 0.92 : 1;
         const points = available ? {
-            median: +(bMed * mult).toFixed(2),
-            floor: +(bFloor * mult * (1 - floorPenalty)).toFixed(2),
-            ceiling: +(bCeil * mult).toFixed(2),
+            median: +(bMed * mult * availMult).toFixed(2),
+            floor: +(bFloor * mult * availMult * (1 - floorPenalty)).toFixed(2),
+            ceiling: +(bCeil * mult * availMult).toFixed(2),
         } : { median: 0, floor: 0, ceiling: 0 };
 
         const grade = available ? gradeFor(mult) : 'F';
