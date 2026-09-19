@@ -176,21 +176,37 @@
             score: staffScore(experience, reg, po),
         };
     }
-    function coaching(season) {
+    // A team whose coach pages failed once (ESPN hiccup, a 429 on a phone)
+    // used to be cached as "no coach" for four hours, which is how the Lab
+    // showed no coaching for one player and full coaching for the next
+    // (owner photo 2026-09-19). Now each team gets a second try, only a
+    // complete league is cached for four hours, and a partial one is kept
+    // in memory for ten minutes so the missing teams are retried soon.
+    let _coachPartial = { season: null, ts: 0, data: null };
+    async function coachWithRetry(season, id) {
+        for (let attempt = 1; attempt <= 2; attempt++) {
+            try { return await coachForTeam(season, id); }
+            catch (e) { if (attempt === 2) return null; await new Promise(r => setTimeout(r, 400)); }
+        }
+        return null;
+    }
+    async function coaching(season) {
         season = season || currentSeason();
-        return cached('coaching_' + season, async () => {
-            const T = await teams(season);
-            const codes = Object.keys(T);
-            const out = {};
-            // Four teams at a time keeps ESPN happy and the whole league under ~10s.
-            for (let i = 0; i < codes.length; i += 4) {
-                await Promise.all(codes.slice(i, i + 4).map(async c => {
-                    try { out[c] = await coachForTeam(season, T[c].id); }
-                    catch (e) { out[c] = null; }
-                }));
-            }
-            return out;
-        });
+        const hit = cacheGet('coaching_' + season);
+        if (hit) return hit;
+        if (_coachPartial.data && _coachPartial.season === season && Date.now() - _coachPartial.ts < 10 * 60 * 1000) return _coachPartial.data;
+        const T = await teams(season);
+        const codes = Object.keys(T);
+        const out = (_coachPartial.season === season && _coachPartial.data) ? Object.assign({}, _coachPartial.data) : {};
+        const todo = codes.filter(c => !out[c]);
+        // Three teams at a time keeps ESPN happy and the whole league under ~10s.
+        for (let i = 0; i < todo.length; i += 3) {
+            await Promise.all(todo.slice(i, i + 3).map(async c => { out[c] = await coachWithRetry(season, T[c].id); }));
+        }
+        const resolved = codes.filter(c => out[c]).length;
+        if (resolved >= codes.length && codes.length >= 30) return cacheSet('coaching_' + season, out);
+        _coachPartial = { season, ts: Date.now(), data: out };
+        return out;
     }
 
     // ── schedules + head-to-head ─────────────────────────────────────
