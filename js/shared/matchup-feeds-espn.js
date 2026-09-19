@@ -81,11 +81,26 @@
     }
 
     // ── teams: Sleeper code ↔ ESPN id ────────────────────────────────
-    function teams() {
+    // Read from the standings tables, not ESPN's /teams list: /teams is the
+    // one endpoint here that refuses browser calls (no CORS header), and
+    // every other lookup waits on this map (owner report 2026-09-19, the
+    // Lab showed no coaching or head-to-head on the iPad).
+    function teams(season) {
         return cached('teams', async () => {
-            const d = await getJson(SITE + '/teams?limit=40');
-            const list = (((d.sports || [])[0] || {}).leagues || [])[0];
             const out = {};
+            try {
+                const d = await getJson(SITE_V2 + '/standings?season=' + (season || currentSeason()) + '&level=3');
+                const walk = (node) => {
+                    for (const e of (node.standings && node.standings.entries) || []) {
+                        if (e.team && e.team.id) out[code(e.team.abbreviation)] = { id: String(e.team.id), espn: e.team.abbreviation, name: e.team.displayName || e.team.name };
+                    }
+                    for (const c of node.children || []) walk(c);
+                };
+                walk(d);
+            } catch (e) { /* fall through to the team list */ }
+            if (Object.keys(out).length >= 30) return out;
+            const d2 = await getJson(SITE + '/teams?limit=40');
+            const list = (((d2.sports || [])[0] || {}).leagues || [])[0];
             for (const t of (list && list.teams) || []) out[code(t.team.abbreviation)] = { id: String(t.team.id), espn: t.team.abbreviation, name: t.team.displayName };
             return out;
         });
@@ -164,7 +179,7 @@
     function coaching(season) {
         season = season || currentSeason();
         return cached('coaching_' + season, async () => {
-            const T = await teams();
+            const T = await teams(season);
             const codes = Object.keys(T);
             const out = {};
             // Four teams at a time keeps ESPN happy and the whole league under ~10s.
@@ -181,7 +196,7 @@
     // ── schedules + head-to-head ─────────────────────────────────────
     function schedule(teamCode, season) {
         return cached('sched_' + season + '_' + teamCode, async () => {
-            const T = await teams();
+            const T = await teams(season);
             const t = T[teamCode];
             if (!t) return [];
             const d = await getJson(SITE + '/teams/' + t.id + '/schedule?season=' + season);
