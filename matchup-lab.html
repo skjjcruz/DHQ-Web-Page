@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- DHQ LAB GATE (owner ruling 2026-09-04, mirror edition 2026-09-16).
+         Same gate as every Lab page: the right access code unlocks this device. -->
+    <meta name="robots" content="noindex,nofollow">
+    <script>
+    (function () {
+      var KEY = 'dhq_lab_key_v2';
+      var HASH = 'd017d4b5086e39a4f4b065301f1e6eefac302734df8b82fa196a6d588637b6bd';
+      var have = null;
+      try { have = localStorage.getItem(KEY); } catch (e) {}
+      if (have === HASH) return;
+      document.documentElement.style.display = 'none';
+      try { window.stop(); } catch (e) {}
+      function sha256hex(str) {
+        var data = new TextEncoder().encode(str);
+        return crypto.subtle.digest('SHA-256', data).then(function (buf) {
+          return Array.prototype.map.call(new Uint8Array(buf), function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+        });
+      }
+      function ask(triesLeft) {
+        var v = prompt('Access code');
+        if (v == null || !triesLeft) { document.title = ''; return; }
+        sha256hex(v.trim()).then(function (h) {
+          if (h === HASH) { try { localStorage.setItem(KEY, HASH); } catch (e) {} location.reload(); }
+          else { ask(triesLeft - 1); }
+        }).catch(function () { document.title = ''; });
+      }
+      if (window.crypto && crypto.subtle) setTimeout(function () { ask(4); }, 50);
+    })();
+    </script>
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Matchup Grades — Lab</title>
+    <!-- ══════════════════════════════════════════════════════════════
+         matchup-lab.html — LAB49: the DHQ matchup engine, Lab only.
+         A TEST HARNESS for the weekly matchup formula: load a real Sleeper
+         league, grade every player on the owner's roster for a week, show
+         DHQ projected points beside Sleeper's number, and open the "why"
+         behind each grade. Nothing here touches Game Day yet; once the
+         numbers read right in the Lab, the website repo wires the same
+         modules into the Game Day roster rows.
+         Modules under test: js/shared/matchup-engine.js (the math),
+         matchup-feeds-espn.js (coaching / standings / head-to-head),
+         matchup-inputs.js (wiring), data/pff-matchup-snapshot.js (PFF).
+         ══════════════════════════════════════════════════════════════ -->
+    <style>
+        :root { --gold:#D4AF37; --black:#0a0a0a; --off-black:#141414; --silver:#c9c9c9; --good:#8fe3a5; --bad:#ff9d9d; --warn:#ffb300; }
+        * { box-sizing: border-box; }
+        body { margin:0; background:var(--black); color:var(--silver); font:15px/1.55 -apple-system,'Segoe UI',Roboto,sans-serif; padding:20px 14px 60px; }
+        .wrap { max-width:960px; margin:0 auto; }
+        h1 { color:var(--gold); font-size:1.3rem; letter-spacing:0.05em; margin:0 0 2px; }
+        h3 { color:var(--gold); font-size:0.9rem; margin:16px 0 6px; letter-spacing:0.04em; }
+        .sub { opacity:0.7; font-size:0.8rem; margin-bottom:18px; }
+        .card { background:var(--off-black); border:1px solid rgba(212,175,55,0.4); border-radius:12px; padding:14px 16px; margin-bottom:14px; }
+        label { display:block; font-size:0.75rem; letter-spacing:0.04em; color:var(--gold); margin:10px 0 3px; }
+        input, select { width:100%; background:#000; border:1px solid rgba(255,255,255,0.2); border-radius:8px; color:#eee; padding:9px 10px; font-size:0.95rem; }
+        .row { display:grid; grid-template-columns:2fr 1fr 1fr; gap:10px; }
+        .hint { font-size:0.75rem; opacity:0.65; margin-top:3px; }
+        button { margin-top:14px; background:var(--gold); color:#000; border:none; border-radius:8px; padding:10px 18px; font-weight:700; font-size:0.95rem; cursor:pointer; }
+        button:disabled { opacity:0.5; cursor:default; }
+        button.ghost { background:transparent; color:var(--silver); border:1px solid rgba(255,255,255,0.25); }
+        .step { padding:4px 0; font-family:ui-monospace,monospace; font-size:0.8rem; }
+        .ok { color:var(--good); } .bad { color:var(--bad); } .warn { color:var(--warn); }
+        table { width:100%; border-collapse:collapse; font-size:0.84rem; }
+        th,td { text-align:left; padding:6px 8px; border-bottom:1px solid rgba(255,255,255,0.07); vertical-align:top; }
+        th { color:var(--gold); font-weight:600; letter-spacing:0.03em; font-size:0.74rem; }
+        td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+        tr.p { cursor:pointer; } tr.p:hover td { background:rgba(255,255,255,0.03); }
+        tr.why td { background:#0f0f0f; padding:8px 12px 12px; }
+        .name { color:#fff; font-weight:600; } .meta { font-size:0.74rem; opacity:0.65; }
+        .g { display:inline-block; min-width:26px; text-align:center; font-weight:800; border-radius:6px; padding:2px 6px; color:#000; }
+        .gA { background:#3ddc84; } .gB { background:#9be27a; } .gC { background:#d9d9d9; } .gD { background:#ffb300; } .gF { background:#ff6b6b; }
+        .v { font-size:0.72rem; letter-spacing:0.08em; text-transform:uppercase; }
+        .v-start { color:var(--good); } .v-flex { color:var(--silver); } .v-sit { color:var(--warn); } .v-out { color:var(--bad); }
+        .fx { display:grid; grid-template-columns:70px 170px 1fr; gap:4px 10px; font-size:0.8rem; }
+        .fx .i { text-align:right; font-variant-numeric:tabular-nums; font-weight:700; }
+        .fx .i.up { color:var(--good); } .fx .i.dn { color:var(--bad); } .fx .i.zero { opacity:0.45; }
+        .fx .l { color:#fff; } .fx .n { opacity:0.8; }
+        .missing { font-size:0.74rem; opacity:0.55; margin-top:8px; }
+        .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:8px; }
+        .tile { border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:8px 10px; font-size:0.8rem; }
+        .tile b { color:#fff; font-size:1.1rem; display:block; }
+        .diff-up { color:var(--good); } .diff-dn { color:var(--bad); }
+        #buildtag { position:fixed; bottom:2px; right:6px; font:700 9px/1.4 monospace; color:rgba(212,175,55,0.55); pointer-events:none; }
+        @media (max-width:640px) { .row { grid-template-columns:1fr; } .fx { grid-template-columns:60px 1fr; } .fx .n { grid-column:1 / -1; padding-left:60px; } th.hide-m, td.hide-m { display:none; } }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <h1>MATCHUP GRADES — LAB TEST HARNESS</h1>
+    <div class="sub">Grades every player on your roster for one week with the DHQ matchup formula: Sleeper's number, then ten weighted factors (role, health, opponent, game, coaching, head-to-head, trenches, trend, team context, luck). Tap a row to see why. Lab only — nothing here touches the live site.</div>
+
+    <div class="card">
+        <div class="row">
+            <div>
+                <label>Sleeper username</label>
+                <input id="fUser" placeholder="your Sleeper handle" autocomplete="off">
+            </div>
+            <div>
+                <label>Season</label>
+                <input id="fSeason" inputmode="numeric" value="2026">
+            </div>
+            <div>
+                <label>Week</label>
+                <input id="fWeek" inputmode="numeric" placeholder="auto">
+            </div>
+        </div>
+        <label>League</label>
+        <select id="fLeague"><option value="">Load leagues first</option></select>
+        <div class="hint">Week is blank for the current NFL week. Grades use this league's exact scoring.</div>
+        <button id="btnLeagues" class="ghost">LOAD LEAGUES</button>
+        <button id="btnRun" disabled>GRADE MY ROSTER</button>
+        <button id="btnReset" class="ghost">Reset</button>
+    </div>
+
+    <div class="card" id="log" style="display:none"></div>
+    <div class="card" id="summary" style="display:none"></div>
+    <div class="card" id="readout" style="display:none"></div>
+</div>
+<div id="buildtag">LAB49</div>
+
+<script>
+// Minimal stand-ins for the app core: Sleeper's scoring keys match its stat
+// keys, so league points are one weighted sum. TE premium is applied by the
+// projection layer. Position groups match App.POS_GROUPS in the app.
+window.App = window.App || {};
+App.POS_GROUPS = App.POS_GROUPS || { QB: ['QB'], RB: ['RB', 'FB'], WR: ['WR'], TE: ['TE'], K: ['K'], DEF: ['DEF'], DL: ['DE', 'DT', 'NT', 'DL', 'IDL', 'EDGE'], LB: ['LB', 'OLB', 'ILB', 'MLB'], DB: ['CB', 'S', 'SS', 'FS', 'DB'] };
+App.normPos = App.normPos || function (p) { for (var g in App.POS_GROUPS) if (App.POS_GROUPS[g].indexOf(p) >= 0) return g; return p; };
+window.calcFantasyPts = window.calcFantasyPts || function (line, scoring) {
+    var t = 0; if (!line || !scoring) return 0;
+    for (var k in scoring) { var v = Number(line[k]); if (isFinite(v) && v) t += v * Number(scoring[k] || 0); }
+    return t;
+};
+App.calcRawPts = App.calcRawPts || window.calcFantasyPts;
+App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? App.calcRawPts(st, scoring) / st.gp : 0; };
+</script>
+<script src="js/shared/startsit-engine.js"></script>
+<script src="js/shared/weekly-proj.js"></script>
+<script src="js/utils/sos-engine.js"></script>
+<script src="js/shared/nfl-context.js"></script>
+<script src="js/shared/matchup-engine.js"></script>
+<script src="js/shared/matchup-feeds-espn.js"></script>
+<script src="js/shared/matchup-inputs.js"></script>
+<script src="data/pff-matchup-snapshot.js"></script>
+
+<script>
+(function () {
+    'use strict';
+    var SL = 'https://api.sleeper.app/v1';
+    var logEl = document.getElementById('log');
+    var state = { user: null, leagues: [], players: null };
+
+    function $(id) { return document.getElementById(id); }
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+    function step(msg, cls) {
+        logEl.style.display = 'block';
+        var d = document.createElement('div'); d.className = 'step ' + (cls || ''); d.textContent = msg; logEl.appendChild(d); return d;
+    }
+    async function getJson(url) {
+        var r = await fetch(url);
+        if (!r.ok) throw new Error('HTTP ' + r.status + ' for ' + url.replace(SL, 'sleeper'));
+        return r.json();
+    }
+    function fmt(n, d) { return n == null || !isFinite(n) ? '—' : Number(n).toFixed(d == null ? 1 : d); }
+
+    // Prefill the username from the app's sign-in record.
+    try { var auth = JSON.parse(localStorage.getItem('od_auth_v1') || 'null'); if (auth && (auth.sleeperUsername || auth.username)) $('fUser').value = auth.sleeperUsername || auth.username; } catch (e) { /* noop */ }
+
+    async function fetchPlayers() {
+        try {
+            var c = JSON.parse(localStorage.getItem('lab_matchup_players_v1') || 'null');
+            if (c && Date.now() - c.ts < 3600000 && c.n > 5000) {
+                var hit = await caches.open('lab-matchup-players').then(function (cache) { return cache.match('players'); }).then(function (r) { return r ? r.json() : null; }).catch(function () { return null; });
+                if (hit) return hit;
+            }
+        } catch (e) { /* noop */ }
+        var data = await getJson(SL + '/players/nfl');
+        try {
+            var cache = await caches.open('lab-matchup-players');
+            await cache.put('players', new Response(JSON.stringify(data)));
+            localStorage.setItem('lab_matchup_players_v1', JSON.stringify({ ts: Date.now(), n: Object.keys(data).length }));
+        } catch (e) { /* noop */ }
+        return data;
+    }
+
+    async function loadLeagues() {
+        var user = $('fUser').value.trim();
+        var season = $('fSeason').value.trim() || '2026';
+        if (!user) { step('Enter your Sleeper username first.', 'bad'); return; }
+        $('btnLeagues').disabled = true;
+        logEl.innerHTML = '';
+        try {
+            step('Finding Sleeper user ' + user + '…');
+            state.user = await getJson(SL + '/user/' + encodeURIComponent(user));
+            state.leagues = await getJson(SL + '/user/' + state.user.user_id + '/leagues/nfl/' + season);
+            var sel = $('fLeague'); sel.innerHTML = '';
+            if (!state.leagues.length) { sel.innerHTML = '<option value="">No leagues for ' + esc(season) + '</option>'; step('No leagues found for ' + season + '.', 'warn'); }
+            state.leagues.forEach(function (lg) {
+                var o = document.createElement('option'); o.value = lg.league_id;
+                o.textContent = lg.name + ' (' + (lg.total_rosters || '?') + ' teams' + (lg.settings && lg.settings.type === 2 ? ', dynasty' : '') + ')';
+                sel.appendChild(o);
+            });
+            step(state.leagues.length + ' league(s) loaded. Pick one and grade.', 'ok');
+            $('btnRun').disabled = !state.leagues.length;
+        } catch (err) { step('FAILED: ' + err.message, 'bad'); }
+        $('btnLeagues').disabled = false;
+    }
+
+    async function run() {
+        var leagueId = $('fLeague').value;
+        if (!leagueId || !state.user) { step('Load leagues and pick one first.', 'bad'); return; }
+        $('btnRun').disabled = true;
+        logEl.innerHTML = ''; $('summary').style.display = 'none'; $('readout').style.display = 'none';
+        var season = Number($('fSeason').value.trim()) || 2026;
+        try {
+            step('1/6 NFL state + player database…');
+            var nflState = await getJson(SL + '/state/nfl');
+            var week = Number($('fWeek').value.trim()) || App.WeeklyProj.fantasyWeek(nflState);
+            window.S = window.S || {};
+            S.nflState = nflState; S.season = season; S.currentWeek = week;
+            S.players = state.players = state.players || await fetchPlayers();
+            step('   week ' + week + ' · ' + Object.keys(S.players).length.toLocaleString() + ' players', 'ok');
+
+            step('2/6 League, rosters and scoring…');
+            var parts = await Promise.all([getJson(SL + '/league/' + leagueId), getJson(SL + '/league/' + leagueId + '/rosters'), getJson(SL + '/league/' + leagueId + '/users')]);
+            var league = parts[0], rosters = parts[1], users = parts[2];
+            S.currentLeagueId = leagueId; S.rosters = rosters;
+            var mine = rosters.filter(function (r) { return String(r.owner_id) === String(state.user.user_id) || (r.co_owners || []).map(String).indexOf(String(state.user.user_id)) >= 0; })[0];
+            if (!mine) throw new Error('You do not own a roster in this league.');
+            var scoring = league.scoring_settings || {};
+            step('   "' + league.name + '" · ' + (league.roster_positions || []).filter(function (s) { return s !== 'BN'; }).length + ' starting slots · ' + (mine.players || []).length + ' players on your roster', 'ok');
+
+            step('3/6 Season stats, weekly points and Sleeper projections…');
+            var weeksDone = []; for (var w = 1; w < week; w++) weeksDone.push(w);
+            var fetches = [getJson(SL + '/stats/nfl/regular/' + season), getJson(SL + '/stats/nfl/regular/' + (season - 1)), getJson(SL + '/projections/nfl/regular/' + season + '/' + week)]
+                .concat(weeksDone.map(function (w) { return getJson(SL + '/stats/nfl/regular/' + season + '/' + w).catch(function () { return {}; }); }));
+            var got = await Promise.all(fetches);
+            var statsCur = got[0], statsPrior = got[1], proj = got[2];
+            S.weeklyPlayerPoints = {};
+            weeksDone.forEach(function (w, i) {
+                var wk = got[3 + i] || {}; S.weeklyPlayerPoints[w] = {};
+                Object.keys(wk).forEach(function (pid) { if (pid.indexOf('TEAM_') !== 0) S.weeklyPlayerPoints[w][pid] = +App.calcRawPts(wk[pid], scoring).toFixed(2); });
+            });
+            App.WeeklyProj.setProjections(week, proj);
+            var lines = (mine.players || []).filter(function (pid) { return App.WeeklyProj.projLine(pid, week); }).length;
+            step('   Sleeper published lines for ' + lines + ' of ' + (mine.players || []).length + ' of your players this week', lines ? 'ok' : 'warn');
+
+            step('4/6 Defense-vs-position ranks, opponents, Vegas + weather…');
+            await App.SOS.initialize(String(season), S.players);
+            try { await App.NflContext.load([week], season); } catch (e) { /* neutral without it */ }
+            var ctxKeys = Object.keys(App.WeeklyProj._ctx.byTeamWeek).filter(function (k) { return k.split('|')[1] === String(week); }).length;
+            step('   SOS ' + (App.SOS.ready ? 'ready' : 'unavailable') + ' · game context for ' + ctxKeys + ' teams', App.SOS.ready ? 'ok' : 'warn');
+
+            step('5/6 Coaching, standings, head-to-head (ESPN) and offense-vs-IDP ranks…');
+            var opts = { playersData: S.players, statsData: statsCur, priorData: statsPrior, scoring: scoring, season: season, league: league };
+            var res = await App.MatchupInputs.projectRoster(mine.players || [], week, opts);
+            var c = res.ctx;
+            step('   coaching ' + (c.coaching ? Object.keys(c.coaching).length : 0) + ' teams · standings ' + (c.standings ? Object.keys(c.standings).length : 0) + ' · IDP ranks ' + (c.idp ? Object.keys(c.idp).length : 0) + ' offenses · PFF snapshot ' + (window.DhqPffMatchup ? 'built ' + String(window.DhqPffMatchup.built).slice(0, 16).replace('T', ' ') : 'MISSING'), c.coaching && window.DhqPffMatchup ? 'ok' : 'warn');
+
+            step('6/6 Rendering…');
+            render(mine, league, res, week, users);
+            step('Done.', 'ok');
+        } catch (err) {
+            step('FAILED: ' + (err && err.message || err), 'bad');
+        }
+        $('btnRun').disabled = false;
+    }
+
+    function nameOf(pid) { var p = S.players[pid] || {}; return (p.full_name || ((p.first_name || '') + ' ' + (p.last_name || '')).trim()) || pid; }
+
+    function factorRows(p) {
+        return p.factors.filter(function (f) { return f.hasData; }).sort(function (a, b) { return Math.abs(b.impactPct) - Math.abs(a.impactPct); }).map(function (f) {
+            var cls = f.impactPct > 0.05 ? 'up' : f.impactPct < -0.05 ? 'dn' : 'zero';
+            return '<div class="i ' + cls + '">' + (f.impactPct > 0 ? '+' : '') + f.impactPct.toFixed(1) + '%</div><div class="l">' + esc(f.label) + ' <span class="meta">w' + f.weight + '</span></div><div class="n">' + esc(f.note) + '</div>';
+        }).join('');
+    }
+    function labelOf(key) { return (App.MatchupEngine.LABELS[key] || key).toLowerCase(); }
+
+    function playerRow(pid, p, slot) {
+        var pl = S.players[pid] || {};
+        var diff = p.available ? p.points.median - p.baseline.median : 0;
+        var diffCls = diff > 0.05 ? 'diff-up' : diff < -0.05 ? 'diff-dn' : '';
+        var status = pl.injury_status ? ' · <span class="warn">' + esc(pl.injury_status) + '</span>' : '';
+        var opp = p.opponentAbbr ? ' vs ' + esc(p.opponentAbbr) : ' · no game';
+        return '<tr class="p" data-pid="' + esc(pid) + '">'
+            + '<td class="hide-m meta">' + esc(slot || '') + '</td>'
+            + '<td><div class="name">' + esc(nameOf(pid)) + '</div><div class="meta">' + esc(p.position) + ' · ' + esc(p.team || pl.team || 'FA') + opp + status + '</div></td>'
+            + '<td class="num">' + fmt(p.baseline.median) + (p.baseline.source === 'estimate' ? '<div class="meta">est.</div>' : '') + '</td>'
+            + '<td class="num"><b style="color:#fff">' + fmt(p.points.median) + '</b><div class="meta">' + fmt(p.points.floor) + '–' + fmt(p.points.ceiling) + '</div></td>'
+            + '<td class="num ' + diffCls + '">' + (diff > 0 ? '+' : '') + fmt(diff) + '</td>'
+            + '<td><span class="g g' + p.grade + '">' + p.grade + '</span></td>'
+            + '<td class="v v-' + p.verdict + '">' + esc(p.verdict) + '</td>'
+            + '</tr>'
+            + '<tr class="why" data-for="' + esc(pid) + '" style="display:none"><td colspan="7"><div class="fx">' + factorRows(p) + '</div>'
+            + (p.missing.length ? '<div class="missing">No data for: ' + esc(p.missing.map(labelOf).join(', ')) + '</div>' : '') + '</td></tr>';
+    }
+
+    function render(mine, league, res, week, users) {
+        var P = res.projections;
+        var starters = (mine.starters || []).filter(function (pid) { return pid && pid !== '0'; });
+        var starterSet = {}; starters.forEach(function (pid) { starterSet[pid] = true; });
+        var bench = (mine.players || []).filter(function (pid) { return !starterSet[pid]; });
+        var slots = (league.roster_positions || []).filter(function (s) { return s !== 'BN'; });
+        var order = { start: 0, flex: 1, sit: 2, out: 3 };
+        bench.sort(function (a, b) { var pa = P[a], pb = P[b]; if (!pa || !pb) return pa ? -1 : 1; return (order[pa.verdict] - order[pb.verdict]) || (pb.points.median - pa.points.median); });
+
+        var head = '<tr><th class="hide-m">Slot</th><th>Player</th><th class="num">Sleeper</th><th class="num">DHQ</th><th class="num">Δ</th><th>Grade</th><th>Read</th></tr>';
+        var sRows = starters.map(function (pid, i) { return P[pid] ? playerRow(pid, P[pid], slots[i] || '') : ''; }).join('');
+        var bRows = bench.map(function (pid) { return P[pid] ? playerRow(pid, P[pid], 'BN') : ''; }).join('');
+
+        // Grade counts + where DHQ disagrees with Sleeper about who starts.
+        var counts = { A: 0, B: 0, C: 0, D: 0, F: 0 };
+        Object.keys(P).forEach(function (pid) { counts[P[pid].grade] = (counts[P[pid].grade] || 0) + 1; });
+        var ss = App.StartSit;
+        var eligible = (mine.players || []).filter(function (pid) { return P[pid]; });
+        var byDhq = ss.optimalLineupWeekly(eligible.map(function (pid) { return { pid: pid, pos: P[pid].position, available: P[pid].available, pts: P[pid].points.median }; }), league.roster_positions || []);
+        var bySleeper = ss.optimalLineupWeekly(eligible.map(function (pid) { return { pid: pid, pos: P[pid].position, available: P[pid].available, pts: P[pid].baseline.median }; }), league.roster_positions || []);
+        var pick = function (opt) { var out = {}; (opt && opt.slots || opt || []).forEach(function (s) { if (s && s.pid) out[s.pid] = true; }); return out; };
+        var inD = pick(byDhq), inS = pick(bySleeper);
+        var swapsIn = Object.keys(inD).filter(function (pid) { return !inS[pid]; });
+        var swapsOut = Object.keys(inS).filter(function (pid) { return !inD[pid]; });
+        var swapText = swapsIn.length
+            ? swapsIn.map(function (pid, i) { return '<div><b>' + esc(nameOf(pid)) + '</b> in' + (swapsOut[i] ? ' for <b>' + esc(nameOf(swapsOut[i])) + '</b>' : '') + '</div>'; }).join('')
+            : '<div class="meta">DHQ and Sleeper agree on the lineup this week.</div>';
+
+        $('summary').style.display = 'block';
+        $('summary').innerHTML = '<h3 style="margin-top:0">WEEK ' + week + ' · ' + esc(league.name) + '</h3>'
+            + '<div class="grid">'
+            + ['A', 'B', 'C', 'D', 'F'].map(function (g) { return '<div class="tile"><span class="g g' + g + '">' + g + '</span> <b>' + counts[g] + '</b>' + (g === 'A' ? 'smash spots' : g === 'B' ? 'good starts' : g === 'C' ? 'coin flips' : g === 'D' ? 'weak spots' : 'sit or out') + '</div>'; }).join('')
+            + '</div><h3>WHERE DHQ DISAGREES WITH SLEEPER\'S LINEUP</h3>' + swapText;
+
+        $('readout').style.display = 'block';
+        $('readout').innerHTML = '<h3 style="margin-top:0">STARTERS</h3><table>' + head + sRows + '</table>'
+            + '<h3>BENCH</h3><table>' + head + bRows + '</table>'
+            + '<div class="hint" style="margin-top:12px">Sleeper = Sleeper\'s published projection scored with this league\'s rules (est. = DHQ estimate when Sleeper has none). DHQ = that number after the ten factors. Δ = DHQ minus Sleeper. Tap a row for the why.</div>';
+        Array.prototype.forEach.call(document.querySelectorAll('tr.p'), function (tr) {
+            tr.addEventListener('click', function () {
+                var why = document.querySelector('tr.why[data-for="' + tr.getAttribute('data-pid') + '"]');
+                if (why) why.style.display = why.style.display === 'none' ? '' : 'none';
+            });
+        });
+    }
+
+    $('btnLeagues').addEventListener('click', loadLeagues);
+    $('btnRun').addEventListener('click', run);
+    $('btnReset').addEventListener('click', function () { location.reload(); });
+})();
+</script>
+</body>
+</html>
