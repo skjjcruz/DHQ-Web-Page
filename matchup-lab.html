@@ -120,7 +120,7 @@
     <div class="card" id="summary" style="display:none"></div>
     <div class="card" id="readout" style="display:none"></div>
 </div>
-<div id="buildtag">LAB52</div>
+<div id="buildtag">LAB54</div>
 
 <script>
 // Minimal stand-ins for the app core: Sleeper's scoring keys match its stat
@@ -294,7 +294,7 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
     }
     function labelOf(key) { return (App.MatchupEngine.LABELS[key] || key).toLowerCase(); }
 
-    function playerRow(key, pid, p, slot) {
+    function playerRow(key, pid, p, slot, read) {
         var pl = S.players[pid] || {};
         var diff = p.available ? p.points.median - p.baseline.median : 0;
         var diffCls = diff > 0.05 ? 'diff-up' : diff < -0.05 ? 'diff-dn' : '';
@@ -307,7 +307,7 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
             + '<td class="num"><b style="color:#fff">' + fmt(p.points.median) + '</b><div class="meta">' + fmt(p.points.floor) + '–' + fmt(p.points.ceiling) + '</div></td>'
             + '<td class="num ' + diffCls + '">' + (diff > 0 ? '+' : '') + fmt(diff) + '</td>'
             + '<td><span class="g g' + p.grade + '">' + p.grade + '</span></td>'
-            + '<td class="v v-' + p.verdict + '">' + esc(p.verdict) + '</td>'
+            + '<td class="v v-' + (read || p.verdict) + '">' + esc(read || p.verdict) + '</td>'
             + '</tr>'
             + '<tr class="why" data-for="' + esc(key) + '" style="display:none"><td colspan="7"><div class="fx">' + factorRows(p) + '</div>'
             + (p.missing.length ? '<div class="missing">No data for: ' + esc(p.missing.map(labelOf).join(', ')) + '</div>' : '') + '</td></tr>';
@@ -324,10 +324,6 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
         var order = { start: 0, flex: 1, sit: 2, out: 3 };
         bench.sort(function (a, b) { var pa = P[a], pb = P[b]; if (!pa || !pb) return pa ? -1 : 1; return (order[pa.verdict] - order[pb.verdict]) || (pb.points.median - pa.points.median); });
 
-        var head = '<tr><th class="hide-m">Slot</th><th>Player</th><th class="num">Sleeper</th><th class="num">DHQ</th><th class="num">Δ</th><th>Grade</th><th>Read</th></tr>';
-        var sRows = starters.map(function (pid, i) { return P[pid] ? playerRow(lid + ':' + pid, pid, P[pid], slots[i] || '') : ''; }).join('');
-        var bRows = bench.map(function (pid) { return P[pid] ? playerRow(lid + ':' + pid, pid, P[pid], 'BN') : ''; }).join('');
-
         var counts = { A: 0, B: 0, C: 0, D: 0, F: 0 };
         Object.keys(P).forEach(function (pid) { counts[P[pid].grade] = (counts[P[pid].grade] || 0) + 1; });
         var ss = App.StartSit;
@@ -336,6 +332,15 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
         var bySleeper = ss.optimalLineupWeekly(eligible.map(function (pid) { return { pid: pid, pos: P[pid].position, available: P[pid].available, pts: P[pid].baseline.median }; }), league.roster_positions || []);
         var pick = function (opt) { var out = {}; (opt && opt.slots || []).forEach(function (s) { if (s && s.pid) out[s.pid] = true; }); return out; };
         var inD = pick(byDhq), inS = pick(bySleeper);
+        // Read = the lineup call: START when the DHQ-optimal lineup has him,
+        // SIT when it does not, OUT when he cannot play. The grade beside it
+        // is the matchup quality, which is a different question (owner ruling
+        // 2026-09-19: a starting RB read FLEX beside his RB slot).
+        var readOf = function (pid) { return !P[pid].available ? 'out' : inD[pid] ? 'start' : 'sit'; };
+
+        var head = '<tr><th class="hide-m">Slot</th><th>Player</th><th class="num">Sleeper</th><th class="num">DHQ</th><th class="num">Δ</th><th>Grade</th><th>Read</th></tr>';
+        var sRows = starters.map(function (pid, i) { return P[pid] ? playerRow(lid + ':' + pid, pid, P[pid], slots[i] || '', readOf(pid)) : ''; }).join('');
+        var bRows = bench.map(function (pid) { return P[pid] ? playerRow(lid + ':' + pid, pid, P[pid], 'BN', readOf(pid)) : ''; }).join('');
         var swapsIn = Object.keys(inD).filter(function (pid) { return !inS[pid]; });
         var swapsOut = Object.keys(inS).filter(function (pid) { return !inD[pid]; });
         var swapText = swapsIn.length
@@ -373,7 +378,7 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
 
         $('readout').style.display = 'block';
         $('readout').innerHTML = graded.map(function (r) { return leagueBlock(r, week); }).join('')
-            + '<div class="hint" style="margin-top:12px">Sleeper = Sleeper\'s published projection scored with each league\'s rules (est. = DHQ estimate when Sleeper has none). DHQ = that number after the ten factors. Δ = DHQ minus Sleeper. Tap a row for the why.</div>';
+            + '<div class="hint" style="margin-top:12px">Sleeper = Sleeper\'s published projection scored with each league\'s rules (est. = DHQ estimate when Sleeper has none). DHQ = that number after the ten factors. Δ = DHQ minus Sleeper. Grade = the matchup. Read = the lineup call: START if the DHQ-optimal lineup has him, SIT if not, OUT if he cannot play. Tap a row for the why.</div>';
         Array.prototype.forEach.call(document.querySelectorAll('tr.p'), function (tr) {
             tr.addEventListener('click', function () {
                 var why = document.querySelector('tr.why[data-for="' + tr.getAttribute('data-key') + '"]');
