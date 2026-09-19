@@ -173,6 +173,170 @@
         return _idp.promise;
     }
 
+    // ── Last season's ranks, the same way, cached for a day ───────────
+    // Defense vs QB/RB/WR/TE from pts_half_ppr and offense vs DL/LB/DB from
+    // pts_idp, both from the prior season's weekly tables. Steadies the
+    // matchup rank through the first month of a new season.
+    let _prior = { season: null, ranks: null, promise: null };
+    const OFF_GROUPS = ['QB', 'RB', 'WR', 'TE'];
+    async function priorRankings(season, playersData) {
+        if (_prior.ranks && _prior.season === season) return _prior.ranks;
+        try {
+            const raw = root.sessionStorage && root.sessionStorage.getItem('dhq_mi_prior_' + season);
+            if (raw) { const rec = JSON.parse(raw); if (Date.now() - rec.ts < 24 * TTL_MS && rec.data) { _prior = { season, ranks: rec.data, promise: null }; return rec.data; } }
+        } catch (e) { /* no storage */ }
+        if (_prior.promise && _prior.season === season) return _prior.promise;
+        _prior.season = season;
+        _prior.promise = (async () => {
+            const weeks = await Promise.all(Array.from({ length: 18 }, (_, i) => fetchWeek(season, i + 1).catch(() => ({}))));
+            const allowed = {};   // defense/offense team → group → { pts, games }
+            let played = 0;
+            for (const wk of weeks) {
+                if (!wk || Object.keys(wk).length < 10) continue;
+                const pair = pairings(wk);
+                if (!Object.keys(pair).length) continue;
+                played++;
+                for (const [pid, st] of Object.entries(wk)) {
+                    if (pid.startsWith('TEAM_')) continue;
+                    const p = playersData && playersData[pid];
+                    if (!p || !p.team) continue;
+                    const grp = posGroup(p);
+                    const pts = IDP_GROUP[String(p.position || '').toUpperCase()] ? num(st.pts_idp) : (OFF_GROUPS.includes(grp) ? num(st.pts_half_ppr) : null);
+                    if (!pts || pts <= 0) continue;
+                    const other = pair[String(p.team).toUpperCase()];
+                    if (!other) continue;
+                    const a = allowed[other] = allowed[other] || {};
+                    a[grp] = a[grp] || { pts: 0, games: new Set() };
+                    a[grp].pts += pts;
+                    a[grp].games.add(played);
+                }
+            }
+            const ranks = {};
+            for (const grp of ['QB', 'RB', 'WR', 'TE', 'DL', 'LB', 'DB']) {
+                const list = Object.keys(allowed).filter(t => allowed[t][grp]).map(t => ({ t, avg: allowed[t][grp].pts / allowed[t][grp].games.size }));
+                list.sort((a, b) => a.avg - b.avg);
+                list.forEach((r, i) => { ranks[r.t] = ranks[r.t] || {}; ranks[r.t]['vs' + grp] = i + 1; });
+            }
+            const out = Object.keys(ranks).length >= 30 ? ranks : null;
+            _prior = { season, ranks: out, promise: null };
+            try { if (out) root.sessionStorage && root.sessionStorage.setItem('dhq_mi_prior_' + season, JSON.stringify({ ts: Date.now(), data: out })); } catch (e) { /* ignore */ }
+            return out;
+        })();
+        return _prior.promise;
+    }
+
+    // ── Opponent vs position: a blended 1..32 rank ────────────────────
+    // Four views of how hard the opponent is on this position, blended by
+    // how much of the season has been played, then ranked across the 32:
+    //   points allowed this season  (App.SOS / the IDP rank)
+    //   PFF unit grades for the position (film, not fantasy points)
+    //   points allowed last season  (fades out by week eight)
+    //   team quality: PFF overall grade, record, point differential
+    const ORD = (n) => { const m = n % 100, d = n % 10; return n + ((m >= 11 && m <= 13) ? 'th' : d === 1 ? 'st' : d === 2 ? 'nd' : d === 3 ? 'rd' : 'th'); };
+    const tough01 = (rank) => rank != null ? (33 - rank) / 32 : null;   // rank 1 → 1
+    // Percentile (0..1, 1 = best) of a value among a list of values.
+    function pctRank(v, list) {
+        if (v == null || !list.length) return null;
+        let below = 0; for (const x of list) if (x < v) below++;
+        return list.length > 1 ? below / (list.length - 1) : 0.5;
+    }
+    function pffUnitGrade(t, grp) {
+        if (!t) return null;
+        const g = (k) => num(t[k]);
+        switch (grp) {
+            case 'RB': return g('grades_run_defense') != null ? 0.7 * g('grades_run_defense') + 0.3 * (g('grades_tackle') != null ? g('grades_tackle') : g('grades_run_defense')) : null;
+            case 'WR': case 'TE': return g('grades_coverage_defense');
+            case 'QB': return g('grades_coverage_defense') != null && g('grades_pass_rush_defense') != null ? 0.6 * g('grades_coverage_defense') + 0.4 * g('grades_pass_rush_defense') : g('grades_defense');
+            case 'DL': return g('grades_pass_block') != null && g('grades_run_block') != null ? 0.5 * g('grades_pass_block') + 0.5 * g('grades_run_block') : g('grades_offense');
+            case 'LB': return g('grades_run_block') != null ? 0.6 * g('grades_run_block') + 0.4 * (g('grades_offense') || g('grades_run_block')) : g('grades_offense');
+            case 'DB': return g('grades_pass') != null ? 0.6 * g('grades_pass') + 0.4 * (g('grades_pass_route') || g('grades_pass')) : g('grades_offense');
+            default: return null;
+        }
+    }
+    const UNIT_LABEL = { RB: 'run D', WR: 'coverage', TE: 'coverage', QB: 'pass D', DL: 'O-line', LB: 'run block', DB: 'passing' };
+    const PTS_LABEL = { RB: 'RBs', WR: 'WRs', TE: 'TEs', QB: 'QBs', DL: 'DL', LB: 'LBs', DB: 'DBs' };
+    function currentRank(T, grp, ctx) {
+        if (IDP_GROUP[grp] || grp === 'DL' || grp === 'LB' || grp === 'DB') return ctx.idp && ctx.idp[T] ? num(ctx.idp[T]['vs' + grp]) : null;
+        const r = App.SOS && App.SOS.defenseRankings && App.SOS.defenseRankings[T];
+        const v = r ? num(r['vs' + grp]) : null;
+        return v != null && v >= 1 ? v : null;
+    }
+    // Record component of team quality: this season's record and point
+    // differential, but early on that is one or two games, so last season's
+    // record fills in and fades out by game eight.
+    function record01(st) {
+        if (!st) return null;
+        const games = st.wins + st.losses + st.ties;
+        if (!games) return null;
+        const wp = num(st.winPct) != null ? num(st.winPct) : st.wins / games;
+        const pd = num(st.pointDiff);
+        return clamp(0.5 + (wp - 0.5) + (pd != null ? clamp(pd / (games * 14), -0.5, 0.5) * 0.5 : 0), 0, 1);
+    }
+    function teamQuality01(T, ctx, overallList) {
+        const snap = pff();
+        const t = snap && snap.teams ? snap.teams[T] : null;
+        const pffPct = t ? pctRank(num(t.grades_overall), overallList) : null;
+        const cur = record01(ctx.standings && ctx.standings[T]);
+        const prior = record01(ctx.priorStandings && ctx.priorStandings[T]);
+        const st = ctx.standings && ctx.standings[T];
+        const games = st ? st.wins + st.losses + st.ties : 0;
+        const late = clamp((games - 2) / 6, 0, 1);          // 0 through game two, 1 from game eight
+        let rec = null;
+        if (cur != null && prior != null) rec = late * cur + (1 - late) * prior;
+        else if (cur != null) rec = 0.5 + (cur - 0.5) * Math.min(1, games / 6);
+        else if (prior != null) rec = prior;
+        if (pffPct == null && rec == null) return null;
+        if (pffPct == null) return rec;
+        if (rec == null) return pffPct;
+        return 0.5 * pffPct + 0.5 * rec;
+    }
+    // Blended rank of `opp` against `grp`, plus the evidence string.
+    function opponentFor(grp, opp, ctx, opts) {
+        if (!opp || !BALL_BASIS[grp]) return null;
+        ctx._opp = ctx._opp || {};
+        if (ctx._opp[grp]) return ctx._opp[grp][opp] || null;
+        const snap = pff();
+        const teams = snap && snap.teams ? Object.keys(snap.teams) : Object.keys((App.SOS && App.SOS.defenseRankings) || {});
+        if (teams.length < 20) return null;
+        // Games played by the average team so far, from the standings.
+        let gp = 0, n = 0;
+        for (const T of teams) { const st = ctx.standings && ctx.standings[T]; if (st) { gp += st.wins + st.losses + st.ties; n++; } }
+        gp = n ? gp / n : (ctx.week ? ctx.week - 1 : 0);
+        const late = clamp((gp - 4) / 4, 0, 1);          // 0 through game four, 1 from game eight
+        const W = { cur: 0.30 + 0.15 * late, pff: 0.30 + 0.15 * late, prior: 0.30 * (1 - late), quality: 0.10 };
+        const unitList = teams.map(T => pffUnitGrade(snap && snap.teams ? snap.teams[T] : null, grp)).filter(v => v != null);
+        const overallList = teams.map(T => snap && snap.teams && snap.teams[T] ? num(snap.teams[T].grades_overall) : null).filter(v => v != null);
+        const rows = teams.map(T => {
+            const parts = [];
+            const cur = currentRank(T, grp, ctx);
+            const unit = pffUnitGrade(snap && snap.teams ? snap.teams[T] : null, grp);
+            const unitPct = pctRank(unit, unitList);
+            const prior = ctx.prior && ctx.prior[T] ? num(ctx.prior[T]['vs' + grp]) : null;
+            const quality = teamQuality01(T, ctx, overallList);
+            if (cur != null) parts.push({ w: W.cur, v: tough01(cur) });
+            if (unitPct != null) parts.push({ w: W.pff, v: unitPct });
+            if (prior != null && W.prior > 0) parts.push({ w: W.prior, v: tough01(prior) });
+            if (quality != null) parts.push({ w: W.quality, v: quality });
+            const wsum = parts.reduce((a, b) => a + b.w, 0);
+            return { T, tough: wsum ? parts.reduce((a, b) => a + b.w * b.v, 0) / wsum : null, cur, unit, unitPct, prior, quality };
+        }).filter(r => r.tough != null);
+        rows.sort((a, b) => b.tough - a.tough);
+        const out = {};
+        rows.forEach((r, i) => {
+            const bits = [];
+            if (r.cur != null) bits.push(ORD(r.cur) + ' in pts to ' + PTS_LABEL[grp]);
+            if (r.unit != null) bits.push(UNIT_LABEL[grp] + ' ' + Math.round(r.unit) + ' (' + ORD(Math.round((1 - r.unitPct) * (unitList.length - 1)) + 1) + ')');
+            if (r.prior != null && W.prior > 0) bits.push(ORD(r.prior) + ' last season');
+            const st = ctx.standings && ctx.standings[r.T];
+            const pst = ctx.priorStandings && ctx.priorStandings[r.T];
+            if (st) bits.push(st.wins + '-' + st.losses + (st.ties ? '-' + st.ties : '') + (pst && (st.wins + st.losses + st.ties) < 8 ? ' (' + pst.wins + '-' + pst.losses + ' last yr)' : ''));
+            if (r.quality != null && snap && snap.teams && snap.teams[r.T] && num(snap.teams[r.T].grades_overall) != null) bits.push('PFF team ' + ORD(Math.round((1 - pctRank(num(snap.teams[r.T].grades_overall), overallList)) * (overallList.length - 1)) + 1));
+            out[r.T] = { rank: i + 1, detail: bits.join(' · ') };
+        });
+        ctx._opp[grp] = out;
+        return out[opp] || null;
+    }
+
     // ── PFF lookups ───────────────────────────────────────────────────
     function pffDepthRow(team, player) {
         const snap = pff();
@@ -205,19 +369,39 @@
         const p = snap.players[normName(qb.n)];
         return p ? (num(p.pass) || num(p.off) || null) : (num(qb.g) || null);
     }
-    // My line vs their front, from the player's side of the ball.
-    function trenchFor(grp, team, opp) {
-        const mine = pffTeam(team), theirs = pffTeam(opp);
-        if (!mine || !theirs) return null;
-        const g = (t, k) => num(t[k]);
-        switch (grp) {
-            case 'RB': return { mine: g(mine, 'grades_run_block'), theirs: g(theirs, 'grades_run_defense') };
-            case 'QB': case 'WR': case 'TE': return { mine: g(mine, 'grades_pass_block'), theirs: g(theirs, 'grades_pass_rush_defense') };
-            case 'DL': return { mine: g(mine, 'grades_pass_rush_defense'), theirs: g(theirs, 'grades_pass_block') };
-            case 'LB': return { mine: g(mine, 'grades_run_defense'), theirs: g(theirs, 'grades_run_block') };
-            case 'DB': return { mine: g(mine, 'grades_coverage_defense'), theirs: g(theirs, 'grades_pass_route') };
-            default: return null;
-        }
+    // My line vs their front, from the player's side of the ball, on a
+    // league scale: each side's percentile among the 32 teams, and the
+    // score is the gap between the two. A back who catches a lot has his
+    // line judged partly on pass blocking and their front on pass rush.
+    const TRENCH_KEYS = {
+        RB: [['grades_run_block', 'run block'], ['grades_run_defense', 'run D']],
+        QB: [['grades_pass_block', 'pass block'], ['grades_pass_rush_defense', 'pass rush']],
+        WR: [['grades_pass_block', 'pass block'], ['grades_pass_rush_defense', 'pass rush']],
+        TE: [['grades_pass_block', 'pass block'], ['grades_pass_rush_defense', 'pass rush']],
+        DL: [['grades_pass_rush_defense', 'pass rush'], ['grades_pass_block', 'pass block']],
+        LB: [['grades_run_defense', 'run D'], ['grades_run_block', 'run block']],
+        DB: [['grades_coverage_defense', 'coverage'], ['grades_pass_route', 'receivers']],
+    };
+    function trenchFor(grp, team, opp, catchShare) {
+        const snap = pff();
+        const keys = TRENCH_KEYS[grp];
+        if (!snap || !snap.teams || !keys) return null;
+        const mineT = snap.teams[team], theirsT = snap.teams[opp];
+        if (!mineT || !theirsT) return null;
+        const c = grp === 'RB' ? clamp(num(catchShare) || 0, 0, 0.5) : 0;
+        const mineOf = (t) => { const a = num(t[keys[0][0]]); if (a == null) return null; return c ? (1 - c) * a + c * (num(t.grades_pass_block) != null ? num(t.grades_pass_block) : a) : a; };
+        const theirsOf = (t) => { const a = num(t[keys[1][0]]); if (a == null) return null; return c ? (1 - c) * a + c * (num(t.grades_pass_rush_defense) != null ? num(t.grades_pass_rush_defense) : a) : a; };
+        const all = Object.values(snap.teams);
+        const mineList = all.map(mineOf).filter(v => v != null);
+        const theirsList = all.map(theirsOf).filter(v => v != null);
+        const mine = mineOf(mineT), theirs = theirsOf(theirsT);
+        if (mine == null || theirs == null) return null;
+        const pm = pctRank(mine, mineList), pt = pctRank(theirs, theirsList);
+        return {
+            mine, theirs, score: clamp(pm - pt, -1, 1),
+            mineRank: Math.round((1 - pm) * (mineList.length - 1)) + 1, theirsRank: Math.round((1 - pt) * (theirsList.length - 1)) + 1,
+            mineLabel: team + ' ' + keys[0][1], theirsLabel: opp + ' ' + keys[1][1],
+        };
     }
 
     // ── Baseline ──────────────────────────────────────────────────────
@@ -406,7 +590,7 @@
         opts = opts || {};
         const season = opts.season || currentSeason();
         const E = espn();
-        const ctx = { season, week, coaching: null, standings: null, idp: null, depth: null, recentWeeks: [], games: {}, h2h: {} };
+        const ctx = { season, week, coaching: null, standings: null, priorStandings: null, idp: null, prior: null, depth: null, recentWeeks: [], games: {}, h2h: {} };
         const jobs = [];
         jobs.push(depthCharts().then(r => { ctx.depth = r; }).catch(() => {}));
         for (let w = Math.max(1, week - RECENT_WEEKS); w < week; w++) {
@@ -415,8 +599,10 @@
         if (E) {
             jobs.push(E.coaching(season).then(c => { ctx.coaching = c; }).catch(() => {}));
             jobs.push(E.standings(season).then(s => { ctx.standings = s; }).catch(() => {}));
+            jobs.push(E.standings(season - 1).then(s => { ctx.priorStandings = s; }).catch(() => {}));
         }
         jobs.push(idpRankings(season, opts.playersData).then(r => { ctx.idp = r; }).catch(() => {}));
+        jobs.push(priorRankings(season - 1, opts.playersData).then(r => { ctx.prior = r; }).catch(() => {}));
         const list = [...new Set((teams || []).map(t => String(t || '').toUpperCase()).filter(Boolean))];
         if (E) {
             for (const t of list) {
@@ -454,13 +640,16 @@
         if (isByeWeek(team, week) || (num(player.bye_week) === week)) status = 'BYE';
         input.health = { status };
 
-        // opponent
+        // opponent: blended rank (points allowed, PFF unit grade, last
+        // season, team quality); falls back to this season's points-allowed
+        // rank alone when the blend has nothing to work with.
         if (opp) {
-            let rank = null;
-            if (grp === 'DL' || grp === 'LB' || grp === 'DB') rank = ctx.idp && ctx.idp[opp] ? num(ctx.idp[opp]['vs' + grp]) : null;
-            else if (App.SOS && App.SOS.defenseRankings && App.SOS.defenseRankings[opp]) rank = num(App.SOS.defenseRankings[opp]['vs' + grp]);
-            // SOS ranks QB/RB/WR/TE only; anything else (kickers) stays neutral.
-            input.opponent = { abbr: opp, rankVsPos: rank != null && rank >= 1 ? rank : null };
+            const blended = opponentFor(grp, opp, ctx, opts);
+            if (blended) input.opponent = { abbr: opp, rankVsPos: blended.rank, detail: blended.detail };
+            else {
+                const rank = currentRank(opp, grp, ctx);
+                input.opponent = { abbr: opp, rankVsPos: rank != null && rank >= 1 ? rank : null };
+            }
         }
 
         // game
@@ -484,8 +673,9 @@
         const h = opp && ctx.h2h && ctx.h2h[team + '|' + opp];
         if (h) input.h2h = { games: h.games, wins: h.wins, avgMargin: h.avgMargin, division: h.division };
 
-        // trench
-        const tr = opp && trenchFor(grp, team, opp);
+        // trench (a back's catch share tilts his line toward pass blocking)
+        const catchShare = grp === 'RB' && stats ? ((num(stats.rec_tgt) || 0) / Math.max(1, (num(stats.rush_att) || 0) + (num(stats.rec_tgt) || 0))) : 0;
+        const tr = opp && trenchFor(grp, team, opp, catchShare);
         if (tr && tr.mine != null && tr.theirs != null) input.trench = tr;
 
         // trend
@@ -539,7 +729,7 @@
     }
 
     App.MatchupInputs = App.MatchupInputs || {
-        prepare, build, project, projectRoster, idpRankings, depthCharts, baselineFor, opponentOf, trenchFor, posGroup, normName, roleFor,
+        prepare, build, project, projectRoster, idpRankings, priorRankings, depthCharts, baselineFor, opponentOf, opponentFor, trenchFor, posGroup, normName, roleFor,
     };
     /* global module */
     if (typeof module !== 'undefined' && module.exports) module.exports = App.MatchupInputs;
