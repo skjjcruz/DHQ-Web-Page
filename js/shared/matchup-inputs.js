@@ -7,7 +7,11 @@
 //
 //   baseline     Sleeper's published line scored through the league's
 //                rules (App.WeeklyProj), or the engine's own estimate.
-//   role         PFF depth chart (order + snap share), Sleeper snap share.
+//   role         ESPN depth-chart rank at his position (the app's
+//                nfl-depth-charts relay, Sleeper's field as backup), his
+//                projected share of the team's ball (targets, touches,
+//                attempts or tackles) from Sleeper stats with injured
+//                teammates' share handed out, and snap share.
 //   health       Sleeper injury tag, PFF depth-chart status as backup.
 //   opponent     App.SOS defense-vs-position rank for offense; a new
 //                offense-vs-IDP rank (built here from Sleeper's weekly
@@ -37,6 +41,18 @@
     // Touchdowns per opportunity that a season tends to settle back to.
     const EXPECTED_TD_RATE = { RB: 0.03, WR: 0.04, TE: 0.045, QB: 0.045 };
     const TTL_MS = 4 * 60 * 60 * 1000;
+    const RECENT_WEEKS = 3;
+    // What "the ball" means per position, and the stat that counts it.
+    const BALL_BASIS = { QB: 'attempts', RB: 'touches', WR: 'targets', TE: 'targets', DL: 'tackles', LB: 'tackles', DB: 'tackles' };
+    // Share of the team's ball a depth-chart slot normally earns (league
+    // norms from the prior season). Used to steady a thin sample and to
+    // give a promoted player credit before his stats catch up.
+    const BASE_SHARE = { QB: [0.95, 0.05], RB: [0.50, 0.25, 0.10, 0.04], WR: [0.25, 0.18, 0.12, 0.06], TE: [0.15, 0.06, 0.03], DL: [0.06, 0.03, 0.02], LB: [0.12, 0.05, 0.03], DB: [0.09, 0.05, 0.03] };
+    const SLEEPER_DEPTH_POS = { QB: 'QB', RB: 'RB', FB: 'RB', WR: 'WR', LWR: 'WR', SWR: 'WR', RWR: 'WR', TE: 'TE', K: 'K',
+        LDE: 'DL', RDE: 'DL', DE: 'DL', DT: 'DL', NT: 'DL', LDT: 'DL', RDT: 'DL', DL: 'DL',
+        LILB: 'LB', RILB: 'LB', LOLB: 'LB', ROLB: 'LB', MLB: 'LB', ILB: 'LB', OLB: 'LB', LB: 'LB', WLB: 'LB', SLB: 'LB',
+        LCB: 'DB', RCB: 'DB', CB: 'DB', NB: 'DB', FS: 'DB', SS: 'DB', S: 'DB', DB: 'DB' };
+    const OUT_FOR_SHARE = { OUT: 1, IR: 1, PUP: 1, SUS: 1, NA: 1, COV: 1, D: 0.8 };
 
     const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
     const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
@@ -52,6 +68,19 @@
         return player ? (player.full_name || ((player.first_name || '') + ' ' + (player.last_name || ''))).trim() : '';
     }
     function pff() { return root.DhqPffMatchup || null; }
+    function functionsBase() {
+        try {
+            const cfg = root.DYNASTY_HQ_CONFIG || (App.CONFIG) || (root.OD && root.OD.CONFIG) || {};
+            return String(cfg.functionsBase || 'https://sxshiqyxhhifvtfqawbq.supabase.co/functions/v1').replace(/\/+$/, '');
+        } catch (e) { return 'https://sxshiqyxhhifvtfqawbq.supabase.co/functions/v1'; }
+    }
+    // Same normalizer the nfl-depth-charts relay keys its roles with.
+    const espnName = (name) => String(name || '').toLowerCase().replace(/\b(jr|sr|ii|iii|iv|v)\.?$/g, '').replace(/[^a-z\s]/g, '').replace(/\s+/g, ' ').trim();
+    // Sleeper's injury tag → engine status code.
+    function statusOf(player) {
+        const raw = String(player && player.injury_status || '').toUpperCase();
+        return SLEEPER_STATUS[raw] || raw;
+    }
     function espn() { return App.MatchupFeeds && App.MatchupFeeds.espn; }
 
     function currentSeason() {
@@ -212,14 +241,177 @@
         return { median: +pts.toFixed(2), floor: +(pts * 0.75).toFixed(2), ceiling: +(pts * 1.25).toFixed(2), source: 'estimate' };
     }
 
+    // ── ESPN depth charts through the app's relay ─────────────────────
+    // { "TEAM|name": { pos, rank } } for every team, rebuilt server-side
+    // every six hours. Cached here for four.
+    let _depth = { roles: null, promise: null };
+    async function depthCharts() {
+        if (_depth.roles) return _depth.roles;
+        try {
+            const raw = root.sessionStorage && root.sessionStorage.getItem('dhq_mi_depth');
+            if (raw) { const rec = JSON.parse(raw); if (Date.now() - rec.ts < TTL_MS && rec.data) { _depth.roles = rec.data; return rec.data; } }
+        } catch (e) { /* no storage */ }
+        if (_depth.promise) return _depth.promise;
+        _depth.promise = (async () => {
+            try {
+                const r = await fetch(functionsBase() + '/nfl-depth-charts');
+                const d = r.ok ? await r.json() : null;
+                const roles = d && d.roles && Object.keys(d.roles).length > 100 ? d.roles : null;
+                if (roles) { _depth.roles = roles; try { root.sessionStorage && root.sessionStorage.setItem('dhq_mi_depth', JSON.stringify({ ts: Date.now(), data: roles })); } catch (e) { /* ignore */ } }
+                return roles;
+            } catch (e) { return null; } finally { _depth.promise = null; }
+        })();
+        return _depth.promise;
+    }
+    // Depth-chart rank at the player's fantasy position: ESPN first, then
+    // Sleeper's own field when it lists him at that position.
+    function posRankFor(player, grp, roles) {
+        const team = String(player.team || '').toUpperCase();
+        if (roles) {
+            const r = roles[team + '|' + espnName(fullName(player))];
+            if (r && r.pos === grp && num(r.rank) != null) return { rank: num(r.rank), source: 'espn' };
+        }
+        const sp = SLEEPER_DEPTH_POS[String(player.depth_chart_position || '').toUpperCase()];
+        const so = num(player.depth_chart_order);
+        if (sp === grp && so != null && so > 0 && so < 20) return { rank: so, source: 'sleeper' };
+        return null;
+    }
+
+    // ── Share of the ball ─────────────────────────────────────────────
+    function ballOf(grp, st) {
+        if (!st) return 0;
+        switch (BALL_BASIS[grp]) {
+            case 'attempts': return num(st.pass_att) || 0;
+            case 'touches': return (num(st.rush_att) || 0) + (num(st.rec_tgt) || 0);
+            case 'targets': return num(st.rec_tgt) || 0;
+            case 'tackles': return num(st.idp_tkl) || 0;
+            default: return 0;
+        }
+    }
+    // Team totals for one stat table, computed once per (team, basis) and
+    // kept on ctx. The season TEAM_ row carries attempts, carries and
+    // targets; tackles and the weekly tables are summed from player rows.
+    function teamBall(ctx, statsObj, key, team, grp, playersData) {
+        const basis = BALL_BASIS[grp];
+        if (!basis) return 0;
+        ctx._tb = ctx._tb || {};
+        const k = key + '|' + team + '|' + basis;
+        if (ctx._tb[k] != null) return ctx._tb[k];
+        let total = 0;
+        const row = statsObj && statsObj['TEAM_' + team];
+        if (row && basis !== 'tackles' && ballOf(grp, row) > 0) total = ballOf(grp, row);
+        else if (statsObj && playersData) {
+            for (const pid of Object.keys(statsObj)) {
+                if (pid.startsWith('TEAM_')) continue;
+                const p = playersData[pid];
+                if (!p || String(p.team || '').toUpperCase() !== team) continue;
+                if (basis === 'tackles' && !IDP_GROUP[String(p.position || '').toUpperCase()]) continue;
+                total += ballOf(grp, statsObj[pid]);
+            }
+        }
+        ctx._tb[k] = total;
+        return total;
+    }
+    // Earned share: season share leaning on the last three weeks.
+    function earnedShare(pid, player, grp, team, opts, ctx) {
+        const season = opts.statsData && opts.statsData[pid];
+        const seasonTotal = teamBall(ctx, opts.statsData, 'season', team, grp, opts.playersData);
+        const seasonShare = season && seasonTotal > 0 ? ballOf(grp, season) / seasonTotal : null;
+        let mine = 0, theirs = 0;
+        for (const wk of ctx.recentWeeks || []) {
+            if (!wk || !wk.stats) continue;
+            const t = teamBall(ctx, wk.stats, 'wk' + wk.week, team, grp, opts.playersData);
+            if (t <= 0) continue;
+            theirs += t;
+            mine += ballOf(grp, wk.stats[pid]);
+        }
+        const recentShare = theirs > 0 ? mine / theirs : null;
+        if (seasonShare == null && recentShare == null) return null;
+        if (recentShare == null) return seasonShare;
+        if (seasonShare == null) return recentShare;
+        return 0.6 * recentShare + 0.4 * seasonShare;
+    }
+    // Team pie for the week: the team's per-game ball, tilted by the spread
+    // (underdogs throw more, favorites hand off more).
+    function teamPie(team, grp, week, opts, ctx) {
+        const row = opts.statsData && opts.statsData['TEAM_' + team];
+        const gp = row ? num(row.gp) : null;
+        const total = teamBall(ctx, opts.statsData, 'season', team, grp, opts.playersData);
+        if (!gp || gp <= 0 || total <= 0) return null;
+        let perGame = total / gp;
+        const wk = App.WeeklyProj && App.WeeklyProj._ctx && App.WeeklyProj._ctx.byTeamWeek[team + '|' + week];
+        const spread = wk && wk.vegas ? num(wk.vegas.spread) : null; // positive = underdog
+        if (spread != null) {
+            const dog = clamp(spread / 14, -1, 1);
+            perGame *= BALL_BASIS[grp] === 'touches' ? (1 - dog * 0.05) : BALL_BASIS[grp] === 'tackles' ? 1 : (1 + dog * 0.08);
+        }
+        return perGame;
+    }
+    // Everything the engine's role factor reads.
+    function roleFor(pid, player, grp, team, opts, ctx) {
+        const stats = (opts.statsData && opts.statsData[pid]) || null;
+        const out = { shareBasis: BALL_BASIS[grp] || null, gamesPlayed: stats ? num(stats.gp) : null };
+        const pr = posRankFor(player, grp, ctx.depth);
+        if (pr) { out.posRank = pr.rank; out.posRankSource = pr.source; }
+        // Snap share, Sleeper first, PFF depth chart as backup.
+        const depth = pffDepthRow(team, player);
+        const snap = stats && num(stats.off_snp) && num(stats.tm_off_snp) ? clamp(stats.off_snp / stats.tm_off_snp, 0, 1)
+            : stats && num(stats.def_snp) && num(stats.tm_def_snp) ? clamp(stats.def_snp / stats.tm_def_snp, 0, 1)
+            : depth && num(depth.sp) != null ? depth.sp / 100 : null;
+        if (snap != null) out.snapShare = snap;
+        if (!BALL_BASIS[grp]) return out;
+
+        let earned = earnedShare(pid, player, grp, team, opts, ctx);
+        // Rank on his team by earned season share, and the share freed up by
+        // teammates at his position who are out this week.
+        if (opts.playersData && opts.statsData) {
+            const seasonTotal = teamBall(ctx, opts.statsData, 'season', team, grp, opts.playersData);
+            const mates = [];
+            let freed = 0, healthySum = 0;
+            for (const mid of Object.keys(opts.statsData)) {
+                if (mid.startsWith('TEAM_')) continue;
+                const m = opts.playersData[mid];
+                if (!m || String(m.team || '').toUpperCase() !== team || posGroup(m) !== grp) continue;
+                const sh = seasonTotal > 0 ? ballOf(grp, opts.statsData[mid]) / seasonTotal : 0;
+                if (sh <= 0) continue;
+                mates.push({ pid: mid, share: sh });
+                const outW = OUT_FOR_SHARE[statusOf(m)] || 0;
+                if (mid !== pid && outW) freed += sh * outW; else healthySum += sh;
+            }
+            mates.sort((a, b) => b.share - a.share);
+            const idx = mates.findIndex(m => m.pid === pid);
+            if (idx >= 0) out.shareRank = idx + 1;
+            if (earned != null && freed > 0 && healthySum > 0 && !OUT_FOR_SHARE[statusOf(player)]) earned = earned * (1 + freed / healthySum);
+        }
+        // Blend with what his depth-chart slot normally earns: heavier early.
+        const base = out.posRank != null && BASE_SHARE[grp] ? BASE_SHARE[grp][Math.min(BASE_SHARE[grp].length, Math.max(1, Math.round(out.posRank))) - 1] : null;
+        const early = out.gamesPlayed == null || out.gamesPlayed < 3;
+        let proj = null;
+        if (earned != null && base != null) proj = early ? 0.6 * earned + 0.4 * base : 0.85 * earned + 0.15 * base;
+        else if (earned != null) proj = earned;
+        else if (base != null) proj = base;
+        if (proj != null) {
+            out.share = clamp(proj, 0, 1);
+            const pie = teamPie(team, grp, ctx.week, opts, ctx);
+            if (pie != null) out.projTargets = +(pie * out.share).toFixed(1);
+            const line = App.WeeklyProj && App.WeeklyProj.projLine && App.WeeklyProj.projLine(pid, ctx.week);
+            if (line) { const st = ballOf(grp, line); if (st > 0) out.sleeperTargets = +st.toFixed(1); }
+        }
+        return out;
+    }
+
     // ── prepare: the async pieces, once per roster ────────────────────
     // Returns a context object build() reads synchronously.
     async function prepare(teams, week, opts) {
         opts = opts || {};
         const season = opts.season || currentSeason();
         const E = espn();
-        const ctx = { season, week, coaching: null, standings: null, idp: null, games: {}, h2h: {} };
+        const ctx = { season, week, coaching: null, standings: null, idp: null, depth: null, recentWeeks: [], games: {}, h2h: {} };
         const jobs = [];
+        jobs.push(depthCharts().then(r => { ctx.depth = r; }).catch(() => {}));
+        for (let w = Math.max(1, week - RECENT_WEEKS); w < week; w++) {
+            jobs.push(fetchWeek(season, w).then(st => { if (st && Object.keys(st).length > 10) ctx.recentWeeks.push({ week: w, stats: st }); }).catch(() => {}));
+        }
         if (E) {
             jobs.push(E.coaching(season).then(c => { ctx.coaching = c; }).catch(() => {}));
             jobs.push(E.standings(season).then(s => { ctx.standings = s; }).catch(() => {}));
@@ -252,12 +444,8 @@
         if (base) { input.baseline = { median: base.median, floor: base.floor, ceiling: base.ceiling }; input.baselineSource = base.source; }
 
         // role
+        input.role = roleFor(pid, player, grp, team, opts, ctx);
         const depth = pffDepthRow(team, player);
-        const snapShare = stats && num(stats.off_snp) && num(stats.tm_off_snp) ? clamp(stats.off_snp / stats.tm_off_snp, 0, 1)
-            : stats && num(stats.def_snp) && num(stats.tm_def_snp) ? clamp(stats.def_snp / stats.tm_def_snp, 0, 1) : null;
-        if (depth || snapShare != null) {
-            input.role = { depthRank: depth ? depth.d : null, share: snapShare != null ? snapShare : (depth && num(depth.sp) != null ? depth.sp / 100 : null) };
-        }
 
         // health
         const sleeperStatus = String(player.injury_status || '').toUpperCase();
@@ -351,7 +539,7 @@
     }
 
     App.MatchupInputs = App.MatchupInputs || {
-        prepare, build, project, projectRoster, idpRankings, baselineFor, opponentOf, trenchFor, posGroup, normName,
+        prepare, build, project, projectRoster, idpRankings, depthCharts, baselineFor, opponentOf, trenchFor, posGroup, normName, roleFor,
     };
     /* global module */
     if (typeof module !== 'undefined' && module.exports) module.exports = App.MatchupInputs;

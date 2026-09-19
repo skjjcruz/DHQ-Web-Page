@@ -22,7 +22,7 @@
 //   multipliers are multiplied together and applied to the baseline.
 //
 // THE FACTORS AND THEIR WEIGHTS (owner ruling 2026-09-19, sum = 100)
-//   role        22  depth-chart slot and snap / target share
+//   role        22  depth-chart rank at his position, projected share of the ball, snaps
 //   health      14  injury tag, practice report, weeks since return
 //   opponent    14  opposing defense (or offense, for IDP) vs this position
 //   game        12  implied total, spread, home / away / overseas, weather
@@ -85,25 +85,69 @@
     // Each returns { score: -1..1 | null, note: 'plain-English reason' }.
     // null score = no data → treated as neutral (0) and flagged in `why`.
 
+    // ── Role & opportunity ───────────────────────────────────────────
+    // Three parts, each -1..1: where he sits on his team's depth chart at
+    // his position, the share of his team's ball he is projected to get
+    // (targets, touches, attempts or tackles), and his snap share. Early in
+    // the season the depth chart carries more weight because one game of
+    // targets is noise; from the third game on the ball share takes over.
+    // A WR2 is a real starter; an RB2 is usually a backup; a TE2 rarely
+    // matters — the tables say so.
+    const RANK_EFFECT = {
+        QB: [1, -1], RB: [1, -0.25, -1], WR: [1, 0.35, -0.4, -1], TE: [1, -0.6, -1], K: [1, -1],
+        DL: [1, -0.5, -1], LB: [1, -0.5, -1], DB: [1, -0.5, -1],
+    };
+    // Ball share that reads as the bottom and the top of the scale.
+    const SHARE_SCALE = { QB: [0.5, 1], RB: [0.10, 0.55], WR: [0.05, 0.28], TE: [0.04, 0.20], DL: [0.02, 0.10], LB: [0.04, 0.16], DB: [0.03, 0.12] };
+    const SHARE_LABEL = { targets: 'team targets', touches: 'team touches', attempts: 'pass attempts', tackles: 'team tackles' };
+    function rankEffect(P, rank) {
+        const t = RANK_EFFECT[P] || [1, -0.4, -1];
+        return t[Math.min(t.length, Math.max(1, Math.round(rank))) - 1];
+    }
+    function shareEffect(P, share) {
+        const sc = SHARE_SCALE[P];
+        if (!sc || share == null) return null;
+        return clamp(((share - sc[0]) / (sc[1] - sc[0])) * 2 - 1, -1, 1);
+    }
+    const ordinal = (n) => n + (n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th');
+    const pct = (v) => Math.round(v * 100) + '%';
+
     function scoreRole(input) {
         const r = input.role;
         if (!r) return { score: null, note: 'No depth-chart data' };
-        const rank = num(r.depthRank);
+        const P = pos(input);
+        if (P === 'K' || P === 'DEF') return { score: null, note: 'No role split at this position' };
+        const rank = num(r.posRank);
         const share = num(r.share);
-        if (rank == null && share == null) return { score: null, note: 'No depth-chart data' };
-        let s = 0;
+        const snap = num(r.snapShare);
+        const parts = [];
         const notes = [];
+        const early = num(r.gamesPlayed) != null && num(r.gamesPlayed) < 3;
         if (rank != null) {
-            if (rank <= 1) { s += 0.6; notes.push('Starter'); }
-            else if (rank === 2) { s -= 0.4; notes.push('Second on the depth chart'); }
-            else { s -= 0.9; notes.push('Deep on the depth chart'); }
+            parts.push({ w: early ? 0.55 : 0.40, s: rankEffect(P, rank) });
+            notes.push((P === 'K' ? 'K' : P) + Math.round(rank) + ' on the depth chart');
         }
-        if (share != null) {
-            // 50% share is neutral; 90%+ is a workhorse; 20% is a bit part.
-            s += clamp((share - 0.5) * 2, -1, 1) * 0.5;
-            notes.push(Math.round(share * 100) + '% of snaps / targets');
+        const se = shareEffect(P, share);
+        if (se != null) {
+            parts.push({ w: early ? 0.25 : 0.40, s: se });
+            let n = pct(share) + ' of ' + (SHARE_LABEL[r.shareBasis] || 'team touches');
+            if (num(r.shareRank) != null) n += ' (' + ordinal(Math.round(r.shareRank)) + ' on team)';
+            notes.push(n);
         }
-        return { score: clamp(s, -1, 1), note: notes.join(' · ') };
+        if (snap != null) {
+            parts.push({ w: 0.20, s: clamp((snap - 0.5) * 2, -1, 1) });
+            notes.push(pct(snap) + ' of snaps');
+        }
+        if (!parts.length) return { score: null, note: 'No depth-chart data' };
+        const wsum = parts.reduce((a, b) => a + b.w, 0);
+        const score = clamp(parts.reduce((a, b) => a + b.w * b.s, 0) / wsum, -1, 1);
+        if (num(r.projTargets) != null) {
+            const unit = r.shareBasis === 'touches' ? 'touches' : r.shareBasis === 'attempts' ? 'attempts' : r.shareBasis === 'tackles' ? 'tackles' : 'targets';
+            let n = Number(r.projTargets).toFixed(1) + ' projected ' + unit;
+            if (num(r.sleeperTargets) != null) n += ', Sleeper ' + Number(r.sleeperTargets).toFixed(1);
+            notes.push(n);
+        }
+        return { score, note: notes.join(' · ') };
     }
 
     function scoreHealth(input) {
@@ -348,7 +392,7 @@
     App.MatchupEngine = App.MatchupEngine || {
         WEIGHTS, SWING, LABELS,
         factorScores, project, gradeFor, verdictFor,
-        scorers: SCORERS,
+        scorers: SCORERS, rankEffect, shareEffect, RANK_EFFECT, SHARE_SCALE,
     };
     /* global module */
     if (typeof module !== 'undefined' && module.exports) module.exports = App.MatchupEngine;

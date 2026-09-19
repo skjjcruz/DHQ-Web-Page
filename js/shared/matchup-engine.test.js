@@ -42,8 +42,8 @@ test('questionable trims the number and cuts the floor harder than the ceiling',
 
 test('a factor can never move the number more than weight × SWING percent', () => {
     // role has the biggest weight (22) → max ±11%
-    const best = projectWith({ role: { depthRank: 1, share: 1 } });
-    const worst = projectWith({ role: { depthRank: 4, share: 0 } });
+    const best = projectWith({ role: { posRank: 1, share: 0.3, snapShare: 1 } });
+    const worst = projectWith({ role: { posRank: 4, share: 0, snapShare: 0 } });
     assert.ok(best.mult <= 1 + 0.22 * E.SWING + 1e-9);
     assert.ok(worst.mult >= 1 - 0.22 * E.SWING - 1e-9);
     assert.ok(best.mult > 1 && worst.mult < 1);
@@ -137,7 +137,7 @@ test('grades follow the multiplier thresholds', () => {
 
 test('the "why" list is sorted by impact and only lists factors that had data', () => {
     const p = projectWith({
-        role: { depthRank: 1, share: 0.9 },
+        role: { posRank: 1, share: 0.25, snapShare: 0.9 },
         opponent: { rankVsPos: 30 },
         luck: { tdRate: 0.06, expectedTdRate: 0.06 },
     });
@@ -148,12 +148,12 @@ test('the "why" list is sorted by impact and only lists factors that had data', 
 
 test('a full stacked best case and worst case stay inside sane bounds', () => {
     const best = projectWith({
-        role: { depthRank: 1, share: 1 }, health: { status: '' }, opponent: { rankVsPos: 32 },
+        role: { posRank: 1, share: 0.3, snapShare: 1 }, health: { status: '' }, opponent: { rankVsPos: 32 },
         game: { impliedTotal: 31, home: true }, coaching: { team: 1, opp: 0 }, h2h: { games: 6, wins: 6, avgMargin: 20, division: true },
         trench: { mine: 95, theirs: 40 }, trend: { last3: 25, season: 12 }, teamContext: { qbGrade: 92, recordDiff: 1 }, luck: { tdRate: 0, expectedTdRate: 0.06 },
     });
     const worst = projectWith({
-        role: { depthRank: 3, share: 0 }, health: { status: 'D', practice: 'DNP', weeksSinceReturn: 0 }, opponent: { rankVsPos: 1 },
+        role: { posRank: 4, share: 0, snapShare: 0 }, health: { status: 'D', practice: 'DNP', weeksSinceReturn: 0 }, opponent: { rankVsPos: 1 },
         game: { impliedTotal: 14, home: false, international: true, weather: { display: 'Snow' } }, coaching: { team: 0, opp: 1 }, h2h: { games: 6, wins: 0, avgMargin: -20, division: true },
         trench: { mine: 40, theirs: 95 }, trend: { last3: 4, season: 12 }, teamContext: { qbGrade: 40, recordDiff: -1 }, luck: { tdRate: 0.2, expectedTdRate: 0.06 },
     });
@@ -162,4 +162,46 @@ test('a full stacked best case and worst case stay inside sane bounds', () => {
     assert.ok(best.mult < 1.6, 'best case ' + best.mult);
     assert.ok(worst.mult > 0.5, 'worst case ' + worst.mult);
     assert.ok(best.points.floor <= best.points.median && best.points.median <= best.points.ceiling);
+});
+
+test('role: WR1 with the targets beats WR2; a WR2 getting WR1 volume closes the gap', () => {
+    const wr1 = projectWith({ role: { posRank: 1, share: 0.26, snapShare: 0.9, gamesPlayed: 6 } });
+    const wr2 = projectWith({ role: { posRank: 2, share: 0.15, snapShare: 0.85, gamesPlayed: 6 } });
+    const wr2hot = projectWith({ role: { posRank: 2, share: 0.27, snapShare: 0.85, gamesPlayed: 6 } });
+    const wr3 = projectWith({ role: { posRank: 3, share: 0.08, snapShare: 0.6, gamesPlayed: 6 } });
+    assert.ok(wr1.mult > wr2.mult && wr2.mult > wr3.mult);
+    assert.ok(wr2hot.mult > wr2.mult, 'volume lifts the WR2');
+    assert.ok((wr2hot.mult - wr2.mult) > (wr1.mult - wr2hot.mult), 'volume closes most of the gap; the chart still counts');
+});
+
+test('role: an RB2 is a backup but a WR2 is a starter', () => {
+    assert.ok(E.rankEffect('RB', 2) < 0);
+    assert.ok(E.rankEffect('WR', 2) > 0);
+    assert.equal(E.rankEffect('TE', 1), 1);
+    assert.equal(E.rankEffect('QB', 2), -1);
+    assert.equal(E.rankEffect('WR', 9), -1, 'deeper than the table is the bottom');
+});
+
+test('role: early season leans on the depth chart, later the ball share takes over', () => {
+    const chartSaysNo = { posRank: 3, share: 0.28, snapShare: 0.8 };
+    const early = projectWith({ role: Object.assign({ gamesPlayed: 1 }, chartSaysNo) });
+    const later = projectWith({ role: Object.assign({ gamesPlayed: 8 }, chartSaysNo) });
+    assert.ok(later.mult > early.mult, 'the targets count for more once there are enough games');
+});
+
+test('role: the why note reads depth chart, share, snaps and projected targets', () => {
+    const p = projectWith({ role: { posRank: 2, share: 0.27, shareRank: 1, shareBasis: 'targets', snapShare: 0.84, projTargets: 7.4, sleeperTargets: 6.5, gamesPlayed: 5 } });
+    const note = p.factors.find(f => f.key === 'role').note;
+    assert.equal(note, 'WR2 on the depth chart · 27% of team targets (1st on team) · 84% of snaps · 7.4 projected targets, Sleeper 6.5');
+});
+
+test('role: only snaps known still scores, nothing known is no data', () => {
+    assert.ok(projectWith({ role: { snapShare: 0.95 } }).mult > 1);
+    assert.equal(projectWith({ role: {} }).mult, 1);
+    assert.ok(projectWith({ role: {} }).missing.includes('role'));
+});
+
+test('role: kickers and team defenses sit the factor out', () => {
+    assert.equal(projectWith({ position: 'K', role: { posRank: 1 } }).mult, 1);
+    assert.equal(projectWith({ position: 'DEF', role: { posRank: 1 } }).mult, 1);
 });
