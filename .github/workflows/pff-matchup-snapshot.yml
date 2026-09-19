@@ -1,0 +1,57 @@
+# Refreshes data/pff-matchup-snapshot.js from the PFF Developer API four
+# times a day (and on demand) using the PFF_API_KEY repo secret. The key
+# never reaches the browser; the app only reads the generated file.
+name: PFF matchup snapshot
+
+on:
+  schedule:
+    - cron: '17 3,9,15,21 * * *'   # every six hours, UTC
+  workflow_dispatch:
+    inputs:
+      season:
+        description: 'Season (four-digit year). Leave blank for the current season.'
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pff-matchup-snapshot
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check the secret is present
+        env:
+          PFF_API_KEY: ${{ secrets.PFF_API_KEY }}
+        run: |
+          if [ -z "$PFF_API_KEY" ]; then
+            echo "::error::PFF_API_KEY secret is missing. Add it under Settings → Secrets and variables → Actions."
+            exit 2
+          fi
+          echo "PFF_API_KEY is set (${#PFF_API_KEY} characters)."
+
+      - name: Build the snapshot
+        env:
+          PFF_API_KEY: ${{ secrets.PFF_API_KEY }}
+        run: node scripts/build-pff-matchup-snapshot.mjs ${{ github.event.inputs.season }}
+
+      - name: Commit if changed
+        run: |
+          git config user.name "dhq-snapshot-bot"
+          git config user.email "noreply@dhqfootball.com"
+          git add data/pff-matchup-snapshot.js
+          if git diff --cached --quiet; then
+            echo "Snapshot unchanged, nothing to commit."
+          else
+            git commit -m "PFF matchup snapshot $(date -u '+%Y-%m-%d %H:%M UTC')"
+            git push
+          fi
