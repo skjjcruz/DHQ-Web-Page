@@ -302,17 +302,27 @@
         if (P === 'QB') {
             const pieces = (c.pieces || []).filter(p => p && num(p.share) != null);
             if (!pieces.length) return { score: null, note: 'No supporting-cast data' };
-            let lost = 0;
+            let lost = 0, down = 0;
             const gone = [];
             for (const p of pieces) {
                 const w = castStatusWeight(p.status);
                 if (!w) continue;
                 lost += num(p.share) * w;
+                down += w;
                 gone.push((p.pos || '') + (p.rank ? p.rank : '') + ' ' + (p.name || '') + ' ' + (w >= 0.85 ? 'out' : 'questionable') + ' (' + Math.round(num(p.share) * 100) + '%)');
             }
-            // Losing weapons worth half the team's targets is the bottom of the scale.
-            const score = clamp(0.25 - lost * 2.5, -1, 0.25);
-            const note = gone.length ? gone.join(' · ') : 'All his weapons in: ' + pieces.map(p => (p.pos || '') + (p.rank || '')).join(', ');
+            // Cumulative, not linear (owner ruling 2026-09-20): losing one
+            // favorite target barely registers because the throws go
+            // somewhere else; the second loss hurts; by the third he is
+            // throwing to the bottom of the depth chart. The share lost is
+            // squared, and each man down past the first adds a step.
+            //   one WR1 at 25%          → about -0.01
+            //   WR1 + WR2 (40%)         → about -0.55
+            //   WR1 + WR2 + TE1 (55%)   → -1 (bottom)
+            const score = clamp(0.25 - 4.1 * lost * lost - 0.15 * Math.max(0, down - 1), -1, 0.25);
+            const note = gone.length
+                ? (Math.round(down) >= 2 ? Math.round(down) + ' weapons down, ' : '') + Math.round(lost * 100) + '% of his targets out: ' + gone.join(', ')
+                : 'All his weapons in: ' + pieces.map(p => (p.pos || '') + (p.rank || '')).join(', ');
             return { score, note };
         }
         // Everyone else lives and dies with the quarterback under center.

@@ -673,13 +673,15 @@
     function expectedShare(pid, grp, team, ctx, opts) {
         const players = opts.playersData || {};
         let best = 0;
-        // This season's share only once the team has three games; one
-        // game of targets says nothing about who was expected to matter.
+        // This season's share counts from game one for receivers and backs
+        // (owner ruling 2026-09-20: Zay Flowers at 43% of week-one targets
+        // was spot on). For quarterbacks it needs three team games, so one
+        // week of a fill-in starter does not make him the expected QB1.
         const teamRow = opts.statsData && opts.statsData['TEAM_' + team];
         const teamGames = teamRow ? (num(teamRow.gp) || 0) : 0;
         const cur = teamBall(ctx, opts.statsData, 'season', team, grp, players);
         const st = opts.statsData && opts.statsData[pid];
-        if (teamGames >= 3 && cur > 0 && st) best = Math.max(best, ballOf(grp, st) / cur);
+        if ((grp !== 'QB' || teamGames >= 3) && cur > 0 && st) best = Math.max(best, ballOf(grp, st) / cur);
         const priorTot = teamBall(ctx, opts.priorData, 'prior', team, grp, players);
         const pr = opts.priorData && opts.priorData[pid];
         if (priorTot > 0 && pr) best = Math.max(best, ballOf(grp, pr) / priorTot);
