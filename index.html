@@ -114,7 +114,7 @@
     <link rel="preload" as="script" href="vendor/supabase.min.js">
     <link rel="preload" as="script" href="vendor/react.production.min.js">
     <link rel="preload" as="script" href="vendor/react-dom.production.min.js">
-    <script src="js/shared/shared-loader.js?v=4cb42206d0"></script>
+    <script src="js/shared/shared-loader.js?v=c84baabc7a"></script>
     <!-- Season-rollover cache hygiene — must run early, before any surface reads caches. -->
     <script src="js/shared/season-guard.js?v=988bfb076d"></script>
     <!-- Native-shell external-link guard: outside links must never strand the WKWebView. -->
@@ -146,12 +146,15 @@ if (_isLocalDev) {
     },
   };
 }
-// ═══ GRAFT PHASE 4 (owner-approved, 2026-09-05): the behavioral-model
-// engine is ON for this site. Sleeper leagues price through values-v2
-// and assess through the one brain; non-Sleeper leagues automatically
-// stay on the original engine (the switch is per-provider inside
-// dhq-engine.js). Rollback: set this to false — one line.
-window.__DHQ_ENGINE_V2 = true;
+// ═══ Value engine switch ═══
+// true  = the v2 points-over-waiver formula (values-v2.js), live 2026-09-05
+//         to 2026-09-20.
+// false = the original market-blended engine inside dhq-engine.js.
+// Owner ruling 2026-09-20: the original engine returns. It agreed with
+// the dynasty market at 0.92 against v2's 0.84, kept veteran IDP priced,
+// and did not put pick-slot rookies above Gibbs and Bijan. The one-brain
+// assessments (health, tiers, record-first power rank) run either way.
+window.__DHQ_ENGINE_V2 = false;
 const WR_SHARED_FILES = [
   'app-config.js',
   'bug-capture.js',
@@ -3198,7 +3201,7 @@ window.addEventListener('appinstalled', () => {
 <!-- Deploy tag (owner ask 2026-08-19): a tiny always-visible build code so the
      owner can read back exactly which version his device is running before
      testing — kills the stale-cache guessing game. Bump the code every deploy. -->
-<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b131 · LAB61</div>
+<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b131 · LAB62</div>
 </body>
 </html>
 <!-- build 1774212614 -->

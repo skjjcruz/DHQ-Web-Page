@@ -2390,11 +2390,15 @@ async function loadLeagueIntel(){
     // Notify subscribers that LeagueIntel is ready (replaces direct render calls)
     if(window.DhqEvents)window.DhqEvents.emit('li:loaded',{source:'fresh'});
 
-    // ═══ GRAFT PHASE 2: one-brain bridge (flag-guarded) ═══
-    // With the v2 engine on, the ratified assessment brain computes
-    // after values land; team-assess overlays it when present. Any
-    // failure logs and leaves the original assessments untouched.
-    if(engineV2){_dhqComputeOneBrain(S).catch(e=>window.dhqLog?.('oneBrain',e));}
+    // ═══ One-brain bridge ═══
+    // The ratified assessment brain (health, tiers, record-first power
+    // rank) reads the points ledger, not the value formula, so it runs
+    // whichever engine priced the players (owner ruling 2026-09-20: the
+    // original value engine returns, the brain stays). It computes after
+    // values land; team-assess overlays it when present. Any failure logs
+    // and leaves the original assessments untouched. Sleeper leagues only,
+    // matching the modules' own platform guard.
+    if(platform==='sleeper'){_dhqComputeOneBrain(S).catch(e=>window.dhqLog?.('oneBrain',e));}
 
   }catch(e){
     console.warn('LeagueIntel error:',e);
