@@ -30,7 +30,9 @@
 //   h2h          8  team-vs-team history, division games count double
 //   trench       8  offensive line vs defensive line (best line wins)
 //   trend        8  last three weeks vs season average
-//   teamContext  3  quarterback quality and team record
+//   cast         8  supporting cast: is his quarterback (or, for a QB,
+//                   his receivers and back) healthy and the real starter?
+//                   Lines are left out on purpose; the trench factor has them.
 //   luck         3  touchdown rate vs what is sustainable (regression)
 //
 // This file is PURE: it never fetches anything. Feeds (Sleeper, ESPN,
@@ -43,15 +45,15 @@
     const App = root.App = root.App || {};
 
     const WEIGHTS = {
-        role: 22,
-        health: 14,
+        role: 20,
+        health: 11,
         opponent: 14,
         game: 12,
         coaching: 8,
         h2h: 8,
         trench: 8,
         trend: 8,
-        teamContext: 3,
+        cast: 8,
         luck: 3,
     };
 
@@ -60,7 +62,7 @@
     // so role shrinks and the freed weight goes to the two factors that
     // missed Thursday night's shootout: opponent and game environment.
     const WEIGHTS_DHQ = {
-        role: 12, health: 14, opponent: 18, game: 18, coaching: 8, h2h: 8, trench: 8, trend: 8, teamContext: 3, luck: 3,
+        role: 12, health: 11, opponent: 18, game: 18, coaching: 8, h2h: 8, trench: 8, trend: 8, cast: 6, luck: 3,
     };
 
     // How far a factor at full strength may move the number, as a share
@@ -76,7 +78,7 @@
         h2h: 'Head-to-head history',
         trench: 'Trench edge (OL vs DL)',
         trend: 'Trend line',
-        teamContext: 'Team context',
+        cast: 'Supporting cast',
         luck: 'Luck & regression',
     };
 
@@ -283,15 +285,48 @@
         return { score: s, note: label + ' (' + last3.toFixed(1) + ' last 3 vs ' + season.toFixed(1) + ' season)' };
     }
 
-    function scoreTeamContext(input) {
-        const c = input.teamContext || {};
-        const qb = num(c.qbGrade), rec = num(c.recordDiff);
-        if (qb == null && rec == null) return { score: null, note: 'No team context' };
-        let s = 0;
-        const notes = [];
-        if (qb != null) { s += clamp((qb - 65) / 25, -1, 1) * 0.6; notes.push('QB grade ' + Math.round(qb)); }
-        if (rec != null) { s += clamp(rec, -1, 1) * 0.4; notes.push(rec > 0 ? 'Better record' : rec < 0 ? 'Worse record' : 'Same record'); }
-        return { score: clamp(s, -1, 1), note: notes.join(' · ') };
+    // ── Supporting cast ──────────────────────────────────────────────
+    // input.cast = { qb: { name, status, grade, backup }, pieces: [{ name, pos, rank, share, status }] }
+    //   qb      the quarterback who will actually start for the player's team
+    //           (backup: true when the depth-chart QB1 is out and QB2 starts)
+    //   pieces  for a quarterback: his WR1-3, TE1 and RB1 with each one's
+    //           share of the team's targets/touches and injury status
+    // Lines are never in here; the trench factor already grades them.
+    const CAST_OUT = { OUT: 1, IR: 1, PUP: 1, SUS: 1, NA: 1, COV: 1, D: 0.85, Q: 0.3 };
+    function castStatusWeight(status) { return CAST_OUT[String(status || '').trim().toUpperCase()] || 0; }
+    function scoreCast(input) {
+        const c = input.cast;
+        if (!c) return { score: null, note: 'No supporting-cast data' };
+        const P = pos(input);
+        if (IDP_POSITIONS.has(P) || P === 'DEF') return { score: null, note: 'No supporting-cast rule at this position' };
+        if (P === 'QB') {
+            const pieces = (c.pieces || []).filter(p => p && num(p.share) != null);
+            if (!pieces.length) return { score: null, note: 'No supporting-cast data' };
+            let lost = 0;
+            const gone = [];
+            for (const p of pieces) {
+                const w = castStatusWeight(p.status);
+                if (!w) continue;
+                lost += num(p.share) * w;
+                gone.push((p.pos || '') + (p.rank ? p.rank : '') + ' ' + (p.name || '') + ' ' + (w >= 0.85 ? 'out' : 'questionable') + ' (' + Math.round(num(p.share) * 100) + '%)');
+            }
+            // Losing weapons worth half the team's targets is the bottom of the scale.
+            const score = clamp(0.25 - lost * 2.5, -1, 0.25);
+            const note = gone.length ? gone.join(' · ') : 'All his weapons in: ' + pieces.map(p => (p.pos || '') + (p.rank || '')).join(', ');
+            return { score, note };
+        }
+        // Everyone else lives and dies with the quarterback under center.
+        const qb = c.qb;
+        if (!qb) return { score: null, note: 'No quarterback data' };
+        const w = castStatusWeight(qb.status);
+        const grade = num(qb.grade) > 0 ? num(qb.grade) : null;   // 0 = not graded yet
+        const quality = grade != null ? clamp((grade - 65) / 25, -1, 1) * 0.5 : 0;
+        let score, note;
+        if (qb.backup) { score = clamp(-0.6 + quality * 0.5, -1, -0.3); note = 'Backup QB ' + (qb.name || '') + ' starting' + (grade != null ? ' (grade ' + Math.round(grade) + ')' : ''); }
+        else if (w >= 0.85) { score = -0.9; note = 'QB1 ' + (qb.name || '') + ' out'; }
+        else if (w > 0) { score = clamp(quality - 0.35, -1, 1); note = 'QB1 ' + (qb.name || '') + ' questionable' + (grade != null ? ' (grade ' + Math.round(grade) + ')' : ''); }
+        else { score = quality; note = 'QB1 ' + (qb.name || '') + ' healthy' + (grade != null ? ' (grade ' + Math.round(grade) + ')' : ''); }
+        return { score, note };
     }
 
     // A player scoring touchdowns far above the rate his usage supports is
@@ -317,7 +352,7 @@
         h2h: scoreH2h,
         trench: scoreTrench,
         trend: scoreTrend,
-        teamContext: scoreTeamContext,
+        cast: scoreCast,
         luck: scoreLuck,
     };
 
