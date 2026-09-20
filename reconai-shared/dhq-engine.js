@@ -1207,35 +1207,7 @@ async function loadLeagueIntel(){
     const pprVal=(sc.rec!=null&&sc.rec>=0.9)?1:(sc.rec!=null&&sc.rec>=0.4)?0.5:0;
     let fcRows=[];
     try{const _fr=await fetch(`https://api.fantasycalc.com/values/current?isDynasty=true&numQbs=${isSF?2:1}&numTeams=${totalTeams}&ppr=${pprVal}`);if(_fr.ok)fcRows=await _fr.json();}catch(e){/* leash optional */}
-    // ═══ Rookie rule (owner ruling 2026-09-16): national ADP is the baseline ═══
-    // Sleeper's season projections carry the ADP ladders (dynasty / redraft /
-    // superflex / IDP). The app already downloads them at boot; the shared
-    // cache hands them back without a second network trip.
-    const sfProj=window.Sleeper?.fetchSeasonProjections||(yr=>sf('/projections/nfl/regular/'+yr).catch(()=>({})));
-    let seasonAdp={};
-    try{seasonAdp=(await sfProj(curSeason))||{};}catch(e){seasonAdp={};}
-    const _lgType=Number(league?.settings?.type);
-    const _lgText=[league?.type,league?.metadata?.type,league?.metadata?.league_type,league?.metadata?.draft_type].filter(Boolean).join(' ').toLowerCase();
-    const formatV2={
-      dynasty:_lgType===2||_lgText.includes('dynasty'),
-      sf:isSF,
-      ppr:pprVal===1?'ppr':pprVal===0.5?'half':'std',
-      idp:((starterCounts.DL||0)+(starterCounts.LB||0)+(starterCounts.DB||0))>0,
-    };
-    const curSeasonPicks=allDraftPicks.filter(dp=>parseInt(dp.season)===curSeason);
-    // Waiver rookies price only once the league's rookie draft has run (at
-    // least one full round on the books), so a live draft board keeps its
-    // prospect consensus. Redraft leagues have no such gate.
-    const waiverRookiesV2=!formatV2.dynasty||curSeasonPicks.length>=totalTeams;
-    const prospectRankOfV2=(p)=>{
-      try{
-        const nm=p.full_name||((p.first_name||'')+' '+(p.last_name||'')).trim();
-        const pr=(typeof window.findProspect==='function'&&nm)?window.findProspect(nm):null;
-        const r=pr?(pr.consensusRank||pr.rank||null):null;
-        return (Number.isFinite(+r)&&+r>0)?+r:null;
-      }catch(e){return null;}
-    };
-    const v2Input={
+    const v2=window.WrLabValuesV2.computeFromData({
       league:{league_id:S.currentLeagueId,scoring_settings:sc,roster_positions:rp,season:curSeason},
       rosters:S.rosters,
       playersData:S.players,
@@ -1243,54 +1215,15 @@ async function loadLeagueIntel(){
       stB:seasonStatsRaw[curSeason-2]||{},
       stCur:seasonStatsRaw[curSeason]||{},
       pff:pffSnap.byName||{},
-      draftPicks:curSeasonPicks,
+      draftPicks:allDraftPicks.filter(dp=>parseInt(dp.season)===curSeason),
       pickValues:dhqPickValues,
       fcRows,
-      adp:seasonAdp,
-      format:formatV2,
-      prospectRankOf:prospectRankOfV2,
-      waiverRookies:waiverRookiesV2,
-    };
-    let v2=window.WrLabValuesV2.computeFromData(v2Input);
-    // ═══ Picks speak the rookie ladder's currency (owner call 2026-09-16) ═══
-    // Pick N is worth what the N-th rookie in the national ladder is worth in
-    // THIS league (1.01 = the top rookie; later slots smoothed over a three-
-    // pick window so one player never spikes a slot). Slots past the ladder
-    // scale the industry model by the same ratio; future years keep their
-    // 12%-a-year discount through dhqPickValueFn, which reads this table.
-    // Dynasty leagues only. The slot nudge then re-reads the repriced table.
-    let pickRepriceNote='';
-    try{
-      const lad=(v2.rookieLadder||[]).map(r=>r.adpVal);
-      if(formatV2.dynasty&&lad.length>=8){
-        const rdRounds=Math.min(7,((draftMeta||[]).find(m=>parseInt(m.season)===curSeason)||(draftMeta||[])[0]||{}).rounds||5);
-        const maxPick=rdRounds*totalTeams;
-        const model1=dhqPickValues[1]?.value||0;
-        const scale=model1>0?Math.max(0.4,Math.min(1.5,lad[0]/model1)):1;
-        let prev=Infinity;
-        for(let n=1;n<=maxPick;n++){
-          let val;
-          if(n===1)val=Math.round(lad[0]);
-          else if(n<=lad.length){const a=Math.max(0,n-2),b=Math.min(lad.length-1,n);let s=0,c=0;for(let i=a;i<=b;i++){s+=lad[i];c++;}val=Math.round(s/c);}
-          else if(dhqPickValues[n])val=Math.round(dhqPickValues[n].value*scale);
-          else continue;
-          if(!dhqPickValues[n])dhqPickValues[n]={value:0,hitRate:0,starterRate:0,avgNorm:0,samples:0,allSamples:0};
-          if(dhqPickValues[n].modelValue==null)dhqPickValues[n].modelValue=dhqPickValues[n].value;
-          dhqPickValues[n].value=Math.min(val,prev);
-          dhqPickValues[n].source='rookieLadder';
-          prev=dhqPickValues[n].value;
-        }
-        v2=window.WrLabValuesV2.computeFromData(v2Input); // slot nudge on the repriced table
-        pickRepriceNote=', picks repriced off the rookie ladder (1.01 '+model1+' -> '+dhqPickValues[1].value+')';
-      }
-    }catch(e){console.warn('pick reprice skipped:',e);}
+    });
     playerScores=v2.values;
     playerMeta=v2.meta;
     rookieCount=Object.keys(playerMeta).filter(pid=>playerMeta[pid].rookie).length;
     vetBlendCount=Object.keys(playerMeta).filter(pid=>playerMeta[pid].mkt!=null).length;
-    const rookieVia={};Object.keys(playerMeta).forEach(pid=>{const m=playerMeta[pid];if(m.rookie){rookieVia[m.via||'?']=(rookieVia[m.via||'?']||0)+1;}});
-    sourceSnapshots={labV2:{waiver:v2.waiver,format:formatV2,waiverRookies:waiverRookiesV2,rookieVia,rookieLadder:v2.rookieLadder,builtAt:new Date().toISOString()}};
-    console.log('DHQ rookies: '+JSON.stringify(rookieVia)+' ('+(v2.rookieLadder||[]).length+' ranked by ADP)'+pickRepriceNote);
+    sourceSnapshots={labV2:{waiver:v2.waiver,builtAt:new Date().toISOString()}};
     // Slim rows + lineup context keep steps 9-11 and the AI tier tables fed.
     recentPlayers=Object.keys(playerMeta)
       .filter(pid=>rosteredSetV2.has(pid))
