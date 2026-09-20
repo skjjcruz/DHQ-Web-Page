@@ -620,6 +620,75 @@
         return { median: +pts.toFixed(2), floor: +(pts * 0.7).toFixed(2), ceiling: +(pts * 1.35).toFixed(2), why: built.why, line: built.line };
     }
 
+    // ── Preseason expectations ────────────────────────────────────────
+    // Sleeper's season-long projections, published before the season, are
+    // the one feed that still remembers a player was expected to be the
+    // WR2 after an injury pushed him to the bottom of every depth chart.
+    let _seasonProj = { season: null, data: null, promise: null };
+    async function seasonProjections(season) {
+        if (_seasonProj.data && _seasonProj.season === season) return _seasonProj.data;
+        if (_seasonProj.promise && _seasonProj.season === season) return _seasonProj.promise;
+        _seasonProj.season = season;
+        _seasonProj.promise = (async () => {
+            try {
+                const r = await fetch('https://api.sleeper.app/v1/projections/nfl/regular/' + season);
+                const d = r.ok ? await r.json() : null;
+                _seasonProj = { season, data: d && Object.keys(d).length > 1000 ? d : null, promise: null };
+            } catch (e) { _seasonProj = { season, data: null, promise: null }; }
+            return _seasonProj.data;
+        })();
+        return _seasonProj.promise;
+    }
+    // Preseason volume for the expected-share math: receptions for
+    // receivers, carries plus receptions for backs, attempts for QBs.
+    function projBall(grp, r) {
+        if (!r) return 0;
+        if (grp === 'QB') return num(r.pass_att) || 0;
+        if (grp === 'RB') return (num(r.rush_att) || 0) + (num(r.rec) || 0);
+        return num(r.rec) || 0;
+    }
+    // Team total on the same basis as the player's share: receptions across
+    // every skill position for receivers, carries plus receptions across
+    // every skill position for backs, attempts across the quarterbacks.
+    function projTeamTotal(ctx, team, grp, playersData) {
+        ctx._pt = ctx._pt || {};
+        const basis = BALL_BASIS[grp];
+        const k = team + '|' + basis;
+        if (ctx._pt[k] != null) return ctx._pt[k];
+        let total = 0;
+        if (ctx.seasonProj && playersData) {
+            for (const pid of Object.keys(ctx.seasonProj)) {
+                const p = playersData[pid];
+                if (!p || String(p.team || '').toUpperCase() !== team) continue;
+                const g = posGroup(p);
+                if (basis === 'attempts' ? g !== 'QB' : !(g === 'WR' || g === 'TE' || g === 'RB' || g === 'QB')) continue;
+                total += projBall(grp, ctx.seasonProj[pid]);
+            }
+        }
+        ctx._pt[k] = total;
+        return total;
+    }
+    // The most a player was ever expected to carry: this season's share,
+    // last season's share, or his preseason projected share.
+    function expectedShare(pid, grp, team, ctx, opts) {
+        const players = opts.playersData || {};
+        let best = 0;
+        // This season's share only once the team has three games; one
+        // game of targets says nothing about who was expected to matter.
+        const teamRow = opts.statsData && opts.statsData['TEAM_' + team];
+        const teamGames = teamRow ? (num(teamRow.gp) || 0) : 0;
+        const cur = teamBall(ctx, opts.statsData, 'season', team, grp, players);
+        const st = opts.statsData && opts.statsData[pid];
+        if (teamGames >= 3 && cur > 0 && st) best = Math.max(best, ballOf(grp, st) / cur);
+        const priorTot = teamBall(ctx, opts.priorData, 'prior', team, grp, players);
+        const pr = opts.priorData && opts.priorData[pid];
+        if (priorTot > 0 && pr) best = Math.max(best, ballOf(grp, pr) / priorTot);
+        const pt = projTeamTotal(ctx, team, grp, players);
+        const sp = ctx.seasonProj && ctx.seasonProj[pid];
+        if (pt > 0 && sp) best = Math.max(best, projBall(grp, sp) / pt);
+        return best;
+    }
+
     // ── Supporting cast ───────────────────────────────────────────────
     // The team's depth chart by fantasy position (ESPN roles, Sleeper's
     // field as backup), each slot mapped to the Sleeper player so we know
@@ -669,33 +738,59 @@
         const depth = teamDepth(team, ctx, opts);
         const players = opts.playersData || {};
         const nameOf = (id) => fullName(players[id]);
+        const hurt = (m) => (OUT_FOR_SHARE[statusOf(m)] || 0) >= 0.3 || statusOf(m) === 'Q';
         if (grp === 'QB') {
             const pieces = [];
+            const seen = new Set();
             const add = (g, maxRank) => {
                 for (const slot of depth[g].filter(x => x.rank <= maxRank)) {
                     const m = players[slot.pid];
-                    if (!m || slot.pid === pid) continue;
-                    const total = teamBall(ctx, opts.statsData, 'season', team, g, players);
-                    const st = opts.statsData && opts.statsData[slot.pid];
-                    const share = total > 0 && st ? ballOf(g, st) / total : (BASE_SHARE[g] ? BASE_SHARE[g][Math.min(BASE_SHARE[g].length, slot.rank) - 1] : 0);
+                    if (!m || slot.pid === pid || seen.has(slot.pid)) continue;
+                    seen.add(slot.pid);
+                    // his real weight: what he carries now, or what he was expected to
+                    const share = Math.max(expectedShare(slot.pid, g, team, ctx, opts), BASE_SHARE[g] ? BASE_SHARE[g][Math.min(BASE_SHARE[g].length, slot.rank) - 1] : 0);
                     pieces.push({ name: nameOf(slot.pid), pos: g, rank: slot.rank, share: +share.toFixed(3), status: statusOf(m) });
                 }
             };
             add('WR', 3); add('TE', 1); add('RB', 1);
+            // Injured weapons the depth chart has already dropped: anyone on
+            // the roster at WR/TE/RB who is hurt and was expected to carry a
+            // real share (this season, last season or preseason).
+            for (const mid of Object.keys(players)) {
+                const m = players[mid];
+                if (!m || mid === pid || seen.has(mid) || String(m.team || '').toUpperCase() !== team) continue;
+                const g = posGroup(m);
+                if (!(g === 'WR' || g === 'TE' || g === 'RB') || !hurt(m)) continue;
+                const share = expectedShare(mid, g, team, ctx, opts);
+                if (share < 0.08) continue;
+                seen.add(mid);
+                pieces.push({ name: nameOf(mid), pos: g, rank: null, share: +share.toFixed(3), status: statusOf(m) });
+            }
             return pieces.length ? { pieces } : null;
         }
-        // Everyone else: the quarterback who will actually start.
+        // Everyone else: the quarterback who will actually start, judged
+        // against the one who was EXPECTED to (this season's attempts, last
+        // season's, or the preseason projection), so a starter the depth
+        // chart has already demoted still counts as the missing man.
         const qbs = depth.QB;
         if (!qbs.length) return null;
-        const q1 = players[qbs[0].pid];
-        const st1 = statusOf(q1);
         // A grade of 0 means PFF has not graded him yet (no snaps), not a terrible QB.
         const gradeOf = (m) => { const pf = m ? pffPlayer(m) : null; const g = pf ? (num(pf.pass) > 0 ? num(pf.pass) : num(pf.off)) : null; return g != null && g > 0 ? g : null; };
-        if (OUT_FOR_SHARE[st1] >= 0.8 && qbs[1]) {
-            const q2 = players[qbs[1].pid];
-            return { qb: { name: nameOf(qbs[1].pid), status: statusOf(q2), grade: gradeOf(q2), backup: true, starterOut: nameOf(qbs[0].pid) } };
+        let expected = null, expShare = 0;
+        for (const mid of Object.keys(players)) {
+            const m = players[mid];
+            if (!m || String(m.team || '').toUpperCase() !== team || posGroup(m) !== 'QB') continue;
+            const sh = expectedShare(mid, 'QB', team, ctx, opts);
+            if (sh > expShare) { expShare = sh; expected = mid; }
         }
-        return { qb: { name: nameOf(qbs[0].pid), status: st1, grade: gradeOf(q1) } };
+        if (!expected) expected = qbs[0].pid;
+        const starter = qbs.find(x => !((OUT_FOR_SHARE[statusOf(players[x.pid])] || 0) >= 0.8)) || qbs[0];
+        const sM = players[starter.pid];
+        if (starter.pid !== expected && (OUT_FOR_SHARE[statusOf(players[expected])] || 0) >= 0.8) {
+            const outNames = [nameOf(expected)].concat(qbs.filter(x => x.pid !== expected && x.pid !== starter.pid && (OUT_FOR_SHARE[statusOf(players[x.pid])] || 0) >= 0.8).map(x => nameOf(x.pid)));
+            return { qb: { name: nameOf(starter.pid), status: statusOf(sM), grade: gradeOf(sM), backup: true, starterOut: outNames.join(', ') } };
+        }
+        return { qb: { name: nameOf(starter.pid), status: statusOf(sM), grade: gradeOf(sM) } };
     }
 
     // ── prepare: the async pieces, once per roster ────────────────────
@@ -704,7 +799,7 @@
         opts = opts || {};
         const season = opts.season || currentSeason();
         const E = espn();
-        const ctx = { season, week, coaching: null, standings: null, priorStandings: null, idp: null, prior: null, depth: null, recentWeeks: [], games: {}, h2h: {} };
+        const ctx = { season, week, coaching: null, standings: null, priorStandings: null, idp: null, prior: null, depth: null, seasonProj: null, recentWeeks: [], games: {}, h2h: {} };
         const jobs = [];
         jobs.push(depthCharts().then(r => { ctx.depth = r; }).catch(() => {}));
         for (let w = Math.max(1, week - RECENT_WEEKS); w < week; w++) {
@@ -717,6 +812,7 @@
         }
         jobs.push(idpRankings(season, opts.playersData).then(r => { ctx.idp = r; }).catch(() => {}));
         jobs.push(priorRankings(season - 1, opts.playersData).then(r => { ctx.prior = r; }).catch(() => {}));
+        jobs.push(seasonProjections(season).then(d => { ctx.seasonProj = d; }).catch(() => {}));
         const list = [...new Set((teams || []).map(t => String(t || '').toUpperCase()).filter(Boolean))];
         if (E) {
             for (const t of list) {
@@ -856,7 +952,7 @@
     }
 
     App.MatchupInputs = App.MatchupInputs || {
-        prepare, build, project, projectRoster, idpRankings, priorRankings, depthCharts, baselineFor, dhqBaselineFor, sleeperPoints, opponentOf, opponentFor, trenchFor, castFor, teamDepth, posGroup, normName, roleFor,
+        prepare, build, project, projectRoster, idpRankings, priorRankings, depthCharts, baselineFor, dhqBaselineFor, sleeperPoints, opponentOf, opponentFor, trenchFor, castFor, teamDepth, expectedShare, seasonProjections, posGroup, normName, roleFor,
     };
     /* global module */
     if (typeof module !== 'undefined' && module.exports) module.exports = App.MatchupInputs;
