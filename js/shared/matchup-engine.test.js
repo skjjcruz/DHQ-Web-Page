@@ -249,12 +249,22 @@ test('supporting cast: a receiver with his QB1 out takes the full hit, a backup 
     assert.match(backup.factors.find(f => f.key === 'cast').note, /Backup QB Clipboard starting/);
 });
 
-test('supporting cast: a quarterback missing his top weapons drops, a full cast is a small plus', () => {
-    const full = projectWith({ position: 'QB', cast: { pieces: [{ name: 'A', pos: 'WR', rank: 1, share: 0.26, status: '' }, { name: 'B', pos: 'TE', rank: 1, share: 0.15, status: '' }] } });
-    const missing = projectWith({ position: 'QB', cast: { pieces: [{ name: 'A', pos: 'WR', rank: 1, share: 0.26, status: 'OUT' }, { name: 'B', pos: 'TE', rank: 1, share: 0.15, status: 'Q' }] } });
-    assert.ok(full.mult > 1);
-    assert.ok(missing.mult < 1);
-    assert.match(missing.factors.find(f => f.key === 'cast').note, /WR1 A out \(26%\) · TE1 B questionable \(15%\)/);
+test('supporting cast: losing one favorite target barely registers, losses pile up fast', () => {
+    const cast = (statuses) => ({ pieces: [
+        { name: 'A', pos: 'WR', rank: 1, share: 0.25, status: statuses[0] || '' },
+        { name: 'B', pos: 'WR', rank: 2, share: 0.15, status: statuses[1] || '' },
+        { name: 'C', pos: 'TE', rank: 1, share: 0.15, status: statuses[2] || '' },
+        { name: 'D', pos: 'RB', rank: 1, share: 0.10, status: '' }] });
+    const s = (statuses) => projectWith({ position: 'QB', cast: cast(statuses) }).factors.find(f => f.key === 'cast').score;
+    const full = s([]), one = s(['OUT']), two = s(['OUT', 'OUT']), three = s(['OUT', 'OUT', 'OUT']);
+    assert.ok(full > 0, 'full cast is a small plus');
+    assert.ok(Math.abs(one) < 0.1, 'one WR1 out is close to nothing: ' + one);
+    assert.ok(two < -0.4 && two > -0.8, 'two down hurts: ' + two);
+    assert.equal(three, -1, 'three down is the bottom');
+    assert.ok((two - one) < (one - full) * -1 || (three - two) < (two - one), 'each loss costs more than the last');
+    const note = projectWith({ position: 'QB', cast: cast(['OUT', 'Q']) }).factors.find(f => f.key === 'cast').note;
+    assert.match(note, /^\d+% of his targets out: WR1 A out \(25%\), WR2 B questionable \(15%\)$/);
+    assert.match(projectWith({ position: 'QB', cast: cast(['OUT', 'OUT']) }).factors.find(f => f.key === 'cast').note, /^2 weapons down, 40% of his targets out/);
 });
 
 test('supporting cast sits out for defenders and kickers keep the QB rule', () => {
