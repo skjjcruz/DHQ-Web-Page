@@ -550,19 +550,24 @@
         // teammates at his position who are out this week.
         if (opts.playersData && opts.statsData) {
             const seasonTotal = teamBall(ctx, opts.statsData, 'season', team, grp, opts.playersData);
-            const mates = [];
-            let freed = 0, healthySum = 0;
-            for (const mid of Object.keys(opts.statsData)) {
-                if (mid.startsWith('TEAM_')) continue;
-                const m = opts.playersData[mid];
-                if (!m || String(m.team || '').toUpperCase() !== team || posGroup(m) !== grp) continue;
-                const sh = seasonTotal > 0 ? ballOf(grp, opts.statsData[mid]) / seasonTotal : 0;
-                if (sh <= 0) continue;
-                mates.push({ pid: mid, share: sh });
-                const outW = OUT_FOR_SHARE[statusOf(m)] || 0;
-                if (mid !== pid && outW) freed += sh * outW; else healthySum += sh;
+            // Teammates at this position with a season share, once per (team, group).
+            ctx._mates = ctx._mates || {};
+            const mk = team + '|' + grp;
+            if (!ctx._mates[mk]) {
+                const list = [];
+                for (const mid of Object.keys(opts.statsData)) {
+                    if (mid.startsWith('TEAM_')) continue;
+                    const m = opts.playersData[mid];
+                    if (!m || String(m.team || '').toUpperCase() !== team || posGroup(m) !== grp) continue;
+                    const sh = seasonTotal > 0 ? ballOf(grp, opts.statsData[mid]) / seasonTotal : 0;
+                    if (sh > 0) list.push({ pid: mid, share: sh, outW: OUT_FOR_SHARE[statusOf(m)] || 0 });
+                }
+                list.sort((a, b) => b.share - a.share);
+                ctx._mates[mk] = list;
             }
-            mates.sort((a, b) => b.share - a.share);
+            const mates = ctx._mates[mk];
+            let freed = 0, healthySum = 0;
+            for (const m of mates) { if (m.pid !== pid && m.outW) freed += m.share * m.outW; else healthySum += m.share; }
             const idx = mates.findIndex(m => m.pid === pid);
             if (idx >= 0) out.shareRank = idx + 1;
             if (earned != null && freed > 0 && healthySum > 0 && !OUT_FOR_SHARE[statusOf(player)]) earned = earned * (1 + freed / healthySum);

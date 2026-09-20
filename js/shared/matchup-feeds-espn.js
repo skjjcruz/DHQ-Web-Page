@@ -192,8 +192,11 @@
     }
     async function coaching(season) {
         season = season || currentSeason();
+        // A cached map with holes (from before LAB54, or a tab that kept one)
+        // is not a hit: rebuild the missing teams instead of trusting it.
         const hit = cacheGet('coaching_' + season);
-        if (hit) return hit;
+        if (hit && Object.keys(hit).length >= 30 && Object.keys(hit).every(k => hit[k])) return hit;
+        if (hit && !_coachPartial.data) _coachPartial = { season, ts: 0, data: hit };
         if (_coachPartial.data && _coachPartial.season === season && Date.now() - _coachPartial.ts < 10 * 60 * 1000) return _coachPartial.data;
         const T = await teams(season);
         const codes = Object.keys(T);

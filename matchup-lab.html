@@ -85,6 +85,10 @@
         .tile b { color:#fff; font-size:1.1rem; display:block; }
         .diff-up { color:var(--good); } .diff-dn { color:var(--bad); }
         #buildtag { position:fixed; bottom:2px; right:6px; font:700 9px/1.4 monospace; color:rgba(212,175,55,0.55); pointer-events:none; }
+        .pos-tabs { display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 10px; }
+        .pos-tabs button { margin:0; padding:6px 12px; font-size:0.8rem; background:transparent; color:var(--silver); border:1px solid rgba(255,255,255,0.25); }
+        .pos-tabs button.on { background:var(--gold); color:#000; border-color:var(--gold); }
+        #boardSearch { margin:4px 0 8px; }
         @media (max-width:640px) { .row { grid-template-columns:1fr; } .fx { grid-template-columns:60px 1fr; } .fx .n { grid-column:1 / -1; padding-left:60px; } th.hide-m, td.hide-m { display:none; } }
     </style>
 </head>
@@ -113,14 +117,16 @@
         <div class="hint">Week is blank for the current NFL week. Pick one league or all of them; every league is graded with its own scoring.</div>
         <button id="btnLeagues" class="ghost">LOAD LEAGUES</button>
         <button id="btnRun" disabled>GRADE MY ROSTER</button>
+        <button id="btnAll" disabled>GRADE ALL NFL PLAYERS</button>
         <button id="btnReset" class="ghost">Reset</button>
+        <div class="hint">All NFL players grades every player Sleeper has published a line for this week, scored with the selected league's rules (or Sleeper's half-PPR defaults when "All leagues" is picked).</div>
     </div>
 
     <div class="card" id="log" style="display:none"></div>
     <div class="card" id="summary" style="display:none"></div>
     <div class="card" id="readout" style="display:none"></div>
 </div>
-<div id="buildtag">LAB54</div>
+<div id="buildtag">LAB56</div>
 
 <script>
 // Minimal stand-ins for the app core: Sleeper's scoring keys match its stat
@@ -210,6 +216,7 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
             });
             step(state.leagues.length + ' league(s) loaded. Pick one, or grade all of them.', 'ok');
             $('btnRun').disabled = !state.leagues.length;
+            $('btnAll').disabled = false;
         } catch (err) { step('FAILED: ' + err.message, 'bad'); }
         $('btnLeagues').disabled = false;
     }
@@ -387,8 +394,107 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
         });
     }
 
+    // ── All NFL players ───────────────────────────────────────────────
+    // Sleeper's half-PPR defaults with common IDP and kicker values, used
+    // only when no single league is picked.
+    var DEFAULT_SCORING = { pass_yd: 0.04, pass_td: 4, pass_int: -1, pass_2pt: 2, rush_yd: 0.1, rush_td: 6, rush_2pt: 2, rec: 0.5, rec_yd: 0.1, rec_td: 6, rec_2pt: 2, fum_lost: -2,
+        fgm_0_19: 3, fgm_20_29: 3, fgm_30_39: 3, fgm_40_49: 4, fgm_50p: 5, fgmiss: -1, xpm: 1, xpmiss: -1,
+        idp_tkl_solo: 1, idp_tkl_ast: 0.5, idp_tkl_loss: 1, idp_sack: 2, idp_qb_hit: 1, idp_int: 3, idp_pass_def: 1, idp_ff: 2, idp_fum_rec: 2, idp_def_td: 6, idp_safe: 2, idp_blk_kick: 2 };
+    var BOARD_POS = ['QB', 'RB', 'WR', 'TE', 'K', 'DL', 'LB', 'DB'];
+    var board = { rows: [], pos: 'ALL', q: '' };
+
+    async function runAll() {
+        if (!state.user) { step('Load leagues first.', 'bad'); return; }
+        $('btnAll').disabled = true; $('btnRun').disabled = true;
+        logEl.innerHTML = ''; $('summary').style.display = 'none'; $('readout').style.display = 'none'; $('readout').innerHTML = '';
+        var season = Number($('fSeason').value.trim()) || 2026;
+        var pick = $('fLeague').value;
+        try {
+            var shared = await loadShared(season);
+            var scoring = DEFAULT_SCORING, scoringName = 'Sleeper half-PPR defaults';
+            if (pick && pick !== ALL) {
+                var lg = await getJson(SL + '/league/' + pick);
+                scoring = lg.scoring_settings || DEFAULT_SCORING; scoringName = lg.name;
+            }
+            step('3/3 Grading every NFL player with a Sleeper line for week ' + shared.week + ' (' + scoringName + ')…');
+            // Weekly points in this scoring, for the trend factor.
+            S.weeklyPlayerPoints = {};
+            shared.weeksDone.forEach(function (w, i) {
+                var wk = shared.weekly[i] || {}; S.weeklyPlayerPoints[w] = {};
+                Object.keys(wk).forEach(function (pid) { if (pid.indexOf('TEAM_') !== 0) S.weeklyPlayerPoints[w][pid] = +App.calcRawPts(wk[pid], scoring).toFixed(2); });
+            });
+            var pids = Object.keys(S.players).filter(function (pid) {
+                var p = S.players[pid];
+                return p && p.team && BOARD_POS.indexOf(App.MatchupInputs.posGroup(p)) >= 0 && App.WeeklyProj.projLine(pid, shared.week);
+            });
+            var t0 = Date.now();
+            var opts = { playersData: S.players, statsData: shared.statsCur, priorData: shared.statsPrior, scoring: scoring, season: shared.season, sleeperOnly: true };
+            var res = await App.MatchupInputs.projectRoster(pids, shared.week, opts);
+            board.rows = Object.keys(res.projections).map(function (pid) { return { pid: pid, p: res.projections[pid] }; });
+            board.rows.sort(function (a, b) { return b.p.points.median - a.p.points.median; });
+            step('   ' + board.rows.length + ' players graded in ' + ((Date.now() - t0) / 1000).toFixed(1) + 's', 'ok');
+            renderBoard(shared.week, scoringName);
+            step('Done.', 'ok');
+        } catch (err) { step('FAILED: ' + (err && err.message || err), 'bad'); }
+        $('btnAll').disabled = false; $('btnRun').disabled = false;
+    }
+
+    function boardRow(r) {
+        var pl = S.players[r.pid] || {}, p = r.p;
+        var diff = p.available ? p.points.median - p.baseline.median : 0;
+        var diffCls = diff > 0.05 ? 'diff-up' : diff < -0.05 ? 'diff-dn' : '';
+        var status = pl.injury_status ? ' · <span class="warn">' + esc(pl.injury_status) + '</span>' : '';
+        var opp = p.opponentAbbr ? ' vs ' + esc(p.opponentAbbr) : ' · no game';
+        return '<tr class="p b" data-pid="' + esc(r.pid) + '">'
+            + '<td><div class="name">' + esc(nameOf(r.pid)) + '</div><div class="meta">' + esc(p.position) + ' · ' + esc(p.team || pl.team || 'FA') + opp + status + '</div></td>'
+            + '<td class="num hide-m">' + (pl.age || '—') + '</td>'
+            + '<td class="num"><b style="color:#fff">' + fmt(p.points.median) + '</b><div class="meta">' + fmt(p.points.floor) + '–' + fmt(p.points.ceiling) + '</div></td>'
+            + '<td class="num">' + fmt(p.baseline.median) + '</td>'
+            + '<td class="num ' + diffCls + '">' + (diff > 0 ? '+' : '') + fmt(diff) + '</td>'
+            + '<td><span class="g g' + p.grade + '">' + p.grade + '</span></td>'
+            + '</tr>';
+    }
+
+    function renderBoard(week, scoringName) {
+        var tabs = ['ALL'].concat(BOARD_POS).map(function (g) { return '<button data-pos="' + g + '" class="' + (board.pos === g ? 'on' : '') + '">' + g + '</button>'; }).join('');
+        var q = board.q.toLowerCase();
+        var rows = board.rows.filter(function (r) { return (board.pos === 'ALL' || r.p.position === board.pos) && (!q || nameOf(r.pid).toLowerCase().indexOf(q) >= 0 || String(r.p.team || '').toLowerCase() === q); });
+        var counts = { A: 0, B: 0, C: 0, D: 0, F: 0 };
+        rows.forEach(function (r) { counts[r.p.grade]++; });
+        var shown = rows.slice(0, 400);
+        $('readout').style.display = 'block';
+        $('readout').innerHTML = '<h3 style="margin-top:0">WEEK ' + week + ' · ALL NFL PLAYERS · ' + board.rows.length + ' WITH A SLEEPER LINE · ' + esc(scoringName) + '</h3>'
+            + '<div class="pos-tabs">' + tabs + '</div>'
+            + '<input id="boardSearch" placeholder="search a player or team code" value="' + esc(board.q) + '">'
+            + '<div class="grid" style="margin-bottom:10px">' + ['A', 'B', 'C', 'D', 'F'].map(function (g) { return '<div class="tile"><span class="g g' + g + '">' + g + '</span> <b>' + counts[g] + '</b></div>'; }).join('') + '</div>'
+            + '<table><tr><th>Player</th><th class="num hide-m">Age</th><th class="num">DHQ proj</th><th class="num">Sleeper proj</th><th class="num">Δ</th><th>Grade</th></tr>'
+            + shown.map(boardRow).join('') + '</table>'
+            + (rows.length > shown.length ? '<div class="hint">Showing the top ' + shown.length + ' of ' + rows.length + ' by DHQ projection. Narrow by position or search to see the rest.</div>' : '')
+            + '<div class="hint" style="margin-top:12px">DHQ proj = Sleeper\'s published line scored with these rules, then the ten factors. Sleeper proj = the same line before the factors. Δ = DHQ minus Sleeper. Grade = the matchup. Tap a row for the why.</div>';
+        Array.prototype.forEach.call(document.querySelectorAll('.pos-tabs button'), function (b) {
+            b.addEventListener('click', function () { board.pos = b.getAttribute('data-pos'); renderBoard(week, scoringName); });
+        });
+        var search = $('boardSearch');
+        var timer = null;
+        search.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(function () { board.q = search.value.trim(); var pos = search.selectionStart; renderBoard(week, scoringName); var s2 = $('boardSearch'); s2.focus(); try { s2.setSelectionRange(pos, pos); } catch (e) { /* noop */ } }, 250); });
+        // Why panels are built on tap, not up front, so a 1,500-row board stays light.
+        Array.prototype.forEach.call(document.querySelectorAll('tr.p.b'), function (tr) {
+            tr.addEventListener('click', function () {
+                var next = tr.nextElementSibling;
+                if (next && next.classList.contains('why')) { next.style.display = next.style.display === 'none' ? '' : 'none'; return; }
+                var pid = tr.getAttribute('data-pid');
+                var r = board.rows.filter(function (x) { return x.pid === pid; })[0];
+                if (!r) return;
+                var why = document.createElement('tr'); why.className = 'why';
+                why.innerHTML = '<td colspan="6"><div class="fx">' + factorRows(r.p) + '</div>' + (r.p.missing.length ? '<div class="missing">No data for: ' + esc(r.p.missing.map(labelOf).join(', ')) + '</div>' : '') + '</td>';
+                tr.parentNode.insertBefore(why, tr.nextSibling);
+            });
+        });
+    }
+
     $('btnLeagues').addEventListener('click', loadLeagues);
     $('btnRun').addEventListener('click', run);
+    $('btnAll').addEventListener('click', runAll);
     $('btnReset').addEventListener('click', function () { location.reload(); });
 })();
 </script>
