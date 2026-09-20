@@ -567,11 +567,27 @@
                 ctx._mates[mk] = list;
             }
             const mates = ctx._mates[mk];
-            let freed = 0, healthySum = 0;
-            for (const m of mates) { if (m.pid !== pid && m.outW) freed += m.share * m.outW; else healthySum += m.share; }
             const idx = mates.findIndex(m => m.pid === pid);
             if (idx >= 0) out.shareRank = idx + 1;
-            if (earned != null && freed > 0 && healthySum > 0 && !OUT_FOR_SHARE[statusOf(player)]) earned = earned * (1 + freed / healthySum);
+            if (grp === 'WR' || grp === 'TE' || grp === 'RB') {
+                // pass catchers: freed targets flow across WR, TE and RB
+                const extra = OUT_FOR_SHARE[statusOf(player)] ? 0 : freedTargetShare(pid, team, ctx, opts);
+                if (extra > 0) {
+                    out.freedShare = +extra.toFixed(3);
+                    if (grp === 'RB') {
+                        // his share is of touches; convert extra targets into touches
+                        const tgtTotal = teamBall(ctx, opts.statsData, 'season', team, 'WR', opts.playersData);
+                        const touchTotal = teamBall(ctx, opts.statsData, 'season', team, 'RB', opts.playersData);
+                        if (tgtTotal > 0 && touchTotal > 0 && earned != null) earned += extra * tgtTotal / touchTotal;
+                    } else if (earned != null) earned += extra;
+                    else earned = extra;
+                }
+            } else {
+                // quarterbacks and defenders: freed share stays inside the position
+                let freed = 0, healthySum = 0;
+                for (const m of mates) { if (m.pid !== pid && m.outW) freed += m.share * m.outW; else healthySum += m.share; }
+                if (earned != null && freed > 0 && healthySum > 0 && !OUT_FOR_SHARE[statusOf(player)]) earned = earned * (1 + freed / healthySum);
+            }
         }
         // Blend with what his depth-chart slot normally earns: heavier early.
         const base = out.posRank != null && BASE_SHARE[grp] ? BASE_SHARE[grp][Math.min(BASE_SHARE[grp].length, Math.max(1, Math.round(out.posRank))) - 1] : null;
@@ -583,7 +599,13 @@
         if (proj != null) {
             out.share = clamp(proj, 0, 1);
             const pie = teamPie(team, grp, ctx.week, opts, ctx);
-            if (pie != null) out.projTargets = +(pie * out.share).toFixed(1);
+            if (pie != null) {
+                out.projTargets = +(pie * out.share).toFixed(1);
+                if (out.freedShare) {
+                    const tgtPie = teamPie(team, 'WR', ctx.week, opts, ctx);
+                    if (tgtPie != null) out.freedTargets = +(tgtPie * out.freedShare * (early ? 0.6 : 0.85)).toFixed(1);
+                }
+            }
             const line = App.WeeklyProj && App.WeeklyProj.projLine && App.WeeklyProj.projLine(pid, ctx.week);
             if (line) { const st = ballOf(grp, line); if (st > 0) out.sleeperTargets = +st.toFixed(1); }
         }
@@ -689,6 +711,48 @@
         const sp = ctx.seasonProj && ctx.seasonProj[pid];
         if (pt > 0 && sp) best = Math.max(best, projBall(grp, sp) / pt);
         return best;
+    }
+
+    // ── Freed targets across the whole passing game ───────────────────
+    // When receivers go down, the throws do not vanish: they filter to the
+    // healthy receivers, the tight end and the back (owner ruling
+    // 2026-09-20, "a synchronized effort across the entire player field").
+    // Freed share = the expected target share of every hurt WR/TE/RB on the
+    // team; it is handed out to the healthy pass catchers in proportion to
+    // their own target share, tilted so receivers absorb most of it, tight
+    // ends next, backs least.
+    const ABSORB = { WR: 1.0, TE: 0.8, RB: 0.55 };
+    function targetShareOf(pid, team, ctx, opts) {
+        // share of the team's TARGETS for any pass catcher (ballOf('WR') = rec_tgt)
+        return expectedShare(pid, 'WR', team, ctx, opts);
+    }
+    function passPool(team, ctx, opts) {
+        ctx._pool = ctx._pool || {};
+        if (ctx._pool[team]) return ctx._pool[team];
+        const players = opts.playersData || {};
+        let freed = 0, denom = 0;
+        const healthy = {};
+        const hurtList = [];
+        for (const mid of Object.keys(players)) {
+            const m = players[mid];
+            if (!m || String(m.team || '').toUpperCase() !== team) continue;
+            const g = posGroup(m);
+            if (!(g === 'WR' || g === 'TE' || g === 'RB')) continue;
+            const tshare = targetShareOf(mid, team, ctx, opts);
+            if (tshare <= 0) continue;
+            const outW = OUT_FOR_SHARE[statusOf(m)] || 0;
+            if (outW) { freed += tshare * outW; if (tshare >= 0.05) hurtList.push(fullName(m)); }
+            else { healthy[mid] = { grp: g, tshare }; denom += ABSORB[g] * tshare; }
+        }
+        ctx._pool[team] = { freed, denom, healthy, hurt: hurtList };
+        return ctx._pool[team];
+    }
+    // Extra share of the team's targets this healthy pass catcher picks up.
+    function freedTargetShare(pid, team, ctx, opts) {
+        const pool = passPool(team, ctx, opts);
+        const me = pool.healthy[pid];
+        if (!me || pool.freed <= 0 || pool.denom <= 0) return 0;
+        return pool.freed * (ABSORB[me.grp] * me.tshare) / pool.denom;
     }
 
     // ── Supporting cast ───────────────────────────────────────────────
@@ -954,7 +1018,7 @@
     }
 
     App.MatchupInputs = App.MatchupInputs || {
-        prepare, build, project, projectRoster, idpRankings, priorRankings, depthCharts, baselineFor, dhqBaselineFor, sleeperPoints, opponentOf, opponentFor, trenchFor, castFor, teamDepth, expectedShare, seasonProjections, posGroup, normName, roleFor,
+        prepare, build, project, projectRoster, idpRankings, priorRankings, depthCharts, baselineFor, dhqBaselineFor, sleeperPoints, opponentOf, opponentFor, trenchFor, castFor, teamDepth, expectedShare, seasonProjections, passPool, freedTargetShare, posGroup, normName, roleFor,
     };
     /* global module */
     if (typeof module !== 'undefined' && module.exports) module.exports = App.MatchupInputs;
