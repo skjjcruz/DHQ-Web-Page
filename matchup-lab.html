@@ -126,7 +126,7 @@
     <div class="card" id="summary" style="display:none"></div>
     <div class="card" id="readout" style="display:none"></div>
 </div>
-<div id="buildtag">LAB56</div>
+<div id="buildtag">LAB57</div>
 
 <script>
 // Minimal stand-ins for the app core: Sleeper's scoring keys match its stat
@@ -234,14 +234,46 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
         var got = await Promise.all([getJson(SL + '/stats/nfl/regular/' + season), getJson(SL + '/stats/nfl/regular/' + (season - 1)), getJson(SL + '/projections/nfl/regular/' + season + '/' + week)]
             .concat(weeksDone.map(function (w) { return getJson(SL + '/stats/nfl/regular/' + season + '/' + w).catch(function () { return {}; }); })));
         App.WeeklyProj.setProjections(week, got[2]);
-        step('   week ' + week + ' · ' + Object.keys(S.players).length.toLocaleString() + ' players · ' + weeksDone.length + ' completed week(s)', 'ok');
+        // This week's box scores so far (players who have already played
+        // carry gp >= 1). Lets the tables show what actually happened beside
+        // both projections, so the formula can be graded.
+        var actual = await getJson(SL + '/stats/nfl/regular/' + season + '/' + week).catch(function () { return {}; });
+        var playedTeams = {};
+        Object.keys(actual).forEach(function (pid) { var p = S.players[pid]; if (p && p.team && actual[pid] && actual[pid].gp >= 1) playedTeams[p.team] = true; });
+        step('   week ' + week + ' · ' + Object.keys(S.players).length.toLocaleString() + ' players · ' + weeksDone.length + ' completed week(s) · box scores in for ' + Object.keys(playedTeams).length + ' teams' + (Object.keys(playedTeams).length ? ' (' + Object.keys(playedTeams).sort().join(', ') + ')' : ''), 'ok');
 
         step('2/3 Defense-vs-position ranks, opponents, Vegas + weather…');
         await App.SOS.initialize(String(season), S.players);
         try { await App.NflContext.load([week], season); } catch (e) { /* neutral without it */ }
         var ctxKeys = Object.keys(App.WeeklyProj._ctx.byTeamWeek).filter(function (k) { return k.split('|')[1] === String(week); }).length;
         step('   SOS ' + (App.SOS.ready ? 'ready' : 'unavailable') + ' · game context for ' + ctxKeys + ' teams · PFF snapshot ' + (window.DhqPffMatchup ? 'built ' + String(window.DhqPffMatchup.built).slice(0, 16).replace('T', ' ') : 'MISSING'), App.SOS.ready && window.DhqPffMatchup ? 'ok' : 'warn');
-        return { season: season, week: week, statsCur: got[0], statsPrior: got[1], weeksDone: weeksDone, weekly: got.slice(3) };
+        return { season: season, week: week, statsCur: got[0], statsPrior: got[1], weeksDone: weeksDone, weekly: got.slice(3), actual: actual };
+    }
+
+    // Actual points this week in the given scoring, for players who have played.
+    function actualsFor(shared, scoring, pids) {
+        var out = {};
+        (pids || []).forEach(function (pid) {
+            var line = shared.actual && shared.actual[pid];
+            if (line && line.gp >= 1) out[pid] = +App.calcRawPts(line, scoring).toFixed(2);
+        });
+        return out;
+    }
+    // How each projection did against the box scores: average miss and who was closer.
+    function scorecard(P, actuals) {
+        var n = 0, sErr = 0, dErr = 0, dWins = 0, ties = 0;
+        Object.keys(actuals).forEach(function (pid) {
+            var p = P[pid]; if (!p || !p.available) return;
+            var a = actuals[pid], se = Math.abs(p.baseline.median - a), de = Math.abs(p.points.median - a);
+            n++; sErr += se; dErr += de;
+            if (de < se - 0.05) dWins++; else if (Math.abs(de - se) <= 0.05) ties++;
+        });
+        if (!n) return '';
+        return '<h3>HOW WE DID · ' + n + ' PLAYED</h3><div class="grid">'
+            + '<div class="tile">Sleeper avg miss<b>' + (sErr / n).toFixed(1) + '</b></div>'
+            + '<div class="tile">DHQ avg miss<b>' + (dErr / n).toFixed(1) + '</b></div>'
+            + '<div class="tile">DHQ closer<b>' + dWins + ' of ' + n + '</b>' + (ties ? '(' + ties + ' even)' : '') + '</div>'
+            + '</div>';
     }
 
     // One league: rosters, scoring, weekly points in this league's rules,
@@ -262,7 +294,7 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
         var opts = { playersData: S.players, statsData: shared.statsCur, priorData: shared.statsPrior, scoring: scoring, season: shared.season, league: league };
         var res = await App.MatchupInputs.projectRoster(mine.players || [], shared.week, opts);
         var lines = (mine.players || []).filter(function (pid) { return App.WeeklyProj.projLine(pid, shared.week); }).length;
-        return { league: league, mine: mine, res: res, lines: lines };
+        return { league: league, mine: mine, res: res, lines: lines, actuals: actualsFor(shared, scoring, mine.players) };
     }
 
     async function run() {
@@ -301,10 +333,15 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
     }
     function labelOf(key) { return (App.MatchupEngine.LABELS[key] || key).toLowerCase(); }
 
-    function playerRow(key, pid, p, slot, read) {
+    // Actual cell: the points scored, with each projection's miss beneath.
+    function actualCell(p, actual) {
+        if (actual == null) return '<td class="num meta">—</td>';
+        var se = p.baseline.median - actual, de = p.points.median - actual;
+        var cls = function (e) { return Math.abs(e) <= 3 ? 'diff-up' : Math.abs(e) >= 8 ? 'diff-dn' : ''; };
+        return '<td class="num"><b style="color:#fff">' + fmt(actual) + '</b><div class="meta"><span class="' + cls(se) + '">S ' + (se > 0 ? '+' : '') + fmt(se) + '</span> · <span class="' + cls(de) + '">D ' + (de > 0 ? '+' : '') + fmt(de) + '</span></div></td>';
+    }
+    function playerRow(key, pid, p, slot, read, actual) {
         var pl = S.players[pid] || {};
-        var diff = p.available ? p.points.median - p.baseline.median : 0;
-        var diffCls = diff > 0.05 ? 'diff-up' : diff < -0.05 ? 'diff-dn' : '';
         var status = pl.injury_status ? ' · <span class="warn">' + esc(pl.injury_status) + '</span>' : '';
         var opp = p.opponentAbbr ? ' vs ' + esc(p.opponentAbbr) : ' · no game';
         return '<tr class="p" data-key="' + esc(key) + '">'
@@ -312,7 +349,7 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
             + '<td><div class="name">' + esc(nameOf(pid)) + '</div><div class="meta">' + esc(p.position) + ' · ' + esc(p.team || pl.team || 'FA') + opp + status + '</div></td>'
             + '<td class="num">' + fmt(p.baseline.median) + (p.baseline.source === 'estimate' ? '<div class="meta">est.</div>' : '') + '</td>'
             + '<td class="num"><b style="color:#fff">' + fmt(p.points.median) + '</b><div class="meta">' + fmt(p.points.floor) + '–' + fmt(p.points.ceiling) + '</div></td>'
-            + '<td class="num ' + diffCls + '">' + (diff > 0 ? '+' : '') + fmt(diff) + '</td>'
+            + actualCell(p, actual)
             + '<td><span class="g g' + p.grade + '">' + p.grade + '</span></td>'
             + '<td class="v v-' + (read || p.verdict) + '">' + esc(read || p.verdict) + '</td>'
             + '</tr>'
@@ -345,9 +382,10 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
         // 2026-09-19: a starting RB read FLEX beside his RB slot).
         var readOf = function (pid) { return !P[pid].available ? 'out' : inD[pid] ? 'start' : 'sit'; };
 
-        var head = '<tr><th class="hide-m">Slot</th><th>Player</th><th class="num">Sleeper</th><th class="num">DHQ</th><th class="num">Δ</th><th>Grade</th><th>Read</th></tr>';
-        var sRows = starters.map(function (pid, i) { return P[pid] ? playerRow(lid + ':' + pid, pid, P[pid], slots[i] || '', readOf(pid)) : ''; }).join('');
-        var bRows = bench.map(function (pid) { return P[pid] ? playerRow(lid + ':' + pid, pid, P[pid], 'BN', readOf(pid)) : ''; }).join('');
+        var A = r.actuals || {};
+        var head = '<tr><th class="hide-m">Slot</th><th>Player</th><th class="num">Sleeper proj</th><th class="num">DHQ proj</th><th class="num">Actual</th><th>Grade</th><th>Read</th></tr>';
+        var sRows = starters.map(function (pid, i) { return P[pid] ? playerRow(lid + ':' + pid, pid, P[pid], slots[i] || '', readOf(pid), A[pid]) : ''; }).join('');
+        var bRows = bench.map(function (pid) { return P[pid] ? playerRow(lid + ':' + pid, pid, P[pid], 'BN', readOf(pid), A[pid]) : ''; }).join('');
         var swapsIn = Object.keys(inD).filter(function (pid) { return !inS[pid]; });
         var swapsOut = Object.keys(inS).filter(function (pid) { return !inD[pid]; });
         var swapText = swapsIn.length
@@ -363,7 +401,7 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
         return '<div class="card"><h3 style="margin-top:0">WEEK ' + week + ' · ' + esc(league.name) + '</h3>'
             + '<div class="grid">'
             + ['A', 'B', 'C', 'D', 'F'].map(function (g) { return '<div class="tile"><span class="g g' + g + '">' + g + '</span> <b>' + counts[g] + '</b>' + (g === 'A' ? 'smash spots' : g === 'B' ? 'good starts' : g === 'C' ? 'coin flips' : g === 'D' ? 'weak spots' : 'sit or out') + '</div>'; }).join('')
-            + '</div>' + lineupText
+            + '</div>' + scorecard(P, A) + lineupText
             + '<h3>WHERE DHQ DISAGREES WITH SLEEPER\'S LINEUP</h3>' + swapText
             + '<h3>STARTERS</h3><table>' + head + sRows + '</table>'
             + '<h3>BENCH</h3><table>' + head + bRows + '</table></div>';
@@ -385,7 +423,7 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
 
         $('readout').style.display = 'block';
         $('readout').innerHTML = graded.map(function (r) { return leagueBlock(r, week); }).join('')
-            + '<div class="hint" style="margin-top:12px">Sleeper = Sleeper\'s published projection scored with each league\'s rules (est. = DHQ estimate when Sleeper has none). DHQ = that number after the ten factors. Δ = DHQ minus Sleeper. Grade = the matchup. Read = the lineup call: START if the DHQ-optimal lineup has him, SIT if not, OUT if he cannot play. Tap a row for the why.</div>';
+            + '<div class="hint" style="margin-top:12px">Sleeper proj = Sleeper\'s published projection scored with each league\'s rules (est. = DHQ estimate when Sleeper has none). DHQ proj = that number after the ten factors. Actual = points scored so far this week, with each projection\'s miss beneath (S = Sleeper, D = DHQ; + means projected too high). Grade = the matchup. Read = the lineup call: START if the DHQ-optimal lineup has him, SIT if not, OUT if he cannot play. Tap a row for the why.</div>';
         Array.prototype.forEach.call(document.querySelectorAll('tr.p'), function (tr) {
             tr.addEventListener('click', function () {
                 var why = document.querySelector('tr.why[data-for="' + tr.getAttribute('data-key') + '"]');
@@ -430,6 +468,7 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
             var t0 = Date.now();
             var opts = { playersData: S.players, statsData: shared.statsCur, priorData: shared.statsPrior, scoring: scoring, season: shared.season, sleeperOnly: true };
             var res = await App.MatchupInputs.projectRoster(pids, shared.week, opts);
+            board.actuals = actualsFor(shared, scoring, pids);
             board.rows = Object.keys(res.projections).map(function (pid) { return { pid: pid, p: res.projections[pid] }; });
             board.rows.sort(function (a, b) { return b.p.points.median - a.p.points.median; });
             step('   ' + board.rows.length + ' players graded in ' + ((Date.now() - t0) / 1000).toFixed(1) + 's', 'ok');
@@ -441,16 +480,14 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
 
     function boardRow(r) {
         var pl = S.players[r.pid] || {}, p = r.p;
-        var diff = p.available ? p.points.median - p.baseline.median : 0;
-        var diffCls = diff > 0.05 ? 'diff-up' : diff < -0.05 ? 'diff-dn' : '';
         var status = pl.injury_status ? ' · <span class="warn">' + esc(pl.injury_status) + '</span>' : '';
         var opp = p.opponentAbbr ? ' vs ' + esc(p.opponentAbbr) : ' · no game';
         return '<tr class="p b" data-pid="' + esc(r.pid) + '">'
             + '<td><div class="name">' + esc(nameOf(r.pid)) + '</div><div class="meta">' + esc(p.position) + ' · ' + esc(p.team || pl.team || 'FA') + opp + status + '</div></td>'
             + '<td class="num hide-m">' + (pl.age || '—') + '</td>'
-            + '<td class="num"><b style="color:#fff">' + fmt(p.points.median) + '</b><div class="meta">' + fmt(p.points.floor) + '–' + fmt(p.points.ceiling) + '</div></td>'
             + '<td class="num">' + fmt(p.baseline.median) + '</td>'
-            + '<td class="num ' + diffCls + '">' + (diff > 0 ? '+' : '') + fmt(diff) + '</td>'
+            + '<td class="num"><b style="color:#fff">' + fmt(p.points.median) + '</b><div class="meta">' + fmt(p.points.floor) + '–' + fmt(p.points.ceiling) + '</div></td>'
+            + actualCell(p, board.actuals ? board.actuals[r.pid] : null)
             + '<td><span class="g g' + p.grade + '">' + p.grade + '</span></td>'
             + '</tr>';
     }
@@ -467,10 +504,11 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
             + '<div class="pos-tabs">' + tabs + '</div>'
             + '<input id="boardSearch" placeholder="search a player or team code" value="' + esc(board.q) + '">'
             + '<div class="grid" style="margin-bottom:10px">' + ['A', 'B', 'C', 'D', 'F'].map(function (g) { return '<div class="tile"><span class="g g' + g + '">' + g + '</span> <b>' + counts[g] + '</b></div>'; }).join('') + '</div>'
-            + '<table><tr><th>Player</th><th class="num hide-m">Age</th><th class="num">DHQ proj</th><th class="num">Sleeper proj</th><th class="num">Δ</th><th>Grade</th></tr>'
+            + scorecard(Object.fromEntries(rows.map(function (r) { return [r.pid, r.p]; })), Object.fromEntries(rows.filter(function (r) { return board.actuals && board.actuals[r.pid] != null; }).map(function (r) { return [r.pid, board.actuals[r.pid]]; })))
+            + '<table><tr><th>Player</th><th class="num hide-m">Age</th><th class="num">Sleeper proj</th><th class="num">DHQ proj</th><th class="num">Actual</th><th>Grade</th></tr>'
             + shown.map(boardRow).join('') + '</table>'
             + (rows.length > shown.length ? '<div class="hint">Showing the top ' + shown.length + ' of ' + rows.length + ' by DHQ projection. Narrow by position or search to see the rest.</div>' : '')
-            + '<div class="hint" style="margin-top:12px">DHQ proj = Sleeper\'s published line scored with these rules, then the ten factors. Sleeper proj = the same line before the factors. Δ = DHQ minus Sleeper. Grade = the matchup. Tap a row for the why.</div>';
+            + '<div class="hint" style="margin-top:12px">Sleeper proj = Sleeper\'s published line scored with these rules. DHQ proj = the same line after the ten factors. Actual = points scored so far this week, with each projection\'s miss beneath (S = Sleeper, D = DHQ; + means projected too high). Grade = the matchup. Tap a row for the why.</div>';
         Array.prototype.forEach.call(document.querySelectorAll('.pos-tabs button'), function (b) {
             b.addEventListener('click', function () { board.pos = b.getAttribute('data-pos'); renderBoard(week, scoringName); });
         });
