@@ -589,6 +589,36 @@
         return out;
     }
 
+    // ── DHQ's own baseline ────────────────────────────────────────────
+    // Volume from the role projection (targets, touches, attempts,
+    // tackles), efficiency pooled from the last three weeks (counted
+    // double), this season and last season, PFF grades as the quality
+    // prior. Returns { median, floor, ceiling, why } in league points.
+    function dhqBaselineFor(pid, player, grp, role, opts, ctx) {
+        const DB = App.DhqBaseline;
+        if (!DB) return null;
+        const stats = (opts.statsData && opts.statsData[pid]) || null;
+        const prior = (opts.priorData && opts.priorData[pid]) || null;
+        const samples = [];
+        for (const wk of ctx.recentWeeks || []) if (wk && wk.stats && wk.stats[pid] && num(wk.stats[pid].gp) >= 1) samples.push({ line: wk.stats[pid], weight: 2 });
+        if (stats && num(stats.gp) >= 1) samples.push({ line: stats, weight: 1 });
+        if (prior && num(prior.gp) >= 1) samples.push({ line: prior, weight: 0.5 });
+        let volume = role && num(role.projTargets) != null ? role.projTargets : null;
+        if (volume == null && grp !== 'K') {
+            // No role projection: fall back to his own per-game volume.
+            const src = stats && num(stats.gp) >= 1 ? stats : (prior && num(prior.gp) >= 1 ? prior : null);
+            if (src) volume = ballOf(grp, src) / num(src.gp);
+        }
+        if (volume == null && grp !== 'K') return null;
+        if (grp === 'K' && !samples.length) return null;
+        const pf = pffPlayer(player) || {};
+        const built = DB.buildLine({ position: grp, volume, samples, grades: { route: pf.route, run: pf.run, pass: pf.pass, off: pf.off, prush: pf.prush, cov: pf.cov, tkl: pf.tkl, fg: pf.fg } });
+        if (!built) return null;
+        const pts = DB.scoreLine(built.line, opts.scoring, grp);
+        if (pts == null || pts <= 0) return null;
+        return { median: +pts.toFixed(2), floor: +(pts * 0.7).toFixed(2), ceiling: +(pts * 1.35).toFixed(2), why: built.why, line: built.line };
+    }
+
     // ── prepare: the async pieces, once per roster ────────────────────
     // Returns a context object build() reads synchronously.
     async function prepare(teams, week, opts) {
@@ -631,12 +661,24 @@
         const stats = (opts.statsData && opts.statsData[pid]) || null;
         const input = { pid, week, position: grp, team, opponentAbbr: opp, baselineSource: 'estimate' };
 
-        const base = baselineFor(pid, week, opts);
-        if (base) { input.baseline = { median: base.median, floor: base.floor, ceiling: base.ceiling }; input.baselineSource = base.source; }
-
-        // role
+        // role first: in DHQ-baseline mode its projected volume feeds the baseline
         input.role = roleFor(pid, player, grp, team, opts, ctx);
         const depth = pffDepthRow(team, player);
+
+        if (opts.baselineMode === 'dhq') {
+            const own = dhqBaselineFor(pid, player, grp, input.role, opts, ctx);
+            if (own) {
+                input.baseline = { median: own.median, floor: own.floor, ceiling: own.ceiling };
+                input.baselineSource = 'dhq';
+                input.baselineWhy = own.why;
+                input.baselineLine = own.line;
+                // the ball share is inside the baseline now; role keeps rank and snaps
+                if (input.role) { delete input.role.share; delete input.role.shareRank; }
+            }
+        } else {
+            const base = baselineFor(pid, week, opts);
+            if (base) { input.baseline = { median: base.median, floor: base.floor, ceiling: base.ceiling }; input.baselineSource = base.source; }
+        }
 
         // health
         const sleeperStatus = String(player.injury_status || '').toUpperCase();
@@ -711,12 +753,20 @@
         return input;
     }
 
+    // Sleeper's own published number for the week in this scoring, or null.
+    function sleeperPoints(pid, week, opts) {
+        const WP = App.WeeklyProj;
+        if (!WP || !WP.projLine || !WP.projLine(pid, week)) return null;
+        const scored = WP.projectPlayer(pid, { playersData: opts.playersData, statsData: opts.statsData, priorData: opts.priorData, scoring: opts.scoring, week, requireSleeper: true });
+        return scored && scored.points ? num(scored.points.median) : null;
+    }
     function project(pid, week, opts, ctx) {
         const input = build(pid, week, opts, ctx);
         if (!input || !App.MatchupEngine) return null;
         const out = App.MatchupEngine.project(input);
         out.team = input.team;
         out.opponentAbbr = input.opponentAbbr;
+        out.sleeper = sleeperPoints(pid, week, opts);
         out.input = input;
         return out;
     }
@@ -734,7 +784,7 @@
     }
 
     App.MatchupInputs = App.MatchupInputs || {
-        prepare, build, project, projectRoster, idpRankings, priorRankings, depthCharts, baselineFor, opponentOf, opponentFor, trenchFor, posGroup, normName, roleFor,
+        prepare, build, project, projectRoster, idpRankings, priorRankings, depthCharts, baselineFor, dhqBaselineFor, sleeperPoints, opponentOf, opponentFor, trenchFor, posGroup, normName, roleFor,
     };
     /* global module */
     if (typeof module !== 'undefined' && module.exports) module.exports = App.MatchupInputs;

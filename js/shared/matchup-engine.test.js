@@ -226,3 +226,13 @@ test('trench uses the league-ranked score when given and shows both ranks', () =
     assert.ok(ranked.mult !== raw.mult, 'the ranked score is what counts when present');
     assert.ok(projectWith({ position: 'RB', trench: { mine: 60, theirs: 60, score: -0.9 } }).mult < 1);
 });
+
+test('a DHQ-built baseline uses the DHQ weight set, which also sums to 100', () => {
+    assert.equal(Object.values(E.WEIGHTS_DHQ).reduce((a, b) => a + b, 0), 100);
+    const p = E.project({ position: 'WR', baseline: BASE, baselineSource: 'dhq', role: { posRank: 1, snapShare: 1 }, opponent: { rankVsPos: 32 } });
+    assert.equal(p.weights.role, 12);
+    assert.equal(p.factors.find(f => f.key === 'opponent').weight, 18);
+    assert.equal(p.baseline.source, 'dhq');
+    const q = E.project({ position: 'WR', baseline: BASE, baselineSource: 'sleeper', opponent: { rankVsPos: 32 } });
+    assert.equal(q.factors.find(f => f.key === 'opponent').weight, 14);
+});
