@@ -129,7 +129,7 @@
     <div class="card" id="summary" style="display:none"></div>
     <div class="card" id="readout" style="display:none"></div>
 </div>
-<div id="buildtag">LAB58</div>
+<div id="buildtag">LAB59</div>
 
 <script>
 // Minimal stand-ins for the app core: Sleeper's scoring keys match its stat
@@ -349,7 +349,7 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
             + '<td class="hide-m meta">' + esc(slot || '') + '</td>'
             + '<td><div class="name">' + esc(nameOf(pid)) + '</div><div class="meta">' + esc(p.position) + ' · ' + esc(p.team || pl.team || 'FA') + opp + status + '</div></td>'
             + '<td class="num">' + fmt(p.baseline.median) + (p.baseline.source === 'estimate' ? '<div class="meta">est.</div>' : '') + '</td>'
-            + '<td class="num"><b style="color:#fff">' + fmt(p.points.median) + '</b><div class="meta">' + fmt(p.points.floor) + '–' + fmt(p.points.ceiling) + '</div></td>'
+            + '<td class="num"><b style="color:#fff">' + fmt(p.points.median) + '</b></td>'
             + actualCell(p, actual)
             + '<td><span class="g g' + p.grade + '">' + p.grade + '</span></td>'
             + '<td class="v v-' + (read || p.verdict) + '">' + esc(read || p.verdict) + '</td>'
@@ -503,7 +503,7 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
             + '<td><div class="name">' + esc(nameOf(r.pid)) + '</div><div class="meta">' + esc(p.position) + ' · ' + esc(p.team || pl.team || 'FA') + opp + status + '</div></td>'
             + '<td class="num hide-m">' + (pl.age || '—') + '</td>'
             + '<td class="num">' + fmt(p.baseline.median) + '</td>'
-            + '<td class="num"><b style="color:#fff">' + fmt(p.points.median) + '</b><div class="meta">' + fmt(p.points.floor) + '–' + fmt(p.points.ceiling) + '</div></td>'
+            + '<td class="num"><b style="color:#fff">' + fmt(p.points.median) + '</b></td>'
             + actualCell(p, board.actuals ? board.actuals[r.pid] : null)
             + '<td><span class="g g' + p.grade + '">' + p.grade + '</span></td>'
             + '</tr>';
