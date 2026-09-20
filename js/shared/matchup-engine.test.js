@@ -10,7 +10,7 @@ const projectWith = (extra) => E.project(Object.assign({ pid: 'x', week: 3, posi
 test('weights sum to 100 and match the owner ruling', () => {
     const sum = Object.values(E.WEIGHTS).reduce((a, b) => a + b, 0);
     assert.equal(sum, 100);
-    assert.deepEqual(E.WEIGHTS, { role: 22, health: 14, opponent: 14, game: 12, coaching: 8, h2h: 8, trench: 8, trend: 8, teamContext: 3, luck: 3 });
+    assert.deepEqual(E.WEIGHTS, { role: 20, health: 11, opponent: 14, game: 12, coaching: 8, h2h: 8, trench: 8, trend: 8, cast: 8, luck: 3 });
 });
 
 test('no factor data at all → projection equals the baseline, grade C, every factor listed as missing', () => {
@@ -158,12 +158,12 @@ test('a full stacked best case and worst case stay inside sane bounds', () => {
     const best = projectWith({
         role: { posRank: 1, share: 0.3, snapShare: 1 }, health: { status: '' }, opponent: { rankVsPos: 32 },
         game: { impliedTotal: 31, home: true }, coaching: { team: 1, opp: 0 }, h2h: { games: 6, wins: 6, avgMargin: 20, division: true },
-        trench: { mine: 95, theirs: 40 }, trend: { last3: 25, season: 12 }, teamContext: { qbGrade: 92, recordDiff: 1 }, luck: { tdRate: 0, expectedTdRate: 0.06 },
+        trench: { mine: 95, theirs: 40 }, trend: { last3: 25, season: 12 }, cast: { qb: { name: 'Q', status: '', grade: 92 } }, luck: { tdRate: 0, expectedTdRate: 0.06 },
     });
     const worst = projectWith({
         role: { posRank: 4, share: 0, snapShare: 0 }, health: { status: 'D', practice: 'DNP', weeksSinceReturn: 0 }, opponent: { rankVsPos: 1 },
         game: { impliedTotal: 14, home: false, international: true, weather: { display: 'Snow' } }, coaching: { team: 0, opp: 1 }, h2h: { games: 6, wins: 0, avgMargin: -20, division: true },
-        trench: { mine: 40, theirs: 95 }, trend: { last3: 4, season: 12 }, teamContext: { qbGrade: 40, recordDiff: -1 }, luck: { tdRate: 0.2, expectedTdRate: 0.06 },
+        trench: { mine: 40, theirs: 95 }, trend: { last3: 4, season: 12 }, cast: { qb: { name: 'Q', status: 'OUT', grade: 40 } }, luck: { tdRate: 0.2, expectedTdRate: 0.06 },
     });
     assert.equal(best.grade, 'A');
     assert.equal(worst.grade, 'F');
@@ -231,8 +231,33 @@ test('a DHQ-built baseline uses the DHQ weight set, which also sums to 100', () 
     assert.equal(Object.values(E.WEIGHTS_DHQ).reduce((a, b) => a + b, 0), 100);
     const p = E.project({ position: 'WR', baseline: BASE, baselineSource: 'dhq', role: { posRank: 1, snapShare: 1 }, opponent: { rankVsPos: 32 } });
     assert.equal(p.weights.role, 12);
+    assert.equal(p.weights.cast, 6);
     assert.equal(p.factors.find(f => f.key === 'opponent').weight, 18);
     assert.equal(p.baseline.source, 'dhq');
     const q = E.project({ position: 'WR', baseline: BASE, baselineSource: 'sleeper', opponent: { rankVsPos: 32 } });
     assert.equal(q.factors.find(f => f.key === 'opponent').weight, 14);
+});
+
+test('supporting cast: a receiver with his QB1 out takes the full hit, a backup QB is a big minus, a healthy good QB is a plus', () => {
+    const out = projectWith({ cast: { qb: { name: 'Star', status: 'Out', grade: 85 } } });
+    const backup = projectWith({ cast: { qb: { name: 'Clipboard', status: '', grade: 55, backup: true } } });
+    const q = projectWith({ cast: { qb: { name: 'Star', status: 'Q', grade: 85 } } });
+    const good = projectWith({ cast: { qb: { name: 'Star', status: '', grade: 85 } } });
+    const meh = projectWith({ cast: { qb: { name: 'Guy', status: '', grade: 60 } } });
+    assert.ok(out.mult < backup.mult && backup.mult < q.mult && q.mult < good.mult, [out.mult, backup.mult, q.mult, good.mult].join(' < '));
+    assert.ok(good.mult > 1 && meh.mult < 1);
+    assert.match(backup.factors.find(f => f.key === 'cast').note, /Backup QB Clipboard starting/);
+});
+
+test('supporting cast: a quarterback missing his top weapons drops, a full cast is a small plus', () => {
+    const full = projectWith({ position: 'QB', cast: { pieces: [{ name: 'A', pos: 'WR', rank: 1, share: 0.26, status: '' }, { name: 'B', pos: 'TE', rank: 1, share: 0.15, status: '' }] } });
+    const missing = projectWith({ position: 'QB', cast: { pieces: [{ name: 'A', pos: 'WR', rank: 1, share: 0.26, status: 'OUT' }, { name: 'B', pos: 'TE', rank: 1, share: 0.15, status: 'Q' }] } });
+    assert.ok(full.mult > 1);
+    assert.ok(missing.mult < 1);
+    assert.match(missing.factors.find(f => f.key === 'cast').note, /WR1 A out \(26%\) · TE1 B questionable \(15%\)/);
+});
+
+test('supporting cast sits out for defenders and kickers keep the QB rule', () => {
+    assert.equal(projectWith({ position: 'LB', cast: { qb: { name: 'Q', status: 'OUT' } } }).mult, 1);
+    assert.ok(projectWith({ position: 'K', cast: { qb: { name: 'Q', status: 'OUT' } } }).mult < 1);
 });

@@ -24,7 +24,8 @@
 //   trench       PFF team unit grades: my line vs their front, from the
 //                player's side of the ball.
 //   trend        Last three weeks vs season PPG (App.WeeklyProj).
-//   teamContext  PFF grade of the team's starting QB + record gap (ESPN).
+//   cast         the QB who will actually start (or, for a QB, his weapons),
+//                from the depth chart, Sleeper injury tags and PFF grades.
 //   luck         Season touchdown rate vs a sustainable rate (Sleeper).
 //
 // Async work (ESPN, the IDP rank) happens once in prepare(); build() is
@@ -619,6 +620,84 @@
         return { median: +pts.toFixed(2), floor: +(pts * 0.7).toFixed(2), ceiling: +(pts * 1.35).toFixed(2), why: built.why, line: built.line };
     }
 
+    // ── Supporting cast ───────────────────────────────────────────────
+    // The team's depth chart by fantasy position (ESPN roles, Sleeper's
+    // field as backup), each slot mapped to the Sleeper player so we know
+    // his injury tag, his season share and his PFF grade.
+    function teamDepth(team, ctx, opts) {
+        ctx._depthIdx = ctx._depthIdx || {};
+        if (ctx._depthIdx[team]) return ctx._depthIdx[team];
+        const byPos = { QB: [], RB: [], WR: [], TE: [] };
+        const players = opts.playersData || {};
+        // name → pid for this team
+        const idx = {};
+        for (const pid of Object.keys(players)) {
+            const p = players[pid];
+            if (!p || String(p.team || '').toUpperCase() !== team) continue;
+            const g = posGroup(p);
+            if (!byPos[g]) continue;
+            idx[espnName(fullName(p))] = pid;
+        }
+        let used = false;
+        if (ctx.depth) {
+            const prefix = team + '|';
+            for (const k of Object.keys(ctx.depth)) {
+                if (!k.startsWith(prefix)) continue;
+                const r = ctx.depth[k];
+                if (!byPos[r.pos]) continue;
+                const pid = idx[k.slice(prefix.length)];
+                if (!pid) continue;
+                byPos[r.pos].push({ pid, rank: num(r.rank) || 99 });
+                used = true;
+            }
+        }
+        if (!used) {
+            for (const pid of Object.values(idx)) {
+                const p = players[pid];
+                const g = SLEEPER_DEPTH_POS[String(p.depth_chart_position || '').toUpperCase()];
+                const o = num(p.depth_chart_order);
+                if (byPos[g] && o != null && o > 0) byPos[g].push({ pid, rank: o });
+            }
+        }
+        for (const g of Object.keys(byPos)) byPos[g].sort((a, b) => a.rank - b.rank);
+        ctx._depthIdx[team] = byPos;
+        return byPos;
+    }
+    function castFor(pid, player, grp, team, opts, ctx) {
+        if (!BALL_BASIS[grp] && grp !== 'K') return null;
+        if (grp === 'DL' || grp === 'LB' || grp === 'DB') return null;
+        const depth = teamDepth(team, ctx, opts);
+        const players = opts.playersData || {};
+        const nameOf = (id) => fullName(players[id]);
+        if (grp === 'QB') {
+            const pieces = [];
+            const add = (g, maxRank) => {
+                for (const slot of depth[g].filter(x => x.rank <= maxRank)) {
+                    const m = players[slot.pid];
+                    if (!m || slot.pid === pid) continue;
+                    const total = teamBall(ctx, opts.statsData, 'season', team, g, players);
+                    const st = opts.statsData && opts.statsData[slot.pid];
+                    const share = total > 0 && st ? ballOf(g, st) / total : (BASE_SHARE[g] ? BASE_SHARE[g][Math.min(BASE_SHARE[g].length, slot.rank) - 1] : 0);
+                    pieces.push({ name: nameOf(slot.pid), pos: g, rank: slot.rank, share: +share.toFixed(3), status: statusOf(m) });
+                }
+            };
+            add('WR', 3); add('TE', 1); add('RB', 1);
+            return pieces.length ? { pieces } : null;
+        }
+        // Everyone else: the quarterback who will actually start.
+        const qbs = depth.QB;
+        if (!qbs.length) return null;
+        const q1 = players[qbs[0].pid];
+        const st1 = statusOf(q1);
+        // A grade of 0 means PFF has not graded him yet (no snaps), not a terrible QB.
+        const gradeOf = (m) => { const pf = m ? pffPlayer(m) : null; const g = pf ? (num(pf.pass) > 0 ? num(pf.pass) : num(pf.off)) : null; return g != null && g > 0 ? g : null; };
+        if (OUT_FOR_SHARE[st1] >= 0.8 && qbs[1]) {
+            const q2 = players[qbs[1].pid];
+            return { qb: { name: nameOf(qbs[1].pid), status: statusOf(q2), grade: gradeOf(q2), backup: true, starterOut: nameOf(qbs[0].pid) } };
+        }
+        return { qb: { name: nameOf(qbs[0].pid), status: st1, grade: gradeOf(q1) } };
+    }
+
     // ── prepare: the async pieces, once per roster ────────────────────
     // Returns a context object build() reads synchronously.
     async function prepare(teams, week, opts) {
@@ -732,16 +811,9 @@
             if (last3 != null && seasonPPG != null) input.trend = { last3, season: seasonPPG };
         }
 
-        // team context
-        const qbGrade = grp === 'QB' ? (pffPlayer(player) ? (num(pffPlayer(player).pass) || num(pffPlayer(player).off)) : null) : teamQbGrade(team);
-        let recordDiff = null;
-        if (ctx.standings && opp && ctx.standings[team] && ctx.standings[opp]) {
-            const a = ctx.standings[team], b = ctx.standings[opp];
-            const games = Math.min(a.wins + a.losses + a.ties, b.wins + b.losses + b.ties);
-            const wa = num(a.winPct), wb = num(b.winPct);
-            if (wa != null && wb != null) recordDiff = +((wa - wb) * Math.min(1, games / 6)).toFixed(3);
-        }
-        if (qbGrade != null || recordDiff != null) input.teamContext = { qbGrade, recordDiff };
+        // supporting cast (the lines are the trench factor's job)
+        const cast = castFor(pid, player, grp, team, opts, ctx);
+        if (cast) input.cast = cast;
 
         // luck
         if (stats && EXPECTED_TD_RATE[grp]) {
@@ -784,7 +856,7 @@
     }
 
     App.MatchupInputs = App.MatchupInputs || {
-        prepare, build, project, projectRoster, idpRankings, priorRankings, depthCharts, baselineFor, dhqBaselineFor, sleeperPoints, opponentOf, opponentFor, trenchFor, posGroup, normName, roleFor,
+        prepare, build, project, projectRoster, idpRankings, priorRankings, depthCharts, baselineFor, dhqBaselineFor, sleeperPoints, opponentOf, opponentFor, trenchFor, castFor, teamDepth, posGroup, normName, roleFor,
     };
     /* global module */
     if (typeof module !== 'undefined' && module.exports) module.exports = App.MatchupInputs;
