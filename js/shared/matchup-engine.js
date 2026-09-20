@@ -322,7 +322,7 @@
         const grade = num(qb.grade) > 0 ? num(qb.grade) : null;   // 0 = not graded yet
         const quality = grade != null ? clamp((grade - 65) / 25, -1, 1) * 0.5 : 0;
         let score, note;
-        if (qb.backup) { score = clamp(-0.6 + quality * 0.5, -1, -0.3); note = 'Backup QB ' + (qb.name || '') + ' starting' + (grade != null ? ' (grade ' + Math.round(grade) + ')' : ''); }
+        if (qb.backup) { score = clamp(-0.6 + quality * 0.5, -1, -0.3); note = 'Backup QB ' + (qb.name || '') + ' starting' + (grade != null ? ' (grade ' + Math.round(grade) + ')' : '') + (qb.starterOut ? ' · ' + qb.starterOut + ' out' : ''); }
         else if (w >= 0.85) { score = -0.9; note = 'QB1 ' + (qb.name || '') + ' out'; }
         else if (w > 0) { score = clamp(quality - 0.35, -1, 1); note = 'QB1 ' + (qb.name || '') + ' questionable' + (grade != null ? ' (grade ' + Math.round(grade) + ')' : ''); }
         else { score = quality; note = 'QB1 ' + (qb.name || '') + ' healthy' + (grade != null ? ' (grade ' + Math.round(grade) + ')' : ''); }
