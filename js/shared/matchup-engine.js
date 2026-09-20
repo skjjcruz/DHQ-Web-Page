@@ -154,6 +154,7 @@
         if (num(r.projTargets) != null) {
             const unit = r.shareBasis === 'touches' ? 'touches' : r.shareBasis === 'attempts' ? 'attempts' : r.shareBasis === 'tackles' ? 'tackles' : 'targets';
             let n = Number(r.projTargets).toFixed(1) + ' projected ' + unit;
+            if (num(r.freedTargets) >= 0.3) n += ' (+' + Number(r.freedTargets).toFixed(1) + ' freed by injured teammates)';
             if (num(r.sleeperTargets) != null) n += ', Sleeper ' + Number(r.sleeperTargets).toFixed(1);
             notes.push(n);
         }
