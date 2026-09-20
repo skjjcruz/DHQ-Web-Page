@@ -55,6 +55,14 @@
         luck: 3,
     };
 
+    // Weights when the baseline is DHQ's own projection (owner ruling
+    // 2026-09-20). Role's ball share already lives inside that baseline,
+    // so role shrinks and the freed weight goes to the two factors that
+    // missed Thursday night's shootout: opponent and game environment.
+    const WEIGHTS_DHQ = {
+        role: 12, health: 14, opponent: 18, game: 18, coaching: 8, h2h: 8, trench: 8, trend: 8, teamContext: 3, luck: 3,
+    };
+
     // How far a factor at full strength may move the number, as a share
     // of its weight. 0.5 means "weight 22 → up to ±11%".
     const SWING = 0.5;
@@ -314,15 +322,20 @@
     };
 
     // ── Put it together ──────────────────────────────────────────────
+    function weightsFor(input) {
+        if (input && input.weights) return input.weights;
+        return input && input.baselineSource === 'dhq' ? WEIGHTS_DHQ : WEIGHTS;
+    }
     function factorScores(input) {
-        return Object.keys(WEIGHTS).map(key => {
+        const W = weightsFor(input);
+        return Object.keys(W).map(key => {
             const r = SCORERS[key](input || {}) || {};
             const score = r.score == null ? null : clamp(Number(r.score) || 0, -1, 1);
-            const mult = 1 + (score || 0) * (WEIGHTS[key] / 100) * SWING;
+            const mult = 1 + (score || 0) * (W[key] / 100) * SWING;
             return {
                 key,
                 label: LABELS[key],
-                weight: WEIGHTS[key],
+                weight: W[key],
                 score,
                 mult: +mult.toFixed(4),
                 impactPct: +(((mult - 1) * 100).toFixed(1)),
@@ -393,7 +406,8 @@
             week: input.week,
             position: pos(input),
             available,
-            baseline: { median: bMed, floor: +bFloor.toFixed(2), ceiling: +bCeil.toFixed(2), source: input.baselineSource || 'estimate' },
+            baseline: { median: bMed, floor: +bFloor.toFixed(2), ceiling: +bCeil.toFixed(2), source: input.baselineSource || 'estimate', why: input.baselineWhy || '' },
+            weights: weightsFor(input),
             mult,
             points,
             grade,
@@ -405,8 +419,8 @@
     }
 
     App.MatchupEngine = App.MatchupEngine || {
-        WEIGHTS, SWING, LABELS,
-        factorScores, project, gradeFor, verdictFor,
+        WEIGHTS, WEIGHTS_DHQ, SWING, LABELS,
+        factorScores, weightsFor, project, gradeFor, verdictFor,
         scorers: SCORERS, rankEffect, shareEffect, RANK_EFFECT, SHARE_SCALE,
     };
     /* global module */
