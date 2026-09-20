@@ -1134,9 +1134,30 @@ async function loadLeagueIntel(){
 
     // Future year discount for picks
     const curYear=curSeason;
+    // Future-year picks (owner ruling 2026-09-20): when the market publishes a
+    // price for "2027 1st (Early)" and friends, a pick a year or more out is
+    // worth that, scaled into this league's currency — not this year's rookie
+    // class discounted 12% a year. Built after the v2 pass (needs the league
+    // scale); null until then, and null in redraft or when the feed is down,
+    // in which case the ladder-and-discount path below still answers.
+    let futurePickTiers=null; // {byYear:{yr:{round:{early,mid,late,any}}}, lastYear, sf}
     const dhqPickValueFn=(season,round,pickInRound)=>{
       const yr=parseInt(season)||curYear;
-      const pick=(round-1)*totalTeams+Math.min(pickInRound||Math.ceil(totalTeams/2),totalTeams);
+      const slotIn=Math.min(pickInRound||Math.ceil(totalTeams/2),totalTeams);
+      if(yr>curYear&&futurePickTiers&&round>=1){
+        const T=futurePickTiers;
+        const useYr=Math.min(yr,T.lastYear);
+        const tiers=T.byYear[useYr]&&T.byYear[useYr][round];
+        if(tiers){
+          const band=slotIn<=Math.ceil(totalTeams/3)?'early':slotIn<=Math.ceil(2*totalTeams/3)?'mid':'late';
+          const fc=tiers[band]??tiers.any;
+          if(fc>0){
+            const extraYears=Math.max(0,yr-T.lastYear); // beyond the market's horizon: 12%/yr on the last published year
+            return Math.round(fc*T.sf*Math.pow(0.88,extraYears));
+          }
+        }
+      }
+      const pick=(round-1)*totalTeams+slotIn;
       const base=dhqPickValues[pick]?.value||dhqPickValues[pick-1]?.value||dhqPickValues[pick+1]?.value||0;
       const yearDiscount=Math.pow(0.88,Math.max(0,yr-curYear)); // 12% per year discount
       return Math.round(base*yearDiscount);
@@ -1284,13 +1305,42 @@ async function loadLeagueIntel(){
         pickRepriceNote=', picks repriced off the rookie ladder (1.01 '+model1+' -> '+dhqPickValues[1].value+')';
       }
     }catch(e){console.warn('pick reprice skipped:',e);}
+    // ═══ Future-year picks read the market's own pick prices (owner ruling 2026-09-20) ═══
+    // FantasyCalc's feed carries "2027 1st (Early|Mid|Late)", "2028 1st", … on
+    // the same scale as its players. Scale them into this league with the same
+    // median top-20 ratio the veteran leash uses, so a 2027 early 1st and the
+    // veteran it trades for read the same number. Dynasty only; feed optional.
+    let futureTierNote='';
+    try{
+      if(formatV2.dynasty&&Array.isArray(fcRows)&&fcRows.length){
+        const matched=fcRows.filter(r=>r.player&&r.player.sleeperId&&v2.values[r.player.sleeperId]>0&&r.value>0&&!(v2.meta[r.player.sleeperId]&&v2.meta[r.player.sleeperId].rookie))
+          .map(r=>({sid:r.player.sleeperId,fc:r.value})).sort((a,b)=>b.fc-a.fc);
+        const ratios=matched.slice(0,20).map(m=>v2.values[m.sid]/m.fc).sort((a,b)=>a-b);
+        const sf=ratios.length>=10?ratios[Math.floor(ratios.length/2)]:0;
+        const byYear={};let lastYear=0,tierCount=0;
+        const RX=/^(\d{4}) (\d)(?:st|nd|rd|th)(?: \((Early|Mid|Late)\))?$/;
+        fcRows.forEach(r=>{
+          const m=RX.exec(String(r.player&&r.player.name||''));
+          if(!m||!(r.value>0))return;
+          const yr=+m[1],rd=+m[2],band=(m[3]||'any').toLowerCase();
+          if(yr<=curYear)return;
+          ((byYear[yr]=byYear[yr]||{})[rd]=byYear[yr][rd]||{})[band]=r.value;
+          if(yr>lastYear)lastYear=yr;tierCount++;
+        });
+        if(sf>0&&tierCount>=4){
+          futurePickTiers={byYear,lastYear,sf:+sf.toFixed(4)};
+          const e1=byYear[curYear+1]&&byYear[curYear+1][1];
+          futureTierNote=', future picks off the market ('+tierCount+' tiers through '+lastYear+', scale '+sf.toFixed(2)+(e1?', '+(curYear+1)+' early 1st '+Math.round((e1.early||e1.any)*sf):'')+')';
+        }
+      }
+    }catch(e){console.warn('future pick tiers skipped:',e);}
     playerScores=v2.values;
     playerMeta=v2.meta;
     rookieCount=Object.keys(playerMeta).filter(pid=>playerMeta[pid].rookie).length;
     vetBlendCount=Object.keys(playerMeta).filter(pid=>playerMeta[pid].mkt!=null).length;
     const rookieVia={};Object.keys(playerMeta).forEach(pid=>{const m=playerMeta[pid];if(m.rookie){rookieVia[m.via||'?']=(rookieVia[m.via||'?']||0)+1;}});
-    sourceSnapshots={labV2:{waiver:v2.waiver,format:formatV2,waiverRookies:waiverRookiesV2,rookieVia,rookieLadder:v2.rookieLadder,builtAt:new Date().toISOString()}};
-    console.log('DHQ rookies: '+JSON.stringify(rookieVia)+' ('+(v2.rookieLadder||[]).length+' ranked by ADP)'+pickRepriceNote);
+    sourceSnapshots={labV2:{waiver:v2.waiver,format:formatV2,waiverRookies:waiverRookiesV2,rookieVia,rookieLadder:v2.rookieLadder,futurePickTiers,builtAt:new Date().toISOString()}};
+    console.log('DHQ rookies: '+JSON.stringify(rookieVia)+' ('+(v2.rookieLadder||[]).length+' ranked by ADP)'+pickRepriceNote+futureTierNote);
     // Slim rows + lineup context keep steps 9-11 and the AI tier tables fed.
     recentPlayers=Object.keys(playerMeta)
       .filter(pid=>rosteredSetV2.has(pid))
