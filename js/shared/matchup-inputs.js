@@ -106,10 +106,25 @@
         return (sch && sch[week] && sch[week][T]) ? String(sch[week][T]).toUpperCase() : null;
     }
     function isByeWeek(team, week) {
+        const T = String(team || '').toUpperCase();
+        // The ESPN scoreboard knows the whole slate before kickoff: a team
+        // with a game listed is not on bye; with a full slate loaded and no
+        // game for this team, it is.
+        const bt = App.WeeklyProj && App.WeeklyProj._ctx && App.WeeklyProj._ctx.byTeamWeek;
+        if (bt) {
+            if (bt[T + '|' + week] && bt[T + '|' + week].opp) return false;
+            const listed = Object.keys(bt).filter(k => k.slice(k.indexOf('|') + 1) === String(week)).length;
+            if (listed >= 20) return true;
+        }
+        // The SOS schedule is built from games already played, so it can
+        // only call a bye for a week that is over. The latest week it holds
+        // may still be in progress (week 2 2026: the Rams and Giants read
+        // as on bye all Monday before their game).
         const sch = App.SOS && App.SOS.schedule;
         if (!sch || !sch[week]) return false;
-        const T = String(team || '').toUpperCase();
-        // A week with a full slate but no entry for this team is its bye.
+        const weeks = Object.keys(sch).map(Number).filter(w => Number.isFinite(w) && sch[w] && Object.keys(sch[w]).length >= 20);
+        const latest = weeks.length ? Math.max.apply(null, weeks) : null;
+        if (latest == null || Number(week) >= latest) return false;
         return Object.keys(sch[week]).length >= 20 && !sch[week][T];
     }
 
