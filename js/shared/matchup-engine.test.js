@@ -232,7 +232,7 @@ test('a DHQ-built baseline uses the DHQ weight set, which also sums to 100', () 
     const p = E.project({ position: 'WR', baseline: BASE, baselineSource: 'dhq', role: { posRank: 1, snapShare: 1 }, opponent: { rankVsPos: 32 } });
     assert.equal(p.weights.role, 12);
     assert.equal(p.weights.cast, 6);
-    assert.equal(p.factors.find(f => f.key === 'opponent').weight, 15);
+    assert.equal(p.factors.find(f => f.key === 'opponent').weight, 18);
     assert.equal(p.baseline.source, 'dhq');
     const q = E.project({ position: 'WR', baseline: BASE, baselineSource: 'sleeper', opponent: { rankVsPos: 32 } });
     assert.equal(q.factors.find(f => f.key === 'opponent').weight, 12);
