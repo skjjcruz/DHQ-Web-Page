@@ -38,8 +38,8 @@
         DL: { soloShare: 0.62, sackPg: 0.35, intPg: 0.01, pdPg: 0.15, ffPg: 0.06, K: 8 },
         LB: { soloShare: 0.62, sackPg: 0.18, intPg: 0.04, pdPg: 0.25, ffPg: 0.06, K: 8 },
         DB: { soloShare: 0.75, sackPg: 0.04, intPg: 0.06, pdPg: 0.60, ffPg: 0.04, K: 8 },
-        K: { fgaPg: 2.0, fgPct: 0.85, xpaPg: 2.6, xpPct: 0.95, K: 6, dist: { fgm_0_19: 0.02, fgm_20_29: 0.30, fgm_30_39: 0.30, fgm_40_49: 0.26, fgm_50p: 0.12 },
-             ydsPerFg: 38, over30PerFg: 9.5, missDist: { fgmiss_0_19: 0.01, fgmiss_20_29: 0.05, fgmiss_30_39: 0.14, fgmiss_40_49: 0.35, fgmiss_50p: 0.45 } },
+        K: { fgaPg: 2.0, fgPct: 0.85, xpaPg: 2.3, xpPct: 0.95, K: 12, dist: { fgm_0_19: 0.02, fgm_20_29: 0.30, fgm_30_39: 0.30, fgm_40_49: 0.26, fgm_50p: 0.12 },
+             ydsPerFg: 39, over30PerFg: 9.5, missDist: { fgmiss_0_19: 0.01, fgmiss_20_29: 0.05, fgmiss_30_39: 0.14, fgmiss_40_49: 0.35, fgmiss_50p: 0.45 } },
     };
     const FUMBLE_PER_TOUCH = 0.006;
 

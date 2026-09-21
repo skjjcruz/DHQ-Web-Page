@@ -862,18 +862,35 @@
         const pf = pffPlayer(player) || {};
         const built = DB.buildLine({ position: grp, volume, samples, grades: { route: pf.route, run: pf.run, pass: pf.pass, off: pf.off, prush: pf.prush, cov: pf.cov, tkl: pf.tkl, fg: pf.fg } });
         if (grp === 'K') {
-            // A kicker's attempts follow his team's scoring: scale his
-            // per-game attempts by the Vegas implied team total against the
-            // league average (owner ruling 2026-09-21).
+            // A kicker's attempts follow his team's scoring (owner ruling
+            // 2026-09-21). From the 2025 team rows: touchdowns (extra-point
+            // tries) per game = -0.6 + 0.137 x points per game (R2 0.93),
+            // while field-goal attempts sit near 2.0 whatever the team
+            // scores (1.70 + 0.013 x ppg, R2 0.02). Expected points are the
+            // Vegas implied total before kickoff, else the team's points per
+            // game this season shrunk toward last season's. His own rates
+            // keep a say: half on field goals, a fifth on extra points.
             const wk = App.WeeklyProj && App.WeeklyProj._ctx && App.WeeklyProj._ctx.byTeamWeek[String(player.team || '').toUpperCase() + '|' + ctx.week];
             const implied = wk && wk.vegas ? num(wk.vegas.impliedTotal) : null;
-            if (implied != null && implied > 0) {
-                const scale = clamp(implied / 22.5, 0.6, 1.5);
-                for (const k of Object.keys(built.line)) if (/^(fga|fgm|fgmiss|xpa|xpm|xpmiss|fgm_)/.test(k)) built.line[k] = +(built.line[k] * scale).toFixed(3);
-                built.why += ' · scaled ' + (scale >= 1 ? '+' : '') + Math.round((scale - 1) * 100) + '% for a ' + implied.toFixed(1) + '-pt implied total';
+            const T = String(player.team || '').toUpperCase();
+            const ppg = (row) => { if (!row || !(num(row.gp) >= 1)) return null; const two = (num(row.pass_2pt) || 0) + (num(row.rush_2pt) || 0); const td = num(row.td) || 0; return (6 * td + 3 * (num(row.fgm) || 0) + (td - two) * 0.96 + 2 * two) / num(row.gp); };
+            const cur = opts.statsData && opts.statsData['TEAM_' + T], pri = opts.priorData && opts.priorData['TEAM_' + T];
+            const curPpg = ppg(cur), priPpg = ppg(pri) != null ? ppg(pri) : 22.5, curGp = cur ? (num(cur.gp) || 0) : 0;
+            const seasonPpg = curPpg != null ? (curPpg * curGp + priPpg * 2) / (curGp + 2) : priPpg;
+            const expected = implied != null && implied > 0 ? implied : seasonPpg;
+            const teamXpa = clamp(-0.6 + 0.137 * expected, 0.5, 5.5);
+            const teamFga = 1.70 + 0.013 * expected;
+            const ownFga = num(built.line.fga), ownXpa = num(built.line.xpa);
+            const fga = ownFga > 0 ? 0.5 * teamFga + 0.5 * ownFga : teamFga;
+            const xpa = ownXpa > 0 ? 0.8 * teamXpa + 0.2 * ownXpa : teamXpa;
+            const fScale = ownFga > 0 ? fga / ownFga : 1, xScale = ownXpa > 0 ? xpa / ownXpa : 1;
+            for (const k of Object.keys(built.line)) {
+                if (/^(fga|fgm|fgmiss|fgm_)/.test(k)) built.line[k] = +(built.line[k] * fScale).toFixed(3);
+                else if (/^(xpa|xpm|xpmiss)/.test(k)) built.line[k] = +(built.line[k] * xScale).toFixed(3);
             }
+            built.why = built.why.replace(/^[\d.]+ FG att/, fga.toFixed(1) + ' FG att').replace(/[\d.]+ XP att/, xpa.toFixed(1) + ' XP att')
+                + ' · team expected ' + expected.toFixed(1) + ' pts (' + (implied != null && implied > 0 ? 'Vegas' : 'season pace') + ')';
         }
-        if (!built) return null;
         const pts = DB.scoreLine(built.line, opts.scoring, grp);
         if (pts == null || pts <= 0) return null;
         return { median: +pts.toFixed(2), floor: +(pts * 0.7).toFixed(2), ceiling: +(pts * 1.35).toFixed(2), why: built.why, line: built.line };

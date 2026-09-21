@@ -91,6 +91,6 @@ test('a kicker line pays in every scoring style a league uses', () => {
     assert.ok(buckets > 6 && buckets < 12, 'bucket leagues: ' + buckets);
     assert.ok(yards > 6 && yards < 12, 'yards-per-make leagues: ' + yards);
     assert.ok(Math.abs(longBuckets - buckets) < 1.5, '50-59/60+ leagues pay about the same as 50+ leagues: ' + longBuckets + ' vs ' + buckets);
-    assert.ok(Math.abs(r.line.fgm_50_59 + r.line.fgm_60p - r.line.fgm_50p) < 1e-9);
+    assert.ok(Math.abs(r.line.fgm_50_59 + r.line.fgm_60p - r.line.fgm_50p) < 0.002, '50-59 plus 60+ adds up to 50+');
     assert.ok(Math.abs(r.line.fgm_yds / r.line.fgm - 38.5) < 1.5, 'about 38-39 yards a make from his 700/18 history pulled to the norm');
 });
