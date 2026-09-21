@@ -5,6 +5,7 @@ name: PFF matchup snapshot
 
 on:
   push:
+    branches: [main]
     paths:
       - 'scripts/build-pff-matchup-snapshot.mjs'
       - '.github/workflows/pff-matchup-snapshot.yml'
