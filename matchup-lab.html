@@ -137,7 +137,7 @@
     <div class="card" id="summary" style="display:none"></div>
     <div class="card" id="readout" style="display:none"></div>
 </div>
-<div id="buildtag">LAB69</div>
+<div id="buildtag">LAB70</div>
 
 <script>
 // Minimal stand-ins for the app core: Sleeper's scoring keys match its stat
@@ -294,7 +294,7 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
     }
     // How each projection did against the box scores: average miss and who was closer.
     function scorecard(P, actuals) {
-        var n = 0, sErr = 0, dErr = 0, dWins = 0, ties = 0;
+        var n = 0, sErr = 0, dErr = 0, dWins = 0, dLoss = 0, ties = 0;
         var nAll = 0, dErrAll = 0;
         Object.keys(actuals).forEach(function (pid) {
             var p = P[pid]; if (!p || !p.available) return;
@@ -303,13 +303,13 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
             if (p.sleeper == null) return;
             var se = Math.abs(p.sleeper - a);
             n++; sErr += se; dErr += de;
-            if (de < se - 0.05) dWins++; else if (Math.abs(de - se) <= 0.05) ties++;
+            if (de < se - 0.05) dWins++; else if (se < de - 0.05) dLoss++; else ties++;
         });
         if (!nAll) return '';
         return '<h3>HOW WE DID · ' + nAll + ' PLAYED</h3><div class="grid">'
             + '<div class="tile">DHQ avg miss<b>' + (dErrAll / nAll).toFixed(1) + '</b>' + nAll + ' players</div>'
             + (n ? '<div class="tile">Sleeper avg miss<b>' + (sErr / n).toFixed(1) + '</b>' + n + ' with a Sleeper line</div>'
-            + '<div class="tile">DHQ closer<b>' + dWins + ' of ' + n + '</b>' + (ties ? '(' + ties + ' even)' : '') + '</div>' : '')
+            + '<div class="tile">Wins - Losses<b><span class="wl wl-w">W</span> ' + dWins + ' &nbsp;-&nbsp; <span class="wl wl-l">L</span> ' + dLoss + '</b>' + (ties ? ties + ' even' : 'DHQ vs Sleeper, closer to the actual') + '</div>' : '')
             + '</div>';
     }
 
