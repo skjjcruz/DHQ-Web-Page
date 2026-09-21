@@ -67,6 +67,7 @@
         table { width:100%; border-collapse:collapse; font-size:0.84rem; }
         th,td { text-align:left; padding:6px 8px; border-bottom:1px solid rgba(255,255,255,0.07); vertical-align:top; }
         th { color:var(--gold); font-weight:600; letter-spacing:0.03em; font-size:0.74rem; }
+        th.sort { cursor:pointer; user-select:none; white-space:nowrap; } th.sort:hover { color:#fff; } th.sort.on { color:#fff; text-decoration:underline; }
         td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
         tr.p { cursor:pointer; } tr.p:hover td { background:rgba(255,255,255,0.03); }
         tr.why td { background:#0f0f0f; padding:8px 12px 12px; }
@@ -137,7 +138,7 @@
     <div class="card" id="summary" style="display:none"></div>
     <div class="card" id="readout" style="display:none"></div>
 </div>
-<div id="buildtag">LAB76</div>
+<div id="buildtag">LAB77</div>
 
 <script>
 // Minimal stand-ins for the app core: Sleeper's scoring keys match its stat
@@ -503,7 +504,27 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
         fgm_0_19: 3, fgm_20_29: 3, fgm_30_39: 3, fgm_40_49: 4, fgm_50p: 5, fgmiss: -1, xpm: 1, xpmiss: -1,
         idp_tkl_solo: 1, idp_tkl_ast: 0.5, idp_tkl_loss: 1, idp_sack: 2, idp_qb_hit: 1, idp_int: 3, idp_pass_def: 1, idp_ff: 2, idp_fum_rec: 2, idp_def_td: 6, idp_safe: 2, idp_blk_kick: 2 };
     var BOARD_POS = ['QB', 'RB', 'WR', 'TE', 'K', 'DL', 'LB', 'DB'];
-    var board = { rows: [], pos: 'ALL', q: '', grade: null };
+    var board = { rows: [], pos: 'ALL', q: '', grade: null, sort: { key: 'dhq', dir: -1 } };
+    // Sortable columns: what each one reads off a row. Nulls sort last either way.
+    var SORT_KEYS = {
+        player: function (r) { return nameOf(r.pid).toLowerCase(); },
+        age: function (r) { var pl = S.players[r.pid] || {}; return pl.age != null ? Number(pl.age) : null; },
+        sleeper: function (r) { return r.p.sleeper != null ? r.p.sleeper : null; },
+        dhq: function (r) { return r.p.points.median; },
+        actual: function (r) { var a = board.actuals && board.actuals[r.pid]; return a != null ? a : null; },
+        pm: function (r) { var a = board.actuals && board.actuals[r.pid]; return a != null ? a - r.p.points.median : null; },
+        wl: function (r) { var a = board.actuals && board.actuals[r.pid]; if (a == null || r.p.sleeper == null) return null; return Math.abs(r.p.sleeper - a) - Math.abs(r.p.points.median - a); }
+    };
+    function sortRows(rows) {
+        var get = SORT_KEYS[board.sort.key] || SORT_KEYS.dhq, dir = board.sort.dir;
+        return rows.slice().sort(function (a, b) {
+            var x = get(a), y = get(b);
+            if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1;
+            if (typeof x === 'string') return dir * x.localeCompare(y);
+            return dir * (x - y);
+        });
+    }
+    function th(key, label, cls) { var on = board.sort.key === key; return '<th class="sort' + (cls ? ' ' + cls : '') + (on ? ' on' : '') + '" data-sort="' + key + '">' + label + (on ? (board.sort.dir < 0 ? ' \u25BE' : ' \u25B4') : '') + '</th>'; }
 
     async function runAll() {
         if (!state.user) { step('Load leagues first.', 'bad'); return; }
@@ -573,7 +594,7 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
         var counts = { A: 0, B: 0, C: 0, D: 0, F: 0 };
         pool.forEach(function (r) { counts[r.p.grade]++; });
         var rows = board.grade ? pool.filter(function (r) { return r.p.grade === board.grade; }) : pool;
-        var shown = rows;   // every graded player (owner ruling 2026-09-21); why panels are built on tap, so the table stays light
+        var shown = sortRows(rows);   // every graded player (owner ruling 2026-09-21); why panels are built on tap, so the table stays light
         $('readout').style.display = 'block';
         $('readout').innerHTML = '<h3 style="margin-top:0">WEEK ' + week + ' · ALL NFL PLAYERS · ' + board.rows.length + ' WITH A SLEEPER LINE · ' + esc(scoringName) + '</h3>'
             + '<div class="pos-tabs">' + tabs + '</div>'
@@ -581,11 +602,20 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
             + '<div class="grid" style="margin-bottom:4px">' + ['A', 'B', 'C', 'D', 'F'].map(function (g) { return '<div class="tile pick' + (board.grade === g ? ' on' : '') + '" data-grade="' + g + '"><span class="g g' + g + '">' + g + '</span> <b>' + counts[g] + '</b></div>'; }).join('') + '</div>'
             + '<div class="hint" style="margin-bottom:10px">Tap a grade to show only those players. Tap again to show everyone.</div>'
             + scorecard(Object.fromEntries(rows.map(function (r) { return [r.pid, r.p]; })), Object.fromEntries(rows.filter(function (r) { return board.actuals && board.actuals[r.pid] != null; }).map(function (r) { return [r.pid, board.actuals[r.pid]]; })))
-            + '<table><tr><th>Player</th><th class="num hide-m">Age</th><th class="num">Sleeper proj</th><th class="num">DHQ proj</th><th class="num">Actual</th><th class="num">+/-</th><th class="num">W/L</th></tr>'
+            + '<table><tr>' + th('player', 'Player') + th('age', 'Age', 'num hide-m') + th('sleeper', 'Sleeper proj', 'num') + th('dhq', 'DHQ proj', 'num') + th('actual', 'Actual', 'num') + th('pm', '+/-', 'num') + th('wl', 'W/L', 'num') + '</tr>'
             + shown.map(boardRow).join('') + '</table>'
-            + '<div class="hint" style="margin-top:12px">Sleeper proj = Sleeper\'s published line scored with these rules. DHQ proj = the DHQ baseline (its own stat line, or Sleeper\'s line, per the switch) after the eleven factors. Actual = points scored so far this week. +/- = Actual minus DHQ proj. W/L = green when DHQ was closer to the actual than Sleeper, red when Sleeper was. Tap a row for the why.</div>';
+            + '<div class="hint" style="margin-top:12px">Tap a column heading to sort by it; tap again to flip. Sleeper proj = Sleeper\'s published line scored with these rules. DHQ proj = the DHQ baseline (its own stat line, or Sleeper\'s line, per the switch) after the eleven factors. Actual = points scored so far this week. +/- = Actual minus DHQ proj. W/L = green when DHQ was closer to the actual than Sleeper, red when Sleeper was; sorted by how much closer. Tap a row for the why.</div>';
         Array.prototype.forEach.call(document.querySelectorAll('.pos-tabs button'), function (b) {
             b.addEventListener('click', function () { board.pos = b.getAttribute('data-pos'); renderBoard(week, scoringName); });
+        });
+        Array.prototype.forEach.call(document.querySelectorAll('#readout th.sort'), function (h) {
+            h.addEventListener('click', function () {
+                var key = h.getAttribute('data-sort');
+                // first tap: high to low for numbers, A to Z for names; second tap flips
+                if (board.sort.key === key) board.sort.dir = -board.sort.dir;
+                else board.sort = { key: key, dir: key === 'player' ? 1 : -1 };
+                renderBoard(week, scoringName);
+            });
         });
         Array.prototype.forEach.call(document.querySelectorAll('#readout .tile.pick'), function (tile) {
             tile.addEventListener('click', function () { var g = tile.getAttribute('data-grade'); board.grade = board.grade === g ? null : g; renderBoard(week, scoringName); });
