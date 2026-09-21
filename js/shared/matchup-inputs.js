@@ -719,7 +719,11 @@
         let proj = rawInfo.share;
         if (proj != null) {
             out.rawShare = +proj.toFixed(3);
-            out.roomScale = +roomScale(team, grp, opts, ctx).toFixed(3);
+            // The starting quarterback is never scaled down by the room: a
+            // backup's starts last year are no claim on this year's throws
+            // (Daniels was cut to 69% of Washington's attempts by Mariota's
+            // 2025 fill-in games).
+            out.roomScale = grp === 'QB' && out.posRank === 1 ? 1 : +roomScale(team, grp, opts, ctx).toFixed(3);
             proj *= out.roomScale;
             out.share = clamp(proj, 0, 1);
             const pie = teamPie(team, grp, ctx.week, opts, ctx);
