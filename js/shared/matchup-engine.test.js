@@ -271,3 +271,12 @@ test('supporting cast sits out for defenders and kickers keep the QB rule', () =
     assert.equal(projectWith({ position: 'LB', cast: { qb: { name: 'Q', status: 'OUT' } } }).mult, 1);
     assert.ok(projectWith({ position: 'K', cast: { qb: { name: 'Q', status: 'OUT' } } }).mult < 1);
 });
+
+test('role note says when a player is the next man up or a fullback', () => {
+    const base = { position: 'QB', role: { posRank: 1, listedRank: 2, promotedPast: ['Sam Darnold'], gamesPlayed: 1 } };
+    const r = E.scorers.role(base);
+    assert.match(r.note, /QB1 on the depth chart \(listed QB2, next man up: Sam Darnold out\)/);
+    const fb = E.scorers.role({ position: 'RB', role: { posRank: 4, listedRank: 1, fullback: true, gamesPlayed: 1 } });
+    assert.match(fb.note, /RB4 on the depth chart \(fullback\)/);
+    assert.ok(fb.score < r.score, 'a fullback reads as a deep backup, a promoted starter as the starter');
+});
