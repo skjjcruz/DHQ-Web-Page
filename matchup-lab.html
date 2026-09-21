@@ -138,7 +138,7 @@
     <div class="card" id="summary" style="display:none"></div>
     <div class="card" id="readout" style="display:none"></div>
 </div>
-<div id="buildtag">LAB85</div>
+<div id="buildtag">LAB86</div>
 
 <script>
 // Minimal stand-ins for the app core: Sleeper's scoring keys match its stat
@@ -273,8 +273,17 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
         // carry gp >= 1). Lets the tables show what actually happened beside
         // both projections, so the formula can be graded.
         var actual = await getJson(SL + '/stats/nfl/regular/' + season + '/' + week).catch(function () { return {}; });
-        var playedTeams = {};
-        Object.keys(actual).forEach(function (pid) { var p = S.players[pid]; if (p && p.team && actual[pid] && actual[pid].gp >= 1) playedTeams[p.team] = true; });
+        var playedTeams = {}, playedFixed = 0;
+        Object.keys(actual).forEach(function (pid) {
+            var p = S.players[pid]; if (!p || !p.team || !actual[pid] || !(actual[pid].gp >= 1)) return;
+            playedTeams[p.team] = true;
+            // He played this week, so this week's grade must not use the injury
+            // tag Sleeper gave him afterwards (owner finding 2026-09-21: Jayden
+            // Daniels scored 14.7 on Sunday and read "Out" by Monday night, so
+            // the grader projected him at zero).
+            if (p.injury_status) { p.injury_status_after = p.injury_status; p.injury_status = null; playedFixed++; }
+        });
+        if (playedFixed) step('   ' + playedFixed + ' player(s) who played this week carry a newer injury tag; graded as having played', 'ok');
         step('   week ' + week + ' · ' + Object.keys(S.players).length.toLocaleString() + ' players · season stats from ' + (weeksDone.length ? 'weeks 1-' + weeksDone.length : 'no completed weeks') + ' (no peeking at this week) · box scores in for ' + Object.keys(playedTeams).length + ' teams' + (Object.keys(playedTeams).length ? ' (' + Object.keys(playedTeams).sort().join(', ') + ')' : ''), 'ok');
 
         step('2/3 Defense-vs-position ranks, opponents, Vegas + weather…');
@@ -393,7 +402,7 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
     }
     function playerRow(key, pid, p, slot, read, actual) {
         var pl = S.players[pid] || {};
-        var status = pl.injury_status ? ' · <span class="warn">' + esc(pl.injury_status) + '</span>' : '';
+        var status = pl.injury_status ? ' · <span class="warn">' + esc(pl.injury_status) + '</span>' : (pl.injury_status_after ? ' · <span class="meta">played · now ' + esc(pl.injury_status_after) + '</span>' : '');
         var opp = p.opponentAbbr ? ' vs ' + esc(p.opponentAbbr) : ' · no game';
         return '<tr class="p" data-key="' + esc(key) + '" data-grade="' + p.grade + '">'
             + '<td class="hide-m meta">' + esc(slot || '') + '</td>'
@@ -577,7 +586,7 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
 
     function boardRow(r) {
         var pl = S.players[r.pid] || {}, p = r.p;
-        var status = pl.injury_status ? ' · <span class="warn">' + esc(pl.injury_status) + '</span>' : '';
+        var status = pl.injury_status ? ' · <span class="warn">' + esc(pl.injury_status) + '</span>' : (pl.injury_status_after ? ' · <span class="meta">played · now ' + esc(pl.injury_status_after) + '</span>' : '');
         var opp = p.opponentAbbr ? ' vs ' + esc(p.opponentAbbr) : ' · no game';
         return '<tr class="p b" data-pid="' + esc(r.pid) + '">'
             + '<td><div class="name">' + esc(nameOf(r.pid)) + '</div><div class="meta">' + esc(p.position) + ' · ' + esc(p.team || pl.team || 'FA') + opp + status + '</div></td>'
