@@ -715,6 +715,7 @@
         if (rawInfo.promoted) out.promoted = true;
         if (rawInfo.snapGate) out.snapGate = rawInfo.snapGate;
         if (rawInfo.slotNote) out.slotNote = rawInfo.slotNote;
+        if (rawInfo.backupQb) out.backupQb = true;
         const early = out.gamesPlayed == null || out.gamesPlayed < 3;
         let proj = rawInfo.share;
         if (proj != null) {
@@ -923,6 +924,11 @@
         if (earned != null && base != null) proj = wEarned * earned + (1 - wEarned) * base;
         else if (earned != null) proj = earned;
         else if (base != null) proj = base;
+        // Backup quarterbacks (owner ruling 2026-09-21): a QB who is not the
+        // starter gets zero, whatever he did last year (Rattler's 2025 starts
+        // were projecting him for 9 points as the Saints' QB2). Next man up
+        // still makes him the starter when the man ahead is out.
+        if (proj != null && grp === 'QB' && posRank != null && posRank >= 2) { proj = 0; out.backupQb = true; }
         // Snap gate (owner ruling 2026-09-21): a back, receiver or tight end
         // listed third or lower who played under 15% of the snaps in his
         // team's last game is trimmed toward that snap share (never below
@@ -968,6 +974,7 @@
         }
         if (volume == null && grp !== 'K') return null;
         if (grp === 'K' && !samples.length) return null;
+        if (role && role.backupQb) return { median: 0, floor: 0, ceiling: 0, why: 'backup quarterback, projected zero unless the starter is out', line: {} };
         const pf = pffPlayer(player) || {};
         const built = DB.buildLine({ position: grp, volume, samples, grades: { route: pf.route, run: pf.run, pass: pf.pass, off: pf.off, prush: pf.prush, cov: pf.cov, tkl: pf.tkl, fg: pf.fg } });
         if (grp === 'K') {
