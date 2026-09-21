@@ -134,7 +134,7 @@
     <div class="card" id="summary" style="display:none"></div>
     <div class="card" id="readout" style="display:none"></div>
 </div>
-<div id="buildtag">LAB66</div>
+<div id="buildtag">LAB68</div>
 
 <script>
 // Minimal stand-ins for the app core: Sleeper's scoring keys match its stat
@@ -383,10 +383,9 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
             + '<td class="num">' + fmt(p.sleeper) + '</td>'
             + '<td class="num"><b style="color:#fff">' + fmt(p.points.median) + '</b></td>'
             + actualCell(p, actual)
-            + '<td><span class="g g' + p.grade + '">' + p.grade + '</span></td>'
             + '<td class="v v-' + (read || p.verdict) + '">' + esc(read || p.verdict) + '</td>'
             + '</tr>'
-            + '<tr class="why" data-for="' + esc(key) + '" style="display:none"><td colspan="7"><div class="fx">' + factorRows(p) + '</div>'
+            + '<tr class="why" data-for="' + esc(key) + '" style="display:none"><td colspan="6"><div class="fx">' + factorRows(p) + '</div>'
             + (p.missing.length ? '<div class="missing">No data for: ' + esc(p.missing.map(labelOf).join(', ')) + '</div>' : '') + '</td></tr>';
     }
 
@@ -416,7 +415,7 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
         var readOf = function (pid) { return !P[pid].available ? 'out' : inD[pid] ? 'start' : 'sit'; };
 
         var A = r.actuals || {};
-        var head = '<tr><th class="hide-m">Slot</th><th>Player</th><th class="num">Sleeper proj</th><th class="num">DHQ proj</th><th class="num">Actual</th><th>Grade</th><th>Read</th></tr>';
+        var head = '<tr><th class="hide-m">Slot</th><th>Player</th><th class="num">Sleeper proj</th><th class="num">DHQ proj</th><th class="num">Actual</th><th>Read</th></tr>';
         var sRows = starters.map(function (pid, i) { return P[pid] ? playerRow(lid + ':' + pid, pid, P[pid], slots[i] || '', readOf(pid), A[pid]) : ''; }).join('');
         var bRows = bench.map(function (pid) { return P[pid] ? playerRow(lid + ':' + pid, pid, P[pid], 'BN', readOf(pid), A[pid]) : ''; }).join('');
         var swapsIn = Object.keys(inD).filter(function (pid) { return !inS[pid]; });
@@ -456,7 +455,7 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
 
         $('readout').style.display = 'block';
         $('readout').innerHTML = graded.map(function (r) { return leagueBlock(r, week); }).join('')
-            + '<div class="hint" style="margin-top:12px">Sleeper proj = Sleeper\'s published projection scored with each league\'s rules. DHQ proj = the DHQ baseline (its own stat line, or Sleeper\'s line, per the switch) after the ten factors. Actual = points scored so far this week. Grade = the matchup. Read = the lineup call: START if the DHQ-optimal lineup has him, SIT if not, OUT if he cannot play. Tap a row for the why.</div>';
+            + '<div class="hint" style="margin-top:12px">Sleeper proj = Sleeper\'s published projection scored with each league\'s rules. DHQ proj = the DHQ baseline (its own stat line, or Sleeper\'s line, per the switch) after the ten factors. Actual = points scored so far this week. Read = the lineup call: START if the DHQ-optimal lineup has him, SIT if not, OUT if he cannot play. Tap a row for the why.</div>';
         Array.prototype.forEach.call(document.querySelectorAll('tr.p'), function (tr) {
             tr.addEventListener('click', function () {
                 var why = document.querySelector('tr.why[data-for="' + tr.getAttribute('data-key') + '"]');
@@ -548,7 +547,6 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
             + '<td class="num">' + fmt(p.sleeper) + '</td>'
             + '<td class="num"><b style="color:#fff">' + fmt(p.points.median) + '</b></td>'
             + actualCell(p, board.actuals ? board.actuals[r.pid] : null)
-            + '<td><span class="g g' + p.grade + '">' + p.grade + '</span></td>'
             + '</tr>';
     }
 
@@ -567,10 +565,10 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
             + '<div class="grid" style="margin-bottom:4px">' + ['A', 'B', 'C', 'D', 'F'].map(function (g) { return '<div class="tile pick' + (board.grade === g ? ' on' : '') + '" data-grade="' + g + '"><span class="g g' + g + '">' + g + '</span> <b>' + counts[g] + '</b></div>'; }).join('') + '</div>'
             + '<div class="hint" style="margin-bottom:10px">Tap a grade to show only those players. Tap again to show everyone.</div>'
             + scorecard(Object.fromEntries(rows.map(function (r) { return [r.pid, r.p]; })), Object.fromEntries(rows.filter(function (r) { return board.actuals && board.actuals[r.pid] != null; }).map(function (r) { return [r.pid, board.actuals[r.pid]]; })))
-            + '<table><tr><th>Player</th><th class="num hide-m">Age</th><th class="num">Sleeper proj</th><th class="num">DHQ proj</th><th class="num">Actual</th><th>Grade</th></tr>'
+            + '<table><tr><th>Player</th><th class="num hide-m">Age</th><th class="num">Sleeper proj</th><th class="num">DHQ proj</th><th class="num">Actual</th></tr>'
             + shown.map(boardRow).join('') + '</table>'
             + (rows.length > shown.length ? '<div class="hint">Showing the top ' + shown.length + ' of ' + rows.length + ' by DHQ projection. Narrow by position or search to see the rest.</div>' : '')
-            + '<div class="hint" style="margin-top:12px">Sleeper proj = Sleeper\'s published line scored with these rules. DHQ proj = the DHQ baseline (its own stat line, or Sleeper\'s line, per the switch) after the ten factors. Actual = points scored so far this week. Grade = the matchup. Tap a row for the why.</div>';
+            + '<div class="hint" style="margin-top:12px">Sleeper proj = Sleeper\'s published line scored with these rules. DHQ proj = the DHQ baseline (its own stat line, or Sleeper\'s line, per the switch) after the ten factors. Actual = points scored so far this week. Tap a row for the why.</div>';
         Array.prototype.forEach.call(document.querySelectorAll('.pos-tabs button'), function (b) {
             b.addEventListener('click', function () { board.pos = b.getAttribute('data-pos'); renderBoard(week, scoringName); });
         });
@@ -589,7 +587,7 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
                 var r = board.rows.filter(function (x) { return x.pid === pid; })[0];
                 if (!r) return;
                 var why = document.createElement('tr'); why.className = 'why';
-                why.innerHTML = '<td colspan="6"><div class="fx">' + factorRows(r.p) + '</div>' + (r.p.missing.length ? '<div class="missing">No data for: ' + esc(r.p.missing.map(labelOf).join(', ')) + '</div>' : '') + '</td>';
+                why.innerHTML = '<td colspan="5"><div class="fx">' + factorRows(r.p) + '</div>' + (r.p.missing.length ? '<div class="missing">No data for: ' + esc(r.p.missing.map(labelOf).join(', ')) + '</div>' : '') + '</td>';
                 tr.parentNode.insertBefore(why, tr.nextSibling);
             });
         });
