@@ -92,5 +92,20 @@ test('a kicker line pays in every scoring style a league uses', () => {
     assert.ok(yards > 6 && yards < 12, 'yards-per-make leagues: ' + yards);
     assert.ok(Math.abs(longBuckets - buckets) < 1.5, '50-59/60+ leagues pay about the same as 50+ leagues: ' + longBuckets + ' vs ' + buckets);
     assert.ok(Math.abs(r.line.fgm_50_59 + r.line.fgm_60p - r.line.fgm_50p) < 0.002, '50-59 plus 60+ adds up to 50+');
-    assert.ok(Math.abs(r.line.fgm_yds / r.line.fgm - 38.5) < 1.5, 'about 38-39 yards a make from his 700/18 history pulled to the norm');
+    assert.ok(r.line.fgm_yds / r.line.fgm > 35 && r.line.fgm_yds / r.line.fgm < 40, 'yards a make from his own distance mix: ' + r.line.fgm_yds / r.line.fgm);
+});
+
+test('make rate is by distance: automatic inside 40, shaky from 50, reads that way', () => {
+    // 40 attempts on record: perfect inside 40, 4 of 10 from 50+
+    const hist = { fga: 40, fgm: 34, xpa: 30, xpm: 30, gp: 17, fgm_20_29: 10, fgm_30_39: 10, fgm_40_49: 10, fgm_50p: 4, fgmiss_50p: 6 };
+    const r = B.buildLine({ position: 'K', samples: [{ line: hist }] });
+    const pct = (b) => r.line['fgm_' + b] / (r.line['fgm_' + b] + r.line['fgmiss_' + b]);
+    assert.ok(pct('20_29') > 0.97 && pct('30_39') > 0.95, 'near automatic inside 40: ' + pct('20_29') + ' ' + pct('30_39'));
+    assert.ok(pct('50p') > 0.45 && pct('50p') < 0.60, 'his 40% from 50+ pulled toward the 69.5% norm: ' + pct('50p'));
+    assert.ok(Math.abs(r.line.fgm_20_29 + r.line.fgm_30_39 + r.line.fgm_40_49 + r.line.fgm_50p + r.line.fgm_0_19 - r.line.fgm) < 0.01, 'range makes add up');
+    assert.ok(Math.abs(r.line.fgm + r.line.fgmiss - r.line.fga) < 0.01, 'makes plus misses equal attempts');
+    assert.match(r.why, /50\+ \d+%/);
+    // the same kicker with his 50+ tries flipped to makes projects more points in a yards league
+    const good = B.buildLine({ position: 'K', samples: [{ line: Object.assign({}, hist, { fgm: 40, fgm_50p: 10, fgmiss_50p: 0 }) }] });
+    assert.ok(B.scoreLine(good.line, { fgm_yds: 0.1, xpm: 1, fgmiss: -1 }, 'K') > B.scoreLine(r.line, { fgm_yds: 0.1, xpm: 1, fgmiss: -1 }, 'K'));
 });

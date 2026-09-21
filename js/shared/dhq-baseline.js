@@ -38,8 +38,13 @@
         DL: { soloShare: 0.62, sackPg: 0.35, intPg: 0.01, pdPg: 0.15, ffPg: 0.06, K: 8 },
         LB: { soloShare: 0.62, sackPg: 0.18, intPg: 0.04, pdPg: 0.25, ffPg: 0.06, K: 8 },
         DB: { soloShare: 0.75, sackPg: 0.04, intPg: 0.06, pdPg: 0.60, ffPg: 0.04, K: 8 },
-        K: { fgaPg: 2.0, fgPct: 0.85, xpaPg: 2.3, xpPct: 0.95, K: 12, dist: { fgm_0_19: 0.02, fgm_20_29: 0.30, fgm_30_39: 0.30, fgm_40_49: 0.26, fgm_50p: 0.12 },
-             ydsPerFg: 39, over30PerFg: 9.5, missDist: { fgmiss_0_19: 0.01, fgmiss_20_29: 0.05, fgmiss_30_39: 0.14, fgmiss_40_49: 0.35, fgmiss_50p: 0.45 } },
+        // Kickers by distance (2024-25 league totals): share of attempts
+        // from each range, the make rate there, and the yards a make earns.
+        K: { fgaPg: 2.0, xpaPg: 2.3, xpPct: 0.95, K: 12, Kb: 8,
+             buckets: ['0_19', '20_29', '30_39', '40_49', '50p'],
+             attShare: { '0_19': 0.003, '20_29': 0.200, '30_39': 0.270, '40_49': 0.280, '50p': 0.247 },
+             makeRate: { '0_19': 0.99, '20_29': 0.975, '30_39': 0.935, '40_49': 0.805, '50p': 0.695 },
+             ydsPerMake: { '0_19': 18, '20_29': 26, '30_39': 34.5, '40_49': 43.5, '50p': 55 } },
     };
     const FUMBLE_PER_TOUCH = 0.006;
 
@@ -128,29 +133,36 @@
             line.idp_fum_rec = perGame(c.idp_fum_rec, c.gp, 0.03, n.K * 2);
             why.push(vol.toFixed(1) + ' tackles (' + Math.round(solo * 100) + '% solo) · ' + sacks.toFixed(2) + ' sacks · ' + pds.toFixed(2) + ' PD · ' + ints.toFixed(2) + ' INT');
         } else if (P === 'K') {
+            // Field goals by distance (owner ruling 2026-09-21): attempts per
+            // game, split across the five ranges by his own attempt mix
+            // (eight or more attempts on record, else the league mix), and a
+            // make rate for each range from his own makes and misses there,
+            // pulled toward the league rate with eight phantom kicks. So a
+            // kicker who is automatic inside 40 and shaky from 50 reads that
+            // way, and his 50-plus tries are worth what they really are.
             const fga = perGame(c.fga, c.gp, n.fgaPg, n.K);
-            const fgPct = rate(c.fgm, c.fga, n.fgPct, 12) * (gradeTilt(g.fg) >= 1 ? 1 + (gradeTilt(g.fg) - 1) * 0.5 : 1 - (1 - gradeTilt(g.fg)) * 0.5);
+            const tilt = gradeTilt(g.fg) >= 1 ? 1 + (gradeTilt(g.fg) - 1) * 0.5 : 1 - (1 - gradeTilt(g.fg)) * 0.5;
+            const att = {}, ownAtt = {};
+            let ownTotal = 0;
+            for (const b of n.buckets) { ownAtt[b] = num(c['fgm_' + b]) + num(c['fgmiss_' + b]); ownTotal += ownAtt[b]; }
+            for (const b of n.buckets) att[b] = fga * (ownTotal >= 8 ? ownAtt[b] / ownTotal : n.attShare[b]);
+            let fgm = 0, fgmiss = 0, yds = 0, over30 = 0;
+            const pcts = [];
+            for (const b of n.buckets) {
+                const pct = clamp(rate(c['fgm_' + b], ownAtt[b], n.makeRate[b], n.Kb) * tilt, 0, 1);
+                const made = att[b] * pct, missed = att[b] - made;
+                line['fgm_' + b] = made; line['fgmiss_' + b] = missed;
+                fgm += made; fgmiss += missed; yds += made * n.ydsPerMake[b]; over30 += made * Math.max(0, n.ydsPerMake[b] - 30);
+                if (b !== '0_19') pcts.push(b.replace('_', '-').replace('p', '+') + ' ' + Math.round(pct * 100) + '%');
+            }
+            line.fga = fga; line.fgm = fgm; line.fgmiss = fgmiss;
+            line.fgm_yds = yds; line.fgm_yds_over_30 = over30;
+            line.fgm_50_59 = line.fgm_50p * 0.9; line.fgm_60p = line.fgm_50p * 0.1;
+            line.fgmiss_50_59 = line.fgmiss_50p * 0.9; line.fgmiss_60p = line.fgmiss_50p * 0.1;
             const xpa = perGame(c.xpa, c.gp, n.xpaPg, n.K);
             const xpPct = rate(c.xpm, c.xpa, n.xpPct, 12);
-            line.fga = fga; line.fgm = fga * fgPct; line.fgmiss = fga * (1 - fgPct);
             line.xpa = xpa; line.xpm = xpa * xpPct; line.xpmiss = xpa * (1 - xpPct);
-            // spread makes by distance from the player's own splits, else the norm
-            const made = ['fgm_0_19', 'fgm_20_29', 'fgm_30_39', 'fgm_40_49', 'fgm_50p'];
-            const own = made.reduce((s, k) => s + num(c[k]), 0);
-            for (const k of made) line[k] = line.fgm * (own >= 8 ? num(c[k]) / own : n.dist[k]);
-            // Every way a league can pay a kicker (owner finding 2026-09-21:
-            // leagues paying 0.1 a yard, or 50-59 and 60+ buckets, were
-            // scoring our line at zero for field goals). Yards per make and
-            // yards over 30 from his own history, pulled toward the norm;
-            // 50+ split 90/10 into 50-59 and 60+; misses spread by distance.
-            const ydsPerFg = rate(c.fgm_yds, c.fgm, n.ydsPerFg, 12);
-            const over30 = rate(c.fgm_yds_over_30, c.fgm, n.over30PerFg, 12);
-            line.fgm_yds = line.fgm * ydsPerFg;
-            line.fgm_yds_over_30 = line.fgm * over30;
-            line.fgm_50_59 = line.fgm_50p * 0.9; line.fgm_60p = line.fgm_50p * 0.1;
-            for (const k of Object.keys(n.missDist)) line[k] = line.fgmiss * n.missDist[k];
-            line.fgmiss_50_59 = line.fgmiss_50p * 0.9; line.fgmiss_60p = line.fgmiss_50p * 0.1;
-            why.push(fga.toFixed(1) + ' FG att at ' + Math.round(fgPct * 100) + '% (' + Math.round(ydsPerFg) + ' yds a make) · ' + xpa.toFixed(1) + ' XP att');
+            why.push(fga.toFixed(1) + ' FG att at ' + Math.round(fga > 0 ? fgm / fga * 100 : 0) + '% (' + pcts.join(', ') + ' · ' + Math.round(fgm > 0 ? yds / fgm : 0) + ' yds a make) · ' + xpa.toFixed(1) + ' XP att');
         }
         for (const k of Object.keys(line)) line[k] = +line[k].toFixed(3);
         return { line, why: why.join(' · ') };
