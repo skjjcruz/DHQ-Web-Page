@@ -90,7 +90,9 @@
     const IDP_POSITIONS = new Set(['DL', 'LB', 'DB']);
 
     function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
-    function num(v) { const n = Number(v); return Number.isFinite(n) ? n : null; }
+    // null and blank mean missing, never zero (a kicker with no matchup rank
+    // was reading as rank 0, an elite unit, and losing 9% every week).
+    function num(v) { if (v == null || v === '') return null; const n = Number(v); return Number.isFinite(n) ? n : null; }
     function pos(input) { return String(input && input.position || '').toUpperCase(); }
 
     // ── Factor scorers ───────────────────────────────────────────────
@@ -193,7 +195,8 @@
         const o = input.opponent || {};
         const rank = num(o.rankVsPos);
         if (rank == null) return { score: null, note: 'No matchup rank yet' };
-        const s = clamp((rank - 16.5) / 15.5, -1, 1);
+        // a kicker's matchup is the whole defense, and it matters half as much
+        const s = clamp((rank - 16.5) / 15.5, -1, 1) * (pos(input) === 'K' ? 0.5 : 1);
         const who = o.abbr ? ' vs ' + o.abbr : '';
         const label = s >= 0.5 ? 'Soft matchup' : s >= 0.15 ? 'Favorable matchup' : s > -0.15 ? 'Neutral matchup' : s > -0.5 ? 'Tough matchup' : 'Elite unit';
         // detail: the evidence behind the rank (points allowed, PFF unit
@@ -209,8 +212,8 @@
         const notes = [];
         const implied = num(g.impliedTotal);
         if (implied != null && implied > 0) {
-            s += clamp((implied - LEAGUE_AVG_IMPLIED) / 7.5, -1, 1) * 0.6;
-            notes.push('Implied ' + implied.toFixed(1) + ' pts');
+            if (P === 'K' && input.baselineSource === 'dhq') notes.push('Implied ' + implied.toFixed(1) + ' pts (already in the baseline)');
+            else { s += clamp((implied - LEAGUE_AVG_IMPLIED) / 7.5, -1, 1) * 0.6; notes.push('Implied ' + implied.toFixed(1) + ' pts'); }
         }
         const spread = num(g.spread); // negative = this team favored
         if (spread != null) {
