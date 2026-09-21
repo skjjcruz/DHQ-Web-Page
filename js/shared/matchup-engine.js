@@ -140,6 +140,7 @@
         if (rank != null) {
             parts.push({ w: early ? 0.55 : 0.40, s: rankEffect(P, rank) });
             let n = (P === 'K' ? 'K' : P) + Math.round(rank) + ' on the depth chart';
+            if (r.slotNote) n += ' (' + r.slotNote + ')';
             if (Array.isArray(r.promotedPast) && r.promotedPast.length && num(r.listedRank) != null) n += ' (listed ' + P + Math.round(num(r.listedRank)) + ', next man up: ' + r.promotedPast.join(', ') + ' out)';
             else if (r.fullback) n += ' (fullback)';
             notes.push(n);

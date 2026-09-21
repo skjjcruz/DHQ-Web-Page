@@ -666,6 +666,8 @@
         ctx._roomCap = ctx._roomCap || {};
         const k = team + '|' + grp;
         if (ctx._roomCap[k] != null) return ctx._roomCap[k];
+        const tn = teamSlotNorm(team, grp, 1, ctx, opts);
+        if (tn && tn.room != null) { ctx._roomCap[k] = clamp(0.5 * median + 0.5 * tn.room, 0, 1); return ctx._roomCap[k]; }
         let cap = median;
         const players = opts.playersData || {};
         const priorRow = opts.priorData && opts.priorData['TEAM_' + team];
@@ -712,6 +714,7 @@
         if (rawInfo.slotNorm != null) out.slotNorm = rawInfo.slotNorm;
         if (rawInfo.promoted) out.promoted = true;
         if (rawInfo.snapGate) out.snapGate = rawInfo.snapGate;
+        if (rawInfo.slotNote) out.slotNote = rawInfo.slotNote;
         const early = out.gamesPlayed == null || out.gamesPlayed < 3;
         let proj = rawInfo.share;
         if (proj != null) {
@@ -742,6 +745,64 @@
         const pr = opts.priorData && opts.priorData[pid];
         if (!pr || (num(pr.gp) || 0) < 8) return null;
         return perGameShare(opts.priorData, 'prior', pid, team, grp, ctx, opts);
+    }
+    // ── Team slot norms (owner ruling 2026-09-21) ────────────────────
+    // What THIS coaching staff gives its WR1..WR6 and TE1..TE4, from the
+    // usage snapshot (data/usage-snapshot.js: seasons under the current
+    // head coach, receivers ranked by targets), blended with this season's
+    // usage on a weight that picks up from week 3. A brand-new head coach
+    // has no history here, so his team runs on this season alone, pulled
+    // toward the league norm while the sample is tiny.
+    function usage() { return root.DhqUsage || null; }
+    function currentUsage(team, grp, ctx, opts) {
+        ctx._cu = ctx._cu || {};
+        const k = team + '|' + grp;
+        if (ctx._cu[k] !== undefined) return ctx._cu[k];
+        const players = opts.playersData || {}, stats = opts.statsData || {};
+        const row = stats['TEAM_' + team];
+        const teamTgt = row ? (num(row.rec_tgt) || 0) : 0, games = row ? (num(row.gp) || 0) : 0;
+        let out = null;
+        if (teamTgt > 0 && games > 0) {
+            const list = [];
+            let room = 0;
+            for (const pid of Object.keys(stats)) {
+                if (pid.startsWith('TEAM_')) continue;
+                const m = players[pid];
+                if (!m || String(m.team || '').toUpperCase() !== team || posGroup(m) !== grp) continue;
+                const t = num(stats[pid].rec_tgt) || 0;
+                if (t > 0) { list.push(t); room += t; }
+            }
+            list.sort((a, b) => b - a);
+            out = { games, share: list.map(t => t / teamTgt), room: room / teamTgt };
+        }
+        ctx._cu[k] = out;
+        return out;
+    }
+    function teamSlotNorm(team, grp, rank, ctx, opts) {
+        if (grp !== 'WR' && grp !== 'TE') return null;
+        const U = usage();
+        const t = U && U.teams && U.teams[team];
+        const prior = t && t.prior && t.prior[grp] && t.prior[grp].seasons > 0 ? t.prior[grp] : null;
+        const cur = currentUsage(team, grp, ctx, opts);
+        const i = Math.max(1, Math.round(rank)) - 1;
+        const league = BASE_SHARE[grp] ? BASE_SHARE[grp][Math.min(BASE_SHARE[grp].length, i + 1) - 1] : null;
+        const gp = cur ? cur.games : 0;
+        if (prior) {
+            const p = i < prior.share.length && prior.share[i] != null ? prior.share[i] : (league != null ? Math.min(league, prior.share[prior.share.length - 1] || league) : null);
+            if (p == null) return null;
+            const wCur = gp <= 1 ? 0 : (gp - 1) / ((gp - 1) + 3);
+            const c = cur && i < cur.share.length ? cur.share[i] : null;
+            const norm = c != null ? (1 - wCur) * p + wCur * c : p;
+            const who = t.hc && t.hc.name ? t.hc.name.split(' ').slice(-1)[0] : 'this staff';
+            return { norm, room: cur && cur.room != null && wCur > 0 ? (1 - wCur) * (prior.room != null ? prior.room : cur.room) + wCur * cur.room : prior.room, source: 'under ' + who + ', ' + prior.seasons + ' season' + (prior.seasons > 1 ? 's' : '') + (wCur > 0 ? ' + this year' : '') };
+        }
+        if (t && t.hc && cur && league != null) {
+            const wCur = gp / (gp + 1);
+            const c = i < cur.share.length ? cur.share[i] : 0;
+            const who = t.hc.name ? t.hc.name.split(' ').slice(-1)[0] : 'new staff';
+            return { norm: wCur * c + (1 - wCur) * league, room: wCur * cur.room + (1 - wCur) * (ROOM_SHARE[grp] || 1), source: 'new staff (' + who + '), this season only' };
+        }
+        return null;
     }
     // His snap share in his team's most recent game (0 when the team
     // played and he has no row, so a healthy scratch reads as 0).
@@ -820,8 +881,11 @@
         // share gets more say with every game: 45% after one game, 60% after
         // two, 85% from three on (owner ruling 2026-09-21: one big week one
         // was becoming a big projection, +1.3 points of bias, worst at RB).
-        const normAt = (rk) => rk != null && BASE_SHARE[grp] ? BASE_SHARE[grp][Math.min(BASE_SHARE[grp].length, Math.max(1, Math.round(rk))) - 1] : null;
+        const leagueAt = (rk) => rk != null && BASE_SHARE[grp] ? BASE_SHARE[grp][Math.min(BASE_SHARE[grp].length, Math.max(1, Math.round(rk))) - 1] : null;
+        const normAt = (rk) => { if (rk == null) return null; const tn = teamSlotNorm(team, grp, rk, ctx, opts); return tn ? tn.norm : leagueAt(rk); };
         let slotNorm = normAt(posRank);
+        const tnInfo = posRank != null ? teamSlotNorm(team, grp, posRank, ctx, opts) : null;
+        if (tnInfo) out.slotNote = grp + Math.round(posRank) + ' slot ' + Math.round(tnInfo.norm * 100) + '% ' + tnInfo.source;
         // A man promoted by an injury only as far as rank 3 takes the
         // midpoint of his old slot and the new one, not the full new share.
         if (promoted && posRank >= 3 && pr.listed != null && normAt(pr.listed) != null) slotNorm = (slotNorm + normAt(pr.listed)) / 2;
@@ -1339,7 +1403,7 @@
     }
 
     App.MatchupInputs = App.MatchupInputs || {
-        prepare, build, project, projectRoster, idpRankings, priorRankings, depthCharts, baselineFor, dhqBaselineFor, sleeperPoints, opponentOf, opponentFor, trenchFor, castFor, teamDepth, expectedShare, passPool, freedTargetShare, posGroup, normName, roleFor, oppHealthFor,
+        prepare, build, project, projectRoster, idpRankings, priorRankings, depthCharts, baselineFor, dhqBaselineFor, sleeperPoints, opponentOf, opponentFor, trenchFor, castFor, teamDepth, expectedShare, teamSlotNorm, passPool, freedTargetShare, posGroup, normName, roleFor, oppHealthFor,
     };
     /* global module */
     if (typeof module !== 'undefined' && module.exports) module.exports = App.MatchupInputs;
