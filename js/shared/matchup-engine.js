@@ -45,15 +45,16 @@
     const App = root.App = root.App || {};
 
     const WEIGHTS = {
-        role: 20,
+        role: 18,
         health: 11,
-        opponent: 14,
-        game: 12,
+        opponent: 12,
+        game: 10,
         coaching: 8,
         h2h: 8,
         trench: 8,
         trend: 8,
         cast: 8,
+        oppHealth: 6,
         luck: 3,
     };
 
@@ -62,7 +63,7 @@
     // so role shrinks and the freed weight goes to the two factors that
     // missed Thursday night's shootout: opponent and game environment.
     const WEIGHTS_DHQ = {
-        role: 12, health: 11, opponent: 18, game: 18, coaching: 8, h2h: 8, trench: 8, trend: 8, cast: 6, luck: 3,
+        role: 12, health: 11, opponent: 15, game: 15, coaching: 8, h2h: 8, trench: 8, trend: 8, cast: 6, oppHealth: 6, luck: 3,
     };
 
     // How far a factor at full strength may move the number, as a share
@@ -79,6 +80,7 @@
         trench: 'Trench edge (OL vs DL)',
         trend: 'Trend line',
         cast: 'Supporting cast',
+        oppHealth: 'Opponent health',
         luck: 'Luck & regression',
     };
 
@@ -343,6 +345,57 @@
         return { score, note };
     }
 
+    // Opponent health (owner ruling 2026-09-21): the other side of the
+    // ball at less than full strength is a lift. Offensive players read the
+    // opponent's secondary and front; defenders read the opponent's
+    // quarterback, line and skill starters. A unit's damage is the share of
+    // its starters lost (out 1, doubtful 0.85, questionable 0.3), and a
+    // fifth of a unit gone is already a solid lift. Full strength sits a
+    // hair below zero so the factor does not lift everyone.
+    function unitDamage(u) {
+        if (!u || !(num(u.starters) > 0)) return null;
+        return clamp((num(u.lost) || 0) / num(u.starters), 0, 1);
+    }
+    function unitText(label, u) {
+        if (!u) return null;
+        const d = unitDamage(u) || 0;
+        if (d <= 0) return null;
+        return label + ' ' + (Math.round(num(u.lost) * 10) / 10) + ' of ' + u.starters + ' starters down (' + (u.names || []).join(', ') + ')';
+    }
+    function scoreOppHealth(input) {
+        const o = input.oppHealth;
+        if (!o) return { score: null, note: 'No opponent health data' };
+        const P = pos(input);
+        const lift = (d) => d == null ? 0 : clamp(d * 2.5, 0, 1);
+        let mix = null;
+        const parts = [];
+        if (o.side === 'offense') {
+            // a defender facing a backup quarterback, a patched line, or missing weapons
+            const qbLost = o.qb ? (num(o.qb.lost) || 0) : 0;
+            const qbPart = qbLost >= 0.85 ? 1 : qbLost > 0 ? 0.3 : 0;
+            const ol = lift(unitDamage(o.ol)), sk = lift(unitDamage(o.skill));
+            if (P === 'DL') mix = 0.5 * qbPart + 0.5 * ol;
+            else if (P === 'DB') mix = 0.5 * qbPart + 0.5 * sk;
+            else mix = 0.3 * qbPart + 0.4 * ol + 0.3 * sk;
+            if (o.qb && qbLost >= 0.85) parts.push('Backup QB ' + (o.qb.backup || '') + ' starting (' + o.qb.name + ' out)');
+            else if (o.qb && qbLost > 0) parts.push('QB1 ' + o.qb.name + ' questionable');
+            const t1 = unitText('line', o.ol), t2 = unitText('skill', o.skill);
+            if (t1) parts.push(t1); if (t2) parts.push(t2);
+        } else {
+            const db = lift(unitDamage(o.db));
+            const front = lift(unitDamage(o.dl != null || o.lb != null ? { starters: (num(o.dl && o.dl.starters) || 0) + (num(o.lb && o.lb.starters) || 0), lost: (num(o.dl && o.dl.lost) || 0) + (num(o.lb && o.lb.lost) || 0) } : null));
+            if (P === 'RB') mix = 0.65 * front + 0.35 * db;
+            else if (P === 'K') mix = 0.5 * front + 0.5 * db;
+            else mix = 0.6 * db + 0.4 * front;
+            const t1 = unitText('secondary', o.db), t2 = unitText('front', { starters: (num(o.dl && o.dl.starters) || 0) + (num(o.lb && o.lb.starters) || 0), lost: (num(o.dl && o.dl.lost) || 0) + (num(o.lb && o.lb.lost) || 0), names: [].concat(o.dl && o.dl.names || [], o.lb && o.lb.names || []) });
+            if (t1) parts.push(t1); if (t2) parts.push(t2);
+        }
+        if (mix == null) return { score: null, note: 'No opponent health data' };
+        const score = clamp(mix - 0.1, -0.1, 1);
+        const note = parts.length ? (o.team ? o.team + ': ' : '') + parts.join(' · ') : (o.team || 'Opponent') + ' at full strength';
+        return { score, note };
+    }
+
     // A player scoring touchdowns far above the rate his usage supports is
     // due to cool off; one far below is due to warm up (half as strong).
     function scoreLuck(input) {
@@ -367,6 +420,7 @@
         trench: scoreTrench,
         trend: scoreTrend,
         cast: scoreCast,
+        oppHealth: scoreOppHealth,
         luck: scoreLuck,
     };
 

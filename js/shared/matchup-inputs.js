@@ -1149,6 +1149,10 @@
         const cast = castFor(pid, player, grp, team, opts, ctx);
         if (cast) input.cast = cast;
 
+        // opponent health (the other side of the ball)
+        const oh = oppHealthFor(opp, grp, opts, ctx);
+        if (oh) input.oppHealth = oh;
+
         // luck
         if (stats && EXPECTED_TD_RATE[grp]) {
             const opps = grp === 'QB' ? num(stats.pass_att) || 0 : (num(stats.rush_att) || 0) + (num(stats.rec_tgt) || 0);
@@ -1157,6 +1161,79 @@
         }
 
         return input;
+    }
+
+    // ── Opponent health ───────────────────────────────────────────────
+    // How banged up the other side of the ball is (owner ruling
+    // 2026-09-21): for an offensive player, the opponent's secondary and
+    // front; for a defender, the opponent's quarterback, line and skill
+    // starters. A starter is anyone listed first on the depth chart at his
+    // slot or who has played half the unit's snaps (this season, or last
+    // season before the first game), so a man on IR still counts as a
+    // starter lost even after ESPN drops him from the chart.
+    const HEALTH_W = { OUT: 1, IR: 1, PUP: 1, SUS: 1, NA: 1, COV: 1, D: 0.85, Q: 0.3 };
+    const OL_POS = new Set(['OL', 'OT', 'OG', 'C', 'G', 'T', 'LT', 'RT', 'LG', 'RG']);
+    const UNIT_SIZE = { qb: 1, ol: 5, skill: 5, dl: 4, lb: 3, db: 5 };
+    function snapShareOf(pid, opts, side) {
+        const a = side === 'def' ? ['def_snp', 'tm_def_snp'] : ['off_snp', 'tm_off_snp'];
+        for (const table of [opts.statsData, opts.priorData]) {
+            const st = table && table[pid];
+            if (!st || !(num(st.gp) >= 1)) continue;
+            const mine = num(st[a[0]]), all = num(st[a[1]]);
+            if (mine != null && all > 0) return clamp(mine / all, 0, 1);
+        }
+        return null;
+    }
+    function unitHealth(team, unit, ctx, opts) {
+        const players = opts.playersData || {};
+        const picked = {};
+        const side = (unit === 'dl' || unit === 'lb' || unit === 'db') ? 'def' : 'off';
+        const chartRank = { skill: { RB: 1, WR: 3, TE: 1 }, qb: { QB: 1 }, dl: { DL: 1 }, lb: { LB: 1 }, db: { DB: 1 } }[unit] || {};
+        for (const g of Object.keys(chartRank)) for (const m of rankedMates(team, g, ctx, opts)) if (m.rank <= chartRank[g]) picked[m.pid] = true;
+        for (const pid of Object.keys(players)) {
+            const m = players[pid];
+            if (!m || String(m.team || '').toUpperCase() !== team) continue;
+            const g = posGroup(m);
+            const inUnit = unit === 'ol' ? OL_POS.has(String(m.position || '').toUpperCase())
+                : unit === 'skill' ? (g === 'RB' || g === 'WR' || g === 'TE') && String(m.position || '').toUpperCase() !== 'FB'
+                : unit === 'qb' ? g === 'QB' : g === unit.toUpperCase();
+            if (!inUnit || picked[pid]) continue;
+            const sh = snapShareOf(pid, opts, side);
+            if (sh != null && sh >= 0.5) picked[pid] = true;
+        }
+        const out = { starters: 0, lost: 0, names: [] };
+        for (const pid of Object.keys(picked)) {
+            const m = players[pid]; if (!m) continue;
+            out.starters++;
+            const w = HEALTH_W[statusOf(m)] || 0;
+            if (w) { out.lost += w; out.names.push(fullName(m) + (w >= 0.85 ? ' out' : ' questionable')); }
+        }
+        out.starters = Math.max(out.starters, UNIT_SIZE[unit] || 0);
+        out.lost = +out.lost.toFixed(2);
+        return out;
+    }
+    function oppHealthFor(opp, grp, opts, ctx) {
+        if (!opp || !ctx || !opts.playersData) return null;
+        const team = String(opp).toUpperCase();
+        const out = { team };
+        if (BALL_BASIS[grp] === 'tackles') {
+            out.side = 'offense';
+            const qbs = rankedMates(team, 'QB', ctx, opts);
+            const qb1 = qbs.find(m => m.rank <= 1) || null;
+            if (qb1) {
+                const w = HEALTH_W[statusOf(opts.playersData[qb1.pid])] || 0;
+                out.qb = { name: qb1.name, lost: w };
+                if (w >= 0.85) { const next = qbs.find(m => m.pid !== qb1.pid && !(HEALTH_W[statusOf(opts.playersData[m.pid])] >= 0.85)); if (next) out.qb.backup = next.name; }
+            }
+            out.ol = unitHealth(team, 'ol', ctx, opts);
+            out.skill = unitHealth(team, 'skill', ctx, opts);
+        } else {
+            out.side = 'defense';
+            out.db = unitHealth(team, 'db', ctx, opts);
+            out.dl = unitHealth(team, 'dl', ctx, opts);
+            out.lb = unitHealth(team, 'lb', ctx, opts);
+        }
+        return out;
     }
 
     // Sleeper's own published number for the week in this scoring, or null.
@@ -1190,7 +1267,7 @@
     }
 
     App.MatchupInputs = App.MatchupInputs || {
-        prepare, build, project, projectRoster, idpRankings, priorRankings, depthCharts, baselineFor, dhqBaselineFor, sleeperPoints, opponentOf, opponentFor, trenchFor, castFor, teamDepth, expectedShare, seasonProjections, passPool, freedTargetShare, posGroup, normName, roleFor,
+        prepare, build, project, projectRoster, idpRankings, priorRankings, depthCharts, baselineFor, dhqBaselineFor, sleeperPoints, opponentOf, opponentFor, trenchFor, castFor, teamDepth, expectedShare, seasonProjections, passPool, freedTargetShare, posGroup, normName, roleFor, oppHealthFor,
     };
     /* global module */
     if (typeof module !== 'undefined' && module.exports) module.exports = App.MatchupInputs;
