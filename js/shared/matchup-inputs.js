@@ -820,14 +820,23 @@
         // share gets more say with every game: 45% after one game, 60% after
         // two, 85% from three on (owner ruling 2026-09-21: one big week one
         // was becoming a big projection, +1.3 points of bias, worst at RB).
-        const slotNorm = posRank != null && BASE_SHARE[grp] ? BASE_SHARE[grp][Math.min(BASE_SHARE[grp].length, Math.max(1, Math.round(posRank))) - 1] : null;
+        const normAt = (rk) => rk != null && BASE_SHARE[grp] ? BASE_SHARE[grp][Math.min(BASE_SHARE[grp].length, Math.max(1, Math.round(rk))) - 1] : null;
+        let slotNorm = normAt(posRank);
+        // A man promoted by an injury only as far as rank 3 takes the
+        // midpoint of his old slot and the new one, not the full new share.
+        if (promoted && posRank >= 3 && pr.listed != null && normAt(pr.listed) != null) slotNorm = (slotNorm + normAt(pr.listed)) / 2;
+        // WR4 and below (owner ruling 2026-09-21): they get the slot's share,
+        // period. It does not matter who the player is or what he did last
+        // year somewhere else; he rarely sees the field unless the WR3 goes
+        // down in the game.
+        const deepBench = grp === 'WR' && posRank != null && posRank >= 4;
         // The slot norm is a league-average starter. A player with a track
         // record (last season, or a preseason projection) starts from his
         // own share instead, 70/30 with the norm (week 2 2026: Chase,
         // Lamb, McCaffrey were pulled to "average WR1/RB1" after one quiet
         // game and ran 2.4 points low). A promoted player's record was
         // earned as a backup, so he takes the slot norm as is.
-        const track = promoted || BALL_BASIS[grp] === 'tackles' ? null : trackRecordShare(pid, grp, team, ctx, opts);
+        const track = promoted || deepBench || BALL_BASIS[grp] === 'tackles' ? null : trackRecordShare(pid, grp, team, ctx, opts);
         let base = slotNorm;
         if (track != null) base = slotNorm != null ? 0.7 * track + 0.3 * slotNorm : track;
         if (track != null) out.trackShare = +track.toFixed(3);
