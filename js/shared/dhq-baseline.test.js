@@ -82,3 +82,15 @@ test('recent weeks counted double pull the rates toward the hot hand', () => {
     const b = B.buildLine({ position: 'WR', volume: 8, samples: [season, hot] });
     assert.ok(b.line.rec_yd > a.line.rec_yd);
 });
+
+test('a kicker line pays in every scoring style a league uses', () => {
+    const r = B.buildLine({ position: 'K', samples: [{ line: { fga: 20, fgm: 18, xpa: 25, xpm: 25, gp: 9, fgm_20_29: 5, fgm_30_39: 6, fgm_40_49: 5, fgm_50p: 2, fgm_yds: 700, fgm_yds_over_30: 180 } }] });
+    const buckets = B.scoreLine(r.line, { fgm_0_19: 3, fgm_20_29: 3, fgm_30_39: 3, fgm_40_49: 4, fgm_50p: 5, fgmiss: -1, xpm: 1 }, 'K');
+    const yards = B.scoreLine(r.line, { fgm_yds: 0.1, fgmiss: -1, xpm: 1 }, 'K');
+    const longBuckets = B.scoreLine(r.line, { fgm_0_19: 3, fgm_20_29: 3, fgm_30_39: 3, fgm_40_49: 4, fgm_50_59: 5, fgm_60p: 6, xpm: 1 }, 'K');
+    assert.ok(buckets > 6 && buckets < 12, 'bucket leagues: ' + buckets);
+    assert.ok(yards > 6 && yards < 12, 'yards-per-make leagues: ' + yards);
+    assert.ok(Math.abs(longBuckets - buckets) < 1.5, '50-59/60+ leagues pay about the same as 50+ leagues: ' + longBuckets + ' vs ' + buckets);
+    assert.ok(Math.abs(r.line.fgm_50_59 + r.line.fgm_60p - r.line.fgm_50p) < 1e-9);
+    assert.ok(Math.abs(r.line.fgm_yds / r.line.fgm - 38.5) < 1.5, 'about 38-39 yards a make from his 700/18 history pulled to the norm');
+});

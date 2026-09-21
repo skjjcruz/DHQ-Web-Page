@@ -38,7 +38,8 @@
         DL: { soloShare: 0.62, sackPg: 0.35, intPg: 0.01, pdPg: 0.15, ffPg: 0.06, K: 8 },
         LB: { soloShare: 0.62, sackPg: 0.18, intPg: 0.04, pdPg: 0.25, ffPg: 0.06, K: 8 },
         DB: { soloShare: 0.75, sackPg: 0.04, intPg: 0.06, pdPg: 0.60, ffPg: 0.04, K: 8 },
-        K: { fgaPg: 2.0, fgPct: 0.85, xpaPg: 2.6, xpPct: 0.95, K: 6, dist: { fgm_0_19: 0.02, fgm_20_29: 0.30, fgm_30_39: 0.30, fgm_40_49: 0.26, fgm_50p: 0.12 } },
+        K: { fgaPg: 2.0, fgPct: 0.85, xpaPg: 2.6, xpPct: 0.95, K: 6, dist: { fgm_0_19: 0.02, fgm_20_29: 0.30, fgm_30_39: 0.30, fgm_40_49: 0.26, fgm_50p: 0.12 },
+             ydsPerFg: 38, over30PerFg: 9.5, missDist: { fgmiss_0_19: 0.01, fgmiss_20_29: 0.05, fgmiss_30_39: 0.14, fgmiss_40_49: 0.35, fgmiss_50p: 0.45 } },
     };
     const FUMBLE_PER_TOUCH = 0.006;
 
@@ -137,7 +138,19 @@
             const made = ['fgm_0_19', 'fgm_20_29', 'fgm_30_39', 'fgm_40_49', 'fgm_50p'];
             const own = made.reduce((s, k) => s + num(c[k]), 0);
             for (const k of made) line[k] = line.fgm * (own >= 8 ? num(c[k]) / own : n.dist[k]);
-            why.push(fga.toFixed(1) + ' FG att at ' + Math.round(fgPct * 100) + '% · ' + xpa.toFixed(1) + ' XP att');
+            // Every way a league can pay a kicker (owner finding 2026-09-21:
+            // leagues paying 0.1 a yard, or 50-59 and 60+ buckets, were
+            // scoring our line at zero for field goals). Yards per make and
+            // yards over 30 from his own history, pulled toward the norm;
+            // 50+ split 90/10 into 50-59 and 60+; misses spread by distance.
+            const ydsPerFg = rate(c.fgm_yds, c.fgm, n.ydsPerFg, 12);
+            const over30 = rate(c.fgm_yds_over_30, c.fgm, n.over30PerFg, 12);
+            line.fgm_yds = line.fgm * ydsPerFg;
+            line.fgm_yds_over_30 = line.fgm * over30;
+            line.fgm_50_59 = line.fgm_50p * 0.9; line.fgm_60p = line.fgm_50p * 0.1;
+            for (const k of Object.keys(n.missDist)) line[k] = line.fgmiss * n.missDist[k];
+            line.fgmiss_50_59 = line.fgmiss_50p * 0.9; line.fgmiss_60p = line.fgmiss_50p * 0.1;
+            why.push(fga.toFixed(1) + ' FG att at ' + Math.round(fgPct * 100) + '% (' + Math.round(ydsPerFg) + ' yds a make) · ' + xpa.toFixed(1) + ' XP att');
         }
         for (const k of Object.keys(line)) line[k] = +line[k].toFixed(3);
         return { line, why: why.join(' · ') };
