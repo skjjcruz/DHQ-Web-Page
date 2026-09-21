@@ -50,13 +50,29 @@ jobs:
         run: node scripts/build-pff-matchup-snapshot.mjs ${{ github.event.inputs.season }}
 
       - name: Commit if changed
+        # The branch can move while the build runs (a merge, or the other
+        # snapshot job), so: keep the fresh build aside, sync to the latest
+        # commit, lay the build back down, and push; up to three tries.
         run: |
           git config user.name "dhq-snapshot-bot"
           git config user.email "noreply@dhqfootball.com"
-          git add data/pff-matchup-snapshot.js
-          if git diff --cached --quiet; then
-            echo "Snapshot unchanged, nothing to commit."
-          else
+          cp data/pff-matchup-snapshot.js /tmp/fresh-snapshot.js
+          BRANCH="${{ github.ref_name }}"
+          for attempt in 1 2 3; do
+            git fetch origin "$BRANCH"
+            git reset --hard "origin/$BRANCH"
+            cp /tmp/fresh-snapshot.js data/pff-matchup-snapshot.js
+            git add data/pff-matchup-snapshot.js
+            if git diff --cached --quiet; then
+              echo "Snapshot unchanged, nothing to commit."
+              exit 0
+            fi
             git commit -m "PFF matchup snapshot $(date -u '+%Y-%m-%d %H:%M UTC')"
-            git push
-          fi
+            if git push origin "HEAD:$BRANCH"; then
+              exit 0
+            fi
+            echo "Push rejected (attempt $attempt), the branch moved; syncing and trying again."
+            sleep $((attempt * 5))
+          done
+          echo "::error::Could not push the snapshot after three tries."
+          exit 1
