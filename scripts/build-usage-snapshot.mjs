@@ -1,5 +1,6 @@
-// Builds data/usage-snapshot.js: how each coaching staff spreads targets
-// across its receivers and tight ends, by usage rank, season by season,
+// Builds data/usage-snapshot.js: how each coaching staff spreads the ball
+// across its receivers, tight ends (targets) and backs (carries plus
+// targets), by usage rank, season by season,
 // plus which past seasons were under the team's current head coach.
 //
 //   node scripts/build-usage-snapshot.mjs [season]
@@ -14,7 +15,9 @@ import path from 'node:path';
 
 const SEASON = Number(process.argv[2]) || (() => { const d = new Date(); return d.getUTCMonth() >= 2 ? d.getUTCFullYear() : d.getUTCFullYear() - 1; })();
 const BACK = 3;                                   // seasons of history to keep
-const POS = { WR: 6, TE: 4 };                     // ranks kept per group
+const POS = { WR: 6, TE: 4, RB: 5 };              // ranks kept per group
+// The ball each group is measured in: targets for pass catchers, carries plus targets for backs.
+const ball = (grp, st) => grp === 'RB' ? (st.rush_att || 0) + (st.rec_tgt || 0) : (st.rec_tgt || 0);
 const OUT = path.resolve('data/usage-snapshot.js');
 const UA = { 'User-Agent': 'curl/8.5.0', Accept: 'application/json' };
 const ESPN_TO_SLEEPER = { WSH: 'WAS', LA: 'LAR', JAC: 'JAX', OAK: 'LV', SD: 'LAC', STL: 'LAR' };
@@ -61,22 +64,24 @@ async function usage(season) {
             if (!Array.isArray(rows) || !rows.length) break;
             for (const r of rows) {
                 if (!r.team || !r.stats || !(r.stats.gp >= 1)) continue;
+                if (grp === 'RB' && r.player && String(r.player.position || '').toUpperCase() === 'FB') continue;   // fullbacks are not backs
                 const T = code(r.team);
                 const t = out[T] = out[T] || {};
                 const g = t[grp] = t[grp] || { players: {}, weeks: new Set() };
                 g.weeks.add(w);
                 const p = g.players[r.player_id] = g.players[r.player_id] || { name: r.player ? (r.player.first_name + ' ' + r.player.last_name) : r.player_id, tgt: 0, games: 0 };
-                p.tgt += r.stats.rec_tgt || 0; p.games++;
+                p.tgt += ball(grp, r.stats); p.games++;
             }
         }
     }
     const result = {};
     for (const T of Object.keys(out)) {
         const row = teamRows['TEAM_' + T] || {};
-        const teamTgt = row.rec_tgt || 0, teamGp = row.gp || 0;
-        result[T] = { games: teamGp, teamTargets: teamTgt, perGame: teamGp ? +(teamTgt / teamGp).toFixed(1) : null };
+        const teamGp = row.gp || 0;
+        result[T] = { games: teamGp, teamTargets: row.rec_tgt || 0, teamTouches: ball('RB', row), perGame: teamGp ? +((row.rec_tgt || 0) / teamGp).toFixed(1) : null };
         for (const grp of Object.keys(POS)) {
             const g = out[T][grp]; if (!g) continue;
+            const teamTgt = ball(grp, row);
             const list = Object.values(g.players).sort((a, b) => b.tgt - a.tgt);
             const roomTgt = list.reduce((s, p) => s + p.tgt, 0);
             result[T][grp] = {

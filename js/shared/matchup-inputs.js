@@ -747,7 +747,8 @@
         return perGameShare(opts.priorData, 'prior', pid, team, grp, ctx, opts);
     }
     // ── Team slot norms (owner ruling 2026-09-21) ────────────────────
-    // What THIS coaching staff gives its WR1..WR6 and TE1..TE4, from the
+    // What THIS coaching staff gives its WR1..WR6, TE1..TE4 (targets) and
+    // RB1..RB5 (carries plus targets), from the
     // usage snapshot (data/usage-snapshot.js: seasons under the current
     // head coach, receivers ranked by targets), blended with this season's
     // usage on a weight that picks up from week 3. A brand-new head coach
@@ -760,7 +761,7 @@
         if (ctx._cu[k] !== undefined) return ctx._cu[k];
         const players = opts.playersData || {}, stats = opts.statsData || {};
         const row = stats['TEAM_' + team];
-        const teamTgt = row ? (num(row.rec_tgt) || 0) : 0, games = row ? (num(row.gp) || 0) : 0;
+        const teamTgt = row ? ballOf(grp, row) : 0, games = row ? (num(row.gp) || 0) : 0;
         let out = null;
         if (teamTgt > 0 && games > 0) {
             const list = [];
@@ -769,7 +770,8 @@
                 if (pid.startsWith('TEAM_')) continue;
                 const m = players[pid];
                 if (!m || String(m.team || '').toUpperCase() !== team || posGroup(m) !== grp) continue;
-                const t = num(stats[pid].rec_tgt) || 0;
+                if (grp === 'RB' && String(m.position || '').toUpperCase() === 'FB') continue;
+                const t = ballOf(grp, stats[pid]);
                 if (t > 0) { list.push(t); room += t; }
             }
             list.sort((a, b) => b - a);
@@ -779,7 +781,7 @@
         return out;
     }
     function teamSlotNorm(team, grp, rank, ctx, opts) {
-        if (grp !== 'WR' && grp !== 'TE') return null;
+        if (grp !== 'WR' && grp !== 'TE' && grp !== 'RB') return null;
         const U = usage();
         const t = U && U.teams && U.teams[team];
         const prior = t && t.prior && t.prior[grp] && t.prior[grp].seasons > 0 ? t.prior[grp] : null;

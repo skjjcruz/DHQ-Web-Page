@@ -5,6 +5,7 @@ name: Usage snapshot
 
 on:
   push:
+    branches: [main]
     paths:
       - 'scripts/build-usage-snapshot.mjs'
       - '.github/workflows/usage-snapshot.yml'
