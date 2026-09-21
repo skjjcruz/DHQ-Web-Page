@@ -48,7 +48,15 @@
     // Share of the team's ball a depth-chart slot normally earns (league
     // norms from the prior season). Used to steady a thin sample and to
     // give a promoted player credit before his stats catch up.
-    const BASE_SHARE = { QB: [0.95, 0.05], RB: [0.50, 0.25, 0.10, 0.04], WR: [0.25, 0.18, 0.12, 0.06], TE: [0.15, 0.06, 0.03], DL: [0.06, 0.03, 0.02], LB: [0.12, 0.05, 0.03], DB: [0.09, 0.05, 0.03] };
+    // Calibrated from the 2025 season (league medians, share of the TEAM's
+    // ball: targets for WR/TE, carries+targets for RB, attempts for QB,
+    // tackles for defenders). Defensive ranks are per depth-chart slot, so
+    // "1" is the typical starter at one of several slots.
+    const BASE_SHARE = { QB: [0.90, 0.10], RB: [0.29, 0.13, 0.04, 0.01], WR: [0.23, 0.15, 0.10, 0.04], TE: [0.15, 0.05, 0.02], DL: [0.045, 0.02, 0.01], LB: [0.10, 0.04, 0.02], DB: [0.075, 0.03, 0.015] };
+    // What a whole position room gets of the team's ball (2025 medians).
+    // A team's projected shares at a position are scaled down to this cap,
+    // so four backs can never add up to more than a backfield.
+    const ROOM_SHARE = { QB: 1.0, RB: 0.46, WR: 0.60, TE: 0.24, DL: 0.25, LB: 0.32, DB: 0.43 };
     const SLEEPER_DEPTH_POS = { QB: 'QB', RB: 'RB', FB: 'RB', WR: 'WR', LWR: 'WR', SWR: 'WR', RWR: 'WR', TE: 'TE', K: 'K',
         LDE: 'DL', RDE: 'DL', DE: 'DL', DT: 'DL', NT: 'DL', LDT: 'DL', RDT: 'DL', DL: 'DL',
         LILB: 'LB', RILB: 'LB', LOLB: 'LB', ROLB: 'LB', MLB: 'LB', ILB: 'LB', OLB: 'LB', LB: 'LB', WLB: 'LB', SLB: 'LB',
@@ -518,12 +526,16 @@
     }
     // Team pie for the week: the team's per-game ball, tilted by the spread
     // (underdogs throw more, favorites hand off more).
+    // League-average per-game volume the team pie is pulled toward until
+    // the team has three games (K = 2 phantom games).
+    const PIE_NORM = { attempts: 34, touches: 55, targets: 30, tackles: 58 };   // 2025 medians
     function teamPie(team, grp, week, opts, ctx) {
         const row = opts.statsData && opts.statsData['TEAM_' + team];
         const gp = row ? num(row.gp) : null;
         const total = teamBall(ctx, opts.statsData, 'season', team, grp, opts.playersData);
         if (!gp || gp <= 0 || total <= 0) return null;
-        let perGame = total / gp;
+        const norm = PIE_NORM[BALL_BASIS[grp]];
+        let perGame = norm ? (total + 2 * norm) / (gp + 2) : total / gp;
         const wk = App.WeeklyProj && App.WeeklyProj._ctx && App.WeeklyProj._ctx.byTeamWeek[team + '|' + week];
         const spread = wk && wk.vegas ? num(wk.vegas.spread) : null; // positive = underdog
         if (spread != null) {
@@ -532,6 +544,27 @@
         }
         return perGame;
     }
+    // A team's raw projected shares at a position, summed over its healthy
+    // players, so each one can be scaled to the room cap. Memoized.
+    function roomScale(team, grp, opts, ctx) {
+        ctx._room = ctx._room || {};
+        const k = team + '|' + grp;
+        if (ctx._room[k] != null) return ctx._room[k];
+        ctx._room[k] = 1;   // guard against re-entry while summing
+        const players = opts.playersData || {};
+        let sum = 0;
+        for (const mid of Object.keys(players)) {
+            const m = players[mid];
+            if (!m || String(m.team || '').toUpperCase() !== team || posGroup(m) !== grp) continue;
+            if (OUT_FOR_SHARE[statusOf(m)]) continue;
+            const raw = rawShareFor(mid, m, grp, team, opts, ctx);
+            if (raw != null) sum += raw;
+        }
+        const cap = ROOM_SHARE[grp] || 1;
+        ctx._room[k] = sum > cap ? cap / sum : 1;
+        return ctx._room[k];
+    }
+
     // Everything the engine's role factor reads.
     function roleFor(pid, player, grp, team, opts, ctx) {
         const stats = (opts.statsData && opts.statsData[pid]) || null;
@@ -545,6 +578,41 @@
             : depth && num(depth.sp) != null ? depth.sp / 100 : null;
         if (snap != null) out.snapShare = snap;
         if (!BALL_BASIS[grp]) return out;
+
+        const rawInfo = rawShareFor(pid, player, grp, team, opts, ctx, true) || {};
+        if (rawInfo.shareRank != null) out.shareRank = rawInfo.shareRank;
+        if (rawInfo.freedShare) out.freedShare = rawInfo.freedShare;
+        const early = out.gamesPlayed == null || out.gamesPlayed < 3;
+        let proj = rawInfo.share;
+        if (proj != null) {
+            proj *= roomScale(team, grp, opts, ctx);
+            out.share = clamp(proj, 0, 1);
+            const pie = teamPie(team, grp, ctx.week, opts, ctx);
+            if (pie != null) {
+                out.projTargets = +(pie * out.share).toFixed(1);
+                if (out.freedShare) {
+                    const tgtPie = teamPie(team, 'WR', ctx.week, opts, ctx);
+                    if (tgtPie != null) out.freedTargets = +(tgtPie * out.freedShare * (early ? 0.6 : 0.85)).toFixed(1);
+                }
+            }
+            const line = App.WeeklyProj && App.WeeklyProj.projLine && App.WeeklyProj.projLine(pid, ctx.week);
+            if (line) { const st = ballOf(grp, line); if (st > 0) out.sleeperTargets = +st.toFixed(1); }
+        }
+        return out;
+    }
+
+    // The raw projected share of the team's ball for one player: earned
+    // share (season, recent) with freed targets, blended with his
+    // depth-chart norm. Memoized per player; `full` also returns the
+    // details the role note shows.
+    function rawShareFor(pid, player, grp, team, opts, ctx, full) {
+        ctx._rawShare = ctx._rawShare || {};
+        if (ctx._rawShare[pid]) return full ? ctx._rawShare[pid] : ctx._rawShare[pid].share;
+        const stats = (opts.statsData && opts.statsData[pid]) || null;
+        const out = {};
+        const pr = posRankFor(player, grp, ctx.depth);
+        const posRank = pr ? pr.rank : null;
+        const gamesPlayed = stats ? num(stats.gp) : null;
 
         let earned = earnedShare(pid, player, grp, team, opts, ctx);
         // Rank on his team by earned season share, and the share freed up by
@@ -589,27 +657,20 @@
                 if (earned != null && freed > 0 && healthySum > 0 && !OUT_FOR_SHARE[statusOf(player)]) earned = earned * (1 + freed / healthySum);
             }
         }
-        // Blend with what his depth-chart slot normally earns: heavier early.
-        const base = out.posRank != null && BASE_SHARE[grp] ? BASE_SHARE[grp][Math.min(BASE_SHARE[grp].length, Math.max(1, Math.round(out.posRank))) - 1] : null;
-        const early = out.gamesPlayed == null || out.gamesPlayed < 3;
+        // Blend with what his depth-chart slot normally earns. The earned
+        // share gets more say with every game: 45% after one game, 60% after
+        // two, 85% from three on (owner ruling 2026-09-21: one big week one
+        // was becoming a big projection, +1.3 points of bias, worst at RB).
+        const base = posRank != null && BASE_SHARE[grp] ? BASE_SHARE[grp][Math.min(BASE_SHARE[grp].length, Math.max(1, Math.round(posRank))) - 1] : null;
+        const gp = gamesPlayed == null ? 0 : gamesPlayed;
+        const wEarned = gp >= 3 ? 0.85 : gp === 2 ? 0.6 : gp === 1 ? 0.45 : 0.3;
         let proj = null;
-        if (earned != null && base != null) proj = early ? 0.6 * earned + 0.4 * base : 0.85 * earned + 0.15 * base;
+        if (earned != null && base != null) proj = wEarned * earned + (1 - wEarned) * base;
         else if (earned != null) proj = earned;
         else if (base != null) proj = base;
-        if (proj != null) {
-            out.share = clamp(proj, 0, 1);
-            const pie = teamPie(team, grp, ctx.week, opts, ctx);
-            if (pie != null) {
-                out.projTargets = +(pie * out.share).toFixed(1);
-                if (out.freedShare) {
-                    const tgtPie = teamPie(team, 'WR', ctx.week, opts, ctx);
-                    if (tgtPie != null) out.freedTargets = +(tgtPie * out.freedShare * (early ? 0.6 : 0.85)).toFixed(1);
-                }
-            }
-            const line = App.WeeklyProj && App.WeeklyProj.projLine && App.WeeklyProj.projLine(pid, ctx.week);
-            if (line) { const st = ballOf(grp, line); if (st > 0) out.sleeperTargets = +st.toFixed(1); }
-        }
-        return out;
+        out.share = proj != null ? clamp(proj, 0, 1) : null;
+        ctx._rawShare[pid] = out;
+        return full ? out : out.share;
     }
 
     // ── DHQ's own baseline ────────────────────────────────────────────
@@ -622,10 +683,17 @@
         if (!DB) return null;
         const stats = (opts.statsData && opts.statsData[pid]) || null;
         const prior = (opts.priorData && opts.priorData[pid]) || null;
+        // Recent weeks count double only once the season has three games;
+        // before that the season table IS those weeks, and doubling them
+        // stacked one game three times against the position norm. Last
+        // season counts in full until then.
         const samples = [];
-        for (const wk of ctx.recentWeeks || []) if (wk && wk.stats && wk.stats[pid] && num(wk.stats[pid].gp) >= 1) samples.push({ line: wk.stats[pid], weight: 2 });
-        if (stats && num(stats.gp) >= 1) samples.push({ line: stats, weight: 1 });
-        if (prior && num(prior.gp) >= 1) samples.push({ line: prior, weight: 0.5 });
+        const gpNow = stats ? (num(stats.gp) || 0) : 0;
+        const recentW = gpNow >= 3 ? 2 : 1;
+        const priorW = gpNow >= 3 ? 0.5 : 1;
+        for (const wk of ctx.recentWeeks || []) if (wk && wk.stats && wk.stats[pid] && num(wk.stats[pid].gp) >= 1) samples.push({ line: wk.stats[pid], weight: recentW });
+        if (stats && gpNow >= 1) samples.push({ line: stats, weight: 1 });
+        if (prior && num(prior.gp) >= 1) samples.push({ line: prior, weight: priorW });
         let volume = role && num(role.projTargets) != null ? role.projTargets : null;
         if (volume == null && grp !== 'K') {
             // No role projection: fall back to his own per-game volume.
