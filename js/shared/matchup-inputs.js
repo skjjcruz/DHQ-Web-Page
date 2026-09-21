@@ -458,7 +458,7 @@
     }
     // Depth-chart rank at the player's fantasy position: ESPN first, then
     // Sleeper's own field when it lists him at that position.
-    function posRankFor(player, grp, roles) {
+    function listedRank(player, grp, roles) {
         const team = String(player.team || '').toUpperCase();
         if (roles) {
             const r = roles[team + '|' + espnName(fullName(player))];
@@ -468,6 +468,61 @@
         const so = num(player.depth_chart_order);
         if (sp === grp && so != null && so > 0 && so < 20) return { rank: so, source: 'sleeper' };
         return null;
+    }
+    // The listed rank with the fullback fixed: ESPN keeps a separate FB
+    // slot that the depth-chart relay folds into "RB, rank 1", so every
+    // fullback read as the starting back (week 2 2026: Juszczyk, Ingold,
+    // Luepke, Bredeson projected 5-7 points, scored 0). Sleeper's own
+    // position tag (FB) or its depth order (3rd or lower) says otherwise.
+    function baseRank(player, grp, roles) {
+        const lr = listedRank(player, grp, roles);
+        if (!lr) return null;
+        const out = { rank: lr.rank, source: lr.source, listed: lr.rank };
+        if (grp === 'RB' && lr.source === 'espn') {
+            const so = num(player.depth_chart_order);
+            const sleeperRb = SLEEPER_DEPTH_POS[String(player.depth_chart_position || '').toUpperCase()] === 'RB';
+            const isFb = String(player.position || '').toUpperCase() === 'FB';
+            if (isFb || (lr.rank <= 1 && sleeperRb && so != null && so >= 3)) {
+                out.rank = Math.max(4, so || 4);
+                out.fullback = true;
+            }
+        }
+        return out;
+    }
+    // Every teammate's base rank at one position, once per (team, group).
+    function rankedMates(team, grp, ctx, opts) {
+        ctx._ranked = ctx._ranked || {};
+        const k = team + '|' + grp;
+        if (ctx._ranked[k]) return ctx._ranked[k];
+        const list = [];
+        const players = (opts && opts.playersData) || {};
+        for (const mid of Object.keys(players)) {
+            const m = players[mid];
+            if (!m || String(m.team || '').toUpperCase() !== team || posGroup(m) !== grp) continue;
+            const br = baseRank(m, grp, ctx.depth);
+            if (br) list.push({ pid: mid, rank: br.rank, name: fullName(m), outW: OUT_FOR_SHARE[statusOf(m)] || 0 });
+        }
+        list.sort((a, b) => a.rank - b.rank);
+        ctx._ranked[k] = list;
+        return list;
+    }
+    // Depth-chart rank at the player's fantasy position: ESPN first, then
+    // Sleeper's own field; fullbacks corrected; then next man up: when the
+    // men listed ahead of him are out (or doubtful) this week he moves up
+    // one slot for each of them (week 2 2026: Darnold out, Drew Lock
+    // stayed "QB2" at half the attempts and scored 21).
+    function posRankFor(player, grp, roles, ctx, opts) {
+        const br = baseRank(player, grp, roles);
+        if (!br) return null;
+        if (!ctx || !opts || !opts.playersData || br.rank <= 1 || BALL_BASIS[grp] === 'tackles') return br;
+        const team = String(player.team || '').toUpperCase();
+        const me = String(player.player_id || '');
+        const myName = fullName(player);
+        const ahead = rankedMates(team, grp, ctx, opts).filter(m => m.pid !== me && m.name !== myName && m.rank < br.rank && m.outW >= 0.8);
+        if (!ahead.length) return br;
+        br.rank = Math.max(1, br.rank - ahead.length);
+        br.promotedPast = ahead.map(m => m.name);
+        return br;
     }
 
     // ── Share of the ball ─────────────────────────────────────────────
@@ -569,8 +624,13 @@
     function roleFor(pid, player, grp, team, opts, ctx) {
         const stats = (opts.statsData && opts.statsData[pid]) || null;
         const out = { shareBasis: BALL_BASIS[grp] || null, gamesPlayed: stats ? num(stats.gp) : null };
-        const pr = posRankFor(player, grp, ctx.depth);
-        if (pr) { out.posRank = pr.rank; out.posRankSource = pr.source; }
+        const pr = posRankFor(player, grp, ctx.depth, ctx, opts);
+        if (pr) {
+            out.posRank = pr.rank; out.posRankSource = pr.source;
+            if (pr.listed != null && pr.listed !== pr.rank) out.listedRank = pr.listed;
+            if (pr.promotedPast) out.promotedPast = pr.promotedPast;
+            if (pr.fullback) out.fullback = true;
+        }
         // Snap share, Sleeper first, PFF depth chart as backup.
         const depth = pffDepthRow(team, player);
         const snap = stats && num(stats.off_snp) && num(stats.tm_off_snp) ? clamp(stats.off_snp / stats.tm_off_snp, 0, 1)
@@ -582,10 +642,16 @@
         const rawInfo = rawShareFor(pid, player, grp, team, opts, ctx, true) || {};
         if (rawInfo.shareRank != null) out.shareRank = rawInfo.shareRank;
         if (rawInfo.freedShare) out.freedShare = rawInfo.freedShare;
+        if (rawInfo.trackShare != null) out.trackShare = rawInfo.trackShare;
+        if (rawInfo.earnedShare != null) out.earnedShare = rawInfo.earnedShare;
+        if (rawInfo.slotNorm != null) out.slotNorm = rawInfo.slotNorm;
+        if (rawInfo.promoted) out.promoted = true;
         const early = out.gamesPlayed == null || out.gamesPlayed < 3;
         let proj = rawInfo.share;
         if (proj != null) {
-            proj *= roomScale(team, grp, opts, ctx);
+            out.rawShare = +proj.toFixed(3);
+            out.roomScale = +roomScale(team, grp, opts, ctx).toFixed(3);
+            proj *= out.roomScale;
             out.share = clamp(proj, 0, 1);
             const pie = teamPie(team, grp, ctx.week, opts, ctx);
             if (pie != null) {
@@ -601,6 +667,25 @@
         return out;
     }
 
+    // What he carried before this season: last season's share of his
+    // team's ball (six games or more) and his preseason projected share,
+    // averaged when both exist.
+    function trackRecordShare(pid, grp, team, ctx, opts) {
+        const players = opts.playersData || {};
+        const parts = [];
+        const pr = opts.priorData && opts.priorData[pid];
+        if (pr && (num(pr.gp) || 0) >= 6) {
+            const priorTot = teamBall(ctx, opts.priorData, 'prior', team, grp, players);
+            if (priorTot > 0) parts.push(ballOf(grp, pr) / priorTot);
+        }
+        const sp = ctx.seasonProj && ctx.seasonProj[pid];
+        if (sp && BALL_BASIS[grp] !== 'tackles') {
+            const pt = projTeamTotal(ctx, team, grp, players);
+            if (pt > 0 && projBall(grp, sp) > 0) parts.push(projBall(grp, sp) / pt);
+        }
+        if (!parts.length) return null;
+        return clamp(parts.reduce((a, b) => a + b, 0) / parts.length, 0, 1);
+    }
     // The raw projected share of the team's ball for one player: earned
     // share (season, recent) with freed targets, blended with his
     // depth-chart norm. Memoized per player; `full` also returns the
@@ -610,8 +695,9 @@
         if (ctx._rawShare[pid]) return full ? ctx._rawShare[pid] : ctx._rawShare[pid].share;
         const stats = (opts.statsData && opts.statsData[pid]) || null;
         const out = {};
-        const pr = posRankFor(player, grp, ctx.depth);
+        const pr = posRankFor(player, grp, ctx.depth, ctx, opts);
         const posRank = pr ? pr.rank : null;
+        const promoted = !!(pr && pr.promotedPast);
         const gamesPlayed = stats ? num(stats.gp) : null;
 
         let earned = earnedShare(pid, player, grp, team, opts, ctx);
@@ -661,9 +747,26 @@
         // share gets more say with every game: 45% after one game, 60% after
         // two, 85% from three on (owner ruling 2026-09-21: one big week one
         // was becoming a big projection, +1.3 points of bias, worst at RB).
-        const base = posRank != null && BASE_SHARE[grp] ? BASE_SHARE[grp][Math.min(BASE_SHARE[grp].length, Math.max(1, Math.round(posRank))) - 1] : null;
+        const slotNorm = posRank != null && BASE_SHARE[grp] ? BASE_SHARE[grp][Math.min(BASE_SHARE[grp].length, Math.max(1, Math.round(posRank))) - 1] : null;
+        // The slot norm is a league-average starter. A player with a track
+        // record (last season, or a preseason projection) starts from his
+        // own share instead, 70/30 with the norm (week 2 2026: Chase,
+        // Lamb, McCaffrey were pulled to "average WR1/RB1" after one quiet
+        // game and ran 2.4 points low). A promoted player's record was
+        // earned as a backup, so he takes the slot norm as is.
+        const track = promoted || BALL_BASIS[grp] === 'tackles' ? null : trackRecordShare(pid, grp, team, ctx, opts);
+        let base = slotNorm;
+        if (track != null) base = slotNorm != null ? 0.7 * track + 0.3 * slotNorm : track;
+        if (track != null) out.trackShare = +track.toFixed(3);
+        if (earned != null) out.earnedShare = +earned.toFixed(3);
+        if (slotNorm != null) out.slotNorm = slotNorm;
         const gp = gamesPlayed == null ? 0 : gamesPlayed;
-        const wEarned = gp >= 3 ? 0.85 : gp === 2 ? 0.6 : gp === 1 ? 0.45 : 0.3;
+        let wEarned = gp >= 3 ? 0.85 : gp === 2 ? 0.6 : gp === 1 ? 0.45 : 0.3;
+        // With a track record behind him, his first games count games/(games+2):
+        // one game is a third of the story, three games are three fifths, and
+        // by game six his own season carries three quarters.
+        if (track != null && gp < 6) wEarned = Math.min(wEarned, gp / (gp + 2));
+        if (promoted) { wEarned = Math.min(wEarned, 0.15); out.promoted = true; }
         let proj = null;
         if (earned != null && base != null) proj = wEarned * earned + (1 - wEarned) * base;
         else if (earned != null) proj = earned;
@@ -850,7 +953,8 @@
                 if (!byPos[r.pos]) continue;
                 const pid = idx[k.slice(prefix.length)];
                 if (!pid) continue;
-                byPos[r.pos].push({ pid, rank: num(r.rank) || 99 });
+                const br = baseRank(players[pid], r.pos, ctx.depth);
+                byPos[r.pos].push({ pid, rank: br ? br.rank : (num(r.rank) || 99) });
                 used = true;
             }
         }

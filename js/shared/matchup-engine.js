@@ -135,7 +135,10 @@
         const early = num(r.gamesPlayed) != null && num(r.gamesPlayed) < 3;
         if (rank != null) {
             parts.push({ w: early ? 0.55 : 0.40, s: rankEffect(P, rank) });
-            notes.push((P === 'K' ? 'K' : P) + Math.round(rank) + ' on the depth chart');
+            let n = (P === 'K' ? 'K' : P) + Math.round(rank) + ' on the depth chart';
+            if (Array.isArray(r.promotedPast) && r.promotedPast.length && num(r.listedRank) != null) n += ' (listed ' + P + Math.round(num(r.listedRank)) + ', next man up: ' + r.promotedPast.join(', ') + ' out)';
+            else if (r.fullback) n += ' (fullback)';
+            notes.push(n);
         }
         const se = shareEffect(P, share);
         if (se != null) {
