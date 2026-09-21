@@ -10,7 +10,7 @@ const projectWith = (extra) => E.project(Object.assign({ pid: 'x', week: 3, posi
 test('weights sum to 100 and match the owner ruling', () => {
     const sum = Object.values(E.WEIGHTS).reduce((a, b) => a + b, 0);
     assert.equal(sum, 100);
-    assert.deepEqual(E.WEIGHTS, { role: 20, health: 11, opponent: 14, game: 12, coaching: 8, h2h: 8, trench: 8, trend: 8, cast: 8, luck: 3 });
+    assert.deepEqual(E.WEIGHTS, { role: 18, health: 11, opponent: 12, game: 10, coaching: 8, h2h: 8, trench: 8, trend: 8, cast: 8, oppHealth: 6, luck: 3 });
 });
 
 test('no factor data at all → projection equals the baseline, grade C, every factor listed as missing', () => {
@@ -20,7 +20,7 @@ test('no factor data at all → projection equals the baseline, grade C, every f
     assert.equal(p.grade, 'C');
     assert.equal(p.verdict, 'flex');
     assert.equal(p.baseline.source, 'sleeper');
-    assert.equal(p.missing.length, 10);
+    assert.equal(p.missing.length, 11);
     assert.equal(p.why.length, 0);
 });
 
@@ -150,7 +150,7 @@ test('the "why" list is sorted by impact and only lists factors that had data', 
         luck: { tdRate: 0.06, expectedTdRate: 0.06 },
     });
     assert.deepEqual(p.why.map(w => w.key), ['role', 'opponent', 'luck']);
-    assert.equal(p.missing.length, 7);
+    assert.equal(p.missing.length, 8);
     for (let i = 1; i < p.why.length; i++) assert.ok(Math.abs(p.why[i - 1].impactPct) >= Math.abs(p.why[i].impactPct));
 });
 
@@ -232,10 +232,10 @@ test('a DHQ-built baseline uses the DHQ weight set, which also sums to 100', () 
     const p = E.project({ position: 'WR', baseline: BASE, baselineSource: 'dhq', role: { posRank: 1, snapShare: 1 }, opponent: { rankVsPos: 32 } });
     assert.equal(p.weights.role, 12);
     assert.equal(p.weights.cast, 6);
-    assert.equal(p.factors.find(f => f.key === 'opponent').weight, 18);
+    assert.equal(p.factors.find(f => f.key === 'opponent').weight, 15);
     assert.equal(p.baseline.source, 'dhq');
     const q = E.project({ position: 'WR', baseline: BASE, baselineSource: 'sleeper', opponent: { rankVsPos: 32 } });
-    assert.equal(q.factors.find(f => f.key === 'opponent').weight, 14);
+    assert.equal(q.factors.find(f => f.key === 'opponent').weight, 12);
 });
 
 test('supporting cast: a receiver with his QB1 out takes the full hit, a backup QB is a big minus, a healthy good QB is a plus', () => {
@@ -279,4 +279,21 @@ test('role note says when a player is the next man up or a fullback', () => {
     const fb = E.scorers.role({ position: 'RB', role: { posRank: 4, listedRank: 1, fullback: true, gamesPlayed: 1 } });
     assert.match(fb.note, /RB4 on the depth chart \(fullback\)/);
     assert.ok(fb.score < r.score, 'a fullback reads as a deep backup, a promoted starter as the starter');
+});
+
+test('opponent health lifts a receiver facing a patched secondary and a defender facing a backup QB', () => {
+    const S = E.scorers.oppHealth;
+    const full = S({ position: 'WR', oppHealth: { team: 'MIA', side: 'defense', db: { starters: 5, lost: 0, names: [] }, dl: { starters: 4, lost: 0, names: [] }, lb: { starters: 3, lost: 0, names: [] } } });
+    assert.ok(full.score <= 0 && full.score > -0.2, 'full strength sits a hair under zero: ' + full.score);
+    assert.match(full.note, /full strength/);
+    const thin = S({ position: 'WR', oppHealth: { team: 'MIA', side: 'defense', db: { starters: 5, lost: 2, names: ['A out', 'B out'] }, dl: { starters: 4, lost: 0, names: [] }, lb: { starters: 3, lost: 0, names: [] } } });
+    assert.ok(thin.score > 0.4, 'two of five secondary starters out is a real lift: ' + thin.score);
+    assert.match(thin.note, /secondary 2 of 5 starters down \(A out, B out\)/);
+    const rb = S({ position: 'RB', oppHealth: { team: 'MIA', side: 'defense', db: { starters: 5, lost: 2, names: ['A out', 'B out'] }, dl: { starters: 4, lost: 0, names: [] }, lb: { starters: 3, lost: 0, names: [] } } });
+    assert.ok(rb.score < thin.score, 'a back cares less about the secondary than a receiver does');
+    const dl = S({ position: 'DL', oppHealth: { team: 'SEA', side: 'offense', qb: { name: 'Sam Darnold', lost: 1, backup: 'Drew Lock' }, ol: { starters: 5, lost: 0, names: [] }, skill: { starters: 5, lost: 0, names: [] } } });
+    assert.ok(dl.score > 0.3, 'a pass rusher facing a backup quarterback: ' + dl.score);
+    assert.match(dl.note, /Backup QB Drew Lock starting \(Sam Darnold out\)/);
+    assert.equal(S({ position: 'QB' }).score, null);
+    assert.ok(E.WEIGHTS.oppHealth === 6 && E.WEIGHTS_DHQ.oppHealth === 6);
 });
