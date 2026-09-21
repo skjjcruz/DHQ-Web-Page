@@ -575,11 +575,24 @@
         ctx._tb[k] = total;
         return total;
     }
+    // A player's share of his team's ball on a per-game basis: his ball
+    // per game he played over the team's ball per game it played (owner
+    // ruling 2026-09-21: Adams had 114 targets in 14 games, 23.8% of the
+    // Rams' 34 a game, not 19.6% of their 17-game total).
+    function perGameShare(table, key, pid, team, grp, ctx, opts) {
+        const st = table && table[pid];
+        if (!st || !(num(st.gp) >= 1)) return null;
+        const total = teamBall(ctx, table, key, team, grp, opts.playersData);
+        if (!(total > 0)) return null;
+        const row = table['TEAM_' + team];
+        const tgp = row ? num(row.gp) : null;
+        const mine = ballOf(grp, st) / num(st.gp);
+        if (tgp > 0) return clamp(mine / (total / tgp), 0, 1);
+        return clamp(ballOf(grp, st) / total, 0, 1);
+    }
     // Earned share: season share leaning on the last three weeks.
     function earnedShare(pid, player, grp, team, opts, ctx) {
-        const season = opts.statsData && opts.statsData[pid];
-        const seasonTotal = teamBall(ctx, opts.statsData, 'season', team, grp, opts.playersData);
-        const seasonShare = season && seasonTotal > 0 ? ballOf(grp, season) / seasonTotal : null;
+        const seasonShare = perGameShare(opts.statsData, 'season', pid, team, grp, ctx, opts);
         let mine = 0, theirs = 0;
         for (const wk of ctx.recentWeeks || []) {
             if (!wk || !wk.stats) continue;
@@ -604,7 +617,13 @@
         const gp = row ? num(row.gp) : null;
         const total = teamBall(ctx, opts.statsData, 'season', team, grp, opts.playersData);
         if (!gp || gp <= 0 || total <= 0) return null;
-        const norm = PIE_NORM[BALL_BASIS[grp]];
+        // Shrink toward the team's own per-game volume last season (the
+        // Rams threw 34 targets a game, the league norm is 30); the league
+        // norm only when the team has no last season on file.
+        const priorRow = opts.priorData && opts.priorData['TEAM_' + team];
+        const priorGp = priorRow ? num(priorRow.gp) : null;
+        const priorTotal = priorGp > 0 ? teamBall(ctx, opts.priorData, 'prior', team, grp, opts.playersData) : 0;
+        const norm = priorTotal > 0 ? priorTotal / priorGp : PIE_NORM[BALL_BASIS[grp]];
         let perGame = norm ? (total + 2 * norm) / (gp + 2) : total / gp;
         const wk = App.WeeklyProj && App.WeeklyProj._ctx && App.WeeklyProj._ctx.byTeamWeek[team + '|' + week];
         const spread = wk && wk.vegas ? num(wk.vegas.spread) : null; // positive = underdog
@@ -630,9 +649,37 @@
             const raw = rawShareFor(mid, m, grp, team, opts, ctx);
             if (raw != null) sum += raw;
         }
-        const cap = ROOM_SHARE[grp] || 1;
+        const cap = roomCap(team, grp, opts, ctx);
         ctx._room[k] = sum > cap ? cap / sum : 1;
         return ctx._room[k];
+    }
+    // The room cap: the league median blended half and half with what
+    // this team's room took last season (the Rams' receivers took 64% of
+    // the targets, the league median is 60%). Last season's room is summed
+    // from the players on the roster now, so it is trusted only within
+    // 20% of the median; a team that signed two WR1s would read too high.
+    function roomCap(team, grp, opts, ctx) {
+        const median = ROOM_SHARE[grp] || 1;
+        ctx._roomCap = ctx._roomCap || {};
+        const k = team + '|' + grp;
+        if (ctx._roomCap[k] != null) return ctx._roomCap[k];
+        let cap = median;
+        const players = opts.playersData || {};
+        const priorRow = opts.priorData && opts.priorData['TEAM_' + team];
+        const priorGp = priorRow ? num(priorRow.gp) : null;
+        const priorTotal = priorGp > 0 ? teamBall(ctx, opts.priorData, 'prior', team, grp, players) : 0;
+        if (priorTotal > 0) {
+            let mine = 0;
+            for (const mid of Object.keys(players)) {
+                const m = players[mid];
+                if (!m || String(m.team || '').toUpperCase() !== team || posGroup(m) !== grp) continue;
+                const pr = opts.priorData[mid];
+                if (pr && num(pr.gp) >= 4) mine += ballOf(grp, pr) / num(pr.gp);
+            }
+            if (mine > 0) cap = 0.5 * median + 0.5 * clamp(mine / (priorTotal / priorGp), 0.8 * median, 1.2 * median);
+        }
+        ctx._roomCap[k] = clamp(cap, 0, 1);
+        return cap;
     }
 
     // Everything the engine's role factor reads.
@@ -682,24 +729,15 @@
         return out;
     }
 
-    // What he carried before this season: last season's share of his
-    // team's ball (six games or more) and his preseason projected share,
-    // averaged when both exist.
+    // What he carried before this season: his own per-game share of the
+    // ball from a real prior season (eight games or more). No preseason
+    // projection (owner ruling 2026-09-21: that was Sleeper's opinion
+    // leaking back into the math); a player with no prior season starts
+    // from his depth-chart slot and earns from game one.
     function trackRecordShare(pid, grp, team, ctx, opts) {
-        const players = opts.playersData || {};
-        const parts = [];
         const pr = opts.priorData && opts.priorData[pid];
-        if (pr && (num(pr.gp) || 0) >= 6) {
-            const priorTot = teamBall(ctx, opts.priorData, 'prior', team, grp, players);
-            if (priorTot > 0) parts.push(ballOf(grp, pr) / priorTot);
-        }
-        const sp = ctx.seasonProj && ctx.seasonProj[pid];
-        if (sp && BALL_BASIS[grp] !== 'tackles') {
-            const pt = projTeamTotal(ctx, team, grp, players);
-            if (pt > 0 && projBall(grp, sp) > 0) parts.push(projBall(grp, sp) / pt);
-        }
-        if (!parts.length) return null;
-        return clamp(parts.reduce((a, b) => a + b, 0) / parts.length, 0, 1);
+        if (!pr || (num(pr.gp) || 0) < 8) return null;
+        return perGameShare(opts.priorData, 'prior', pid, team, grp, ctx, opts);
     }
     // The raw projected share of the team's ball for one player: earned
     // share (season, recent) with freed targets, blended with his
@@ -832,50 +870,6 @@
     // Sleeper's season-long projections, published before the season, are
     // the one feed that still remembers a player was expected to be the
     // WR2 after an injury pushed him to the bottom of every depth chart.
-    let _seasonProj = { season: null, data: null, promise: null };
-    async function seasonProjections(season) {
-        if (_seasonProj.data && _seasonProj.season === season) return _seasonProj.data;
-        if (_seasonProj.promise && _seasonProj.season === season) return _seasonProj.promise;
-        _seasonProj.season = season;
-        _seasonProj.promise = (async () => {
-            try {
-                const r = await fetch('https://api.sleeper.app/v1/projections/nfl/regular/' + season);
-                const d = r.ok ? await r.json() : null;
-                _seasonProj = { season, data: d && Object.keys(d).length > 1000 ? d : null, promise: null };
-            } catch (e) { _seasonProj = { season, data: null, promise: null }; }
-            return _seasonProj.data;
-        })();
-        return _seasonProj.promise;
-    }
-    // Preseason volume for the expected-share math: receptions for
-    // receivers, carries plus receptions for backs, attempts for QBs.
-    function projBall(grp, r) {
-        if (!r) return 0;
-        if (grp === 'QB') return num(r.pass_att) || 0;
-        if (grp === 'RB') return (num(r.rush_att) || 0) + (num(r.rec) || 0);
-        return num(r.rec) || 0;
-    }
-    // Team total on the same basis as the player's share: receptions across
-    // every skill position for receivers, carries plus receptions across
-    // every skill position for backs, attempts across the quarterbacks.
-    function projTeamTotal(ctx, team, grp, playersData) {
-        ctx._pt = ctx._pt || {};
-        const basis = BALL_BASIS[grp];
-        const k = team + '|' + basis;
-        if (ctx._pt[k] != null) return ctx._pt[k];
-        let total = 0;
-        if (ctx.seasonProj && playersData) {
-            for (const pid of Object.keys(ctx.seasonProj)) {
-                const p = playersData[pid];
-                if (!p || String(p.team || '').toUpperCase() !== team) continue;
-                const g = posGroup(p);
-                if (basis === 'attempts' ? g !== 'QB' : !(g === 'WR' || g === 'TE' || g === 'RB' || g === 'QB')) continue;
-                total += projBall(grp, ctx.seasonProj[pid]);
-            }
-        }
-        ctx._pt[k] = total;
-        return total;
-    }
     // The most a player was ever expected to carry: this season's share,
     // last season's share, or his preseason projected share.
     function expectedShare(pid, grp, team, ctx, opts) {
@@ -887,15 +881,8 @@
         // week of a fill-in starter does not make him the expected QB1.
         const teamRow = opts.statsData && opts.statsData['TEAM_' + team];
         const teamGames = teamRow ? (num(teamRow.gp) || 0) : 0;
-        const cur = teamBall(ctx, opts.statsData, 'season', team, grp, players);
-        const st = opts.statsData && opts.statsData[pid];
-        if ((grp !== 'QB' || teamGames >= 3) && cur > 0 && st) best = Math.max(best, ballOf(grp, st) / cur);
-        const priorTot = teamBall(ctx, opts.priorData, 'prior', team, grp, players);
-        const pr = opts.priorData && opts.priorData[pid];
-        if (priorTot > 0 && pr) best = Math.max(best, ballOf(grp, pr) / priorTot);
-        const pt = projTeamTotal(ctx, team, grp, players);
-        const sp = ctx.seasonProj && ctx.seasonProj[pid];
-        if (pt > 0 && sp) best = Math.max(best, projBall(grp, sp) / pt);
+        if (grp !== 'QB' || teamGames >= 3) best = Math.max(best, perGameShare(opts.statsData, 'season', pid, team, grp, ctx, opts) || 0);
+        best = Math.max(best, perGameShare(opts.priorData, 'prior', pid, team, grp, ctx, opts) || 0);
         return best;
     }
 
@@ -1052,7 +1039,7 @@
         opts = opts || {};
         const season = opts.season || currentSeason();
         const E = espn();
-        const ctx = { season, week, coaching: null, standings: null, priorStandings: null, idp: null, prior: null, depth: null, seasonProj: null, recentWeeks: [], games: {}, h2h: {} };
+        const ctx = { season, week, coaching: null, standings: null, priorStandings: null, idp: null, prior: null, depth: null, recentWeeks: [], games: {}, h2h: {} };
         const jobs = [];
         jobs.push(depthCharts().then(r => { ctx.depth = r; }).catch(() => {}));
         for (let w = Math.max(1, week - RECENT_WEEKS); w < week; w++) {
@@ -1065,7 +1052,6 @@
         }
         jobs.push(idpRankings(season, opts.playersData).then(r => { ctx.idp = r; }).catch(() => {}));
         jobs.push(priorRankings(season - 1, opts.playersData).then(r => { ctx.prior = r; }).catch(() => {}));
-        jobs.push(seasonProjections(season).then(d => { ctx.seasonProj = d; }).catch(() => {}));
         const list = [...new Set((teams || []).map(t => String(t || '').toUpperCase()).filter(Boolean))];
         if (E) {
             for (const t of list) {
@@ -1282,7 +1268,7 @@
     }
 
     App.MatchupInputs = App.MatchupInputs || {
-        prepare, build, project, projectRoster, idpRankings, priorRankings, depthCharts, baselineFor, dhqBaselineFor, sleeperPoints, opponentOf, opponentFor, trenchFor, castFor, teamDepth, expectedShare, seasonProjections, passPool, freedTargetShare, posGroup, normName, roleFor, oppHealthFor,
+        prepare, build, project, projectRoster, idpRankings, priorRankings, depthCharts, baselineFor, dhqBaselineFor, sleeperPoints, opponentOf, opponentFor, trenchFor, castFor, teamDepth, expectedShare, passPool, freedTargetShare, posGroup, normName, roleFor, oppHealthFor,
     };
     /* global module */
     if (typeof module !== 'undefined' && module.exports) module.exports = App.MatchupInputs;
