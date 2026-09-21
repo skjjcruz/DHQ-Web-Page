@@ -52,7 +52,9 @@
     // ball: targets for WR/TE, carries+targets for RB, attempts for QB,
     // tackles for defenders). Defensive ranks are per depth-chart slot, so
     // "1" is the typical starter at one of several slots.
-    const BASE_SHARE = { QB: [0.90, 0.10], RB: [0.29, 0.13, 0.04, 0.01], WR: [0.23, 0.15, 0.10, 0.04], TE: [0.15, 0.05, 0.02], DL: [0.045, 0.02, 0.01], LB: [0.10, 0.04, 0.02], DB: [0.075, 0.03, 0.015] };
+    // Rank 4 and below (owner ruling 2026-09-21): a WR7 was projected like a
+    // WR4, and 63 receivers who saw no targets were carrying 1-3 apiece.
+    const BASE_SHARE = { QB: [0.90, 0.10], RB: [0.29, 0.13, 0.04, 0.01, 0.005], WR: [0.23, 0.15, 0.10, 0.03, 0.015], TE: [0.15, 0.05, 0.02, 0.005], DL: [0.045, 0.02, 0.01], LB: [0.10, 0.04, 0.02], DB: [0.075, 0.03, 0.015] };
     // What a whole position room gets of the team's ball (2025 medians).
     // A team's projected shares at a position are scaled down to this cap,
     // so four backs can never add up to more than a backfield.
@@ -709,6 +711,7 @@
         if (rawInfo.earnedShare != null) out.earnedShare = rawInfo.earnedShare;
         if (rawInfo.slotNorm != null) out.slotNorm = rawInfo.slotNorm;
         if (rawInfo.promoted) out.promoted = true;
+        if (rawInfo.snapGate) out.snapGate = rawInfo.snapGate;
         const early = out.gamesPlayed == null || out.gamesPlayed < 3;
         let proj = rawInfo.share;
         if (proj != null) {
@@ -739,6 +742,22 @@
         const pr = opts.priorData && opts.priorData[pid];
         if (!pr || (num(pr.gp) || 0) < 8) return null;
         return perGameShare(opts.priorData, 'prior', pid, team, grp, ctx, opts);
+    }
+    // His snap share in his team's most recent game (0 when the team
+    // played and he has no row, so a healthy scratch reads as 0).
+    function lastGameSnap(pid, team, ctx, opts) {
+        const weeks = (ctx.recentWeeks || []).filter(w => w && w.stats).sort((a, b) => b.week - a.week);
+        const players = opts.playersData || {};
+        for (const wk of weeks) {
+            let teamPlayed = !!wk.stats['TEAM_' + team];
+            if (!teamPlayed) for (const mid of Object.keys(wk.stats)) { const m = players[mid]; if (m && String(m.team || '').toUpperCase() === team && num(wk.stats[mid].gp) >= 1) { teamPlayed = true; break; } }
+            if (!teamPlayed) continue;
+            const st = wk.stats[pid];
+            if (!st || !(num(st.gp) >= 1)) return 0;
+            const mine = num(st.off_snp), all = num(st.tm_off_snp);
+            return all > 0 ? clamp((mine || 0) / all, 0, 1) : null;
+        }
+        return null;
     }
     // The raw projected share of the team's ball for one player: earned
     // share (season, recent) with freed targets, blended with his
@@ -825,6 +844,17 @@
         if (earned != null && base != null) proj = wEarned * earned + (1 - wEarned) * base;
         else if (earned != null) proj = earned;
         else if (base != null) proj = base;
+        // Snap gate (owner ruling 2026-09-21): a back, receiver or tight end
+        // listed third or lower who played under 15% of the snaps in his
+        // team's last game is trimmed toward that snap share (never below
+        // 30% of his projection). A player who moved up is not gated: next
+        // man up exempts him, a rank of 1 or 2 is never gated, and the gate
+        // reads his most recent game, so real snaps last week lift it. A
+        // promotion only to rank 3 or lower (WR4 to WR3) is still gated.
+        if (proj != null && (grp === 'WR' || grp === 'TE' || grp === 'RB') && posRank != null && posRank >= 3 && !(promoted && posRank <= 2)) {
+            const ls = lastGameSnap(pid, team, ctx, opts);
+            if (ls != null && ls < 0.15) { const f = Math.max(0.3, ls / 0.15); proj *= f; out.snapGate = { snap: +ls.toFixed(3), factor: +f.toFixed(2) }; }
+        }
         out.share = proj != null ? clamp(proj, 0, 1) : null;
         ctx._rawShare[pid] = out;
         return full ? out : out.share;
@@ -892,7 +922,9 @@
                 + ' · team expected ' + expected.toFixed(1) + ' pts (' + (implied != null && implied > 0 ? 'Vegas' : 'season pace') + ')';
         }
         const pts = DB.scoreLine(built.line, opts.scoring, grp);
-        if (pts == null || pts <= 0) return null;
+        if (pts == null) return null;
+        // zero is a projection (a TE4 with no snaps), not a missing baseline
+        if (pts <= 0) return { median: 0, floor: 0, ceiling: 0, why: built.why || 'no projected volume', line: built.line };
         return { median: +pts.toFixed(2), floor: +(pts * 0.7).toFixed(2), ceiling: +(pts * 1.35).toFixed(2), why: built.why, line: built.line };
     }
 

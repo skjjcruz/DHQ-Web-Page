@@ -162,6 +162,7 @@
             const unit = r.shareBasis === 'touches' ? 'touches' : r.shareBasis === 'attempts' ? 'attempts' : r.shareBasis === 'tackles' ? 'tackles' : 'targets';
             let n = Number(r.projTargets).toFixed(1) + ' projected ' + unit;
             if (num(r.freedTargets) >= 0.3) n += ' (+' + Number(r.freedTargets).toFixed(1) + ' freed by injured teammates)';
+            if (r.snapGate && num(r.snapGate.snap) != null) n += ' (trimmed: ' + Math.round(num(r.snapGate.snap) * 100) + '% of snaps last game)';
             if (num(r.sleeperTargets) != null) n += ', Sleeper ' + Number(r.sleeperTargets).toFixed(1);
             notes.push(n);
         }
@@ -482,7 +483,9 @@
         const bMed = num(base.median) || 0;
         const bFloor = num(base.floor) != null ? num(base.floor) : bMed * 0.75;
         const bCeil = num(base.ceiling) != null ? num(base.ceiling) : bMed * 1.25;
-        const available = !out && bMed > 0;
+        // Available means healthy enough to play; a baseline of zero is a
+        // projection of zero, not an OUT (a TE4 with no snaps still dresses).
+        const available = !out && num(base.median) != null;
 
         // Doubtful/questionable players keep their ceiling but lose floor:
         // the risk is that they play little or leave early.
@@ -501,6 +504,7 @@
         } : { median: 0, floor: 0, ceiling: 0 };
 
         const grade = available ? gradeFor(mult) : 'F';
+        const verdict = available && points.median <= 0 ? 'sit' : verdictFor(grade, available);
         const why = factors
             .filter(f => f.hasData)
             .sort((a, b) => Math.abs(b.impactPct) - Math.abs(a.impactPct))
@@ -517,7 +521,7 @@
             mult,
             points,
             grade,
-            verdict: verdictFor(grade, available),
+            verdict,
             factors,
             why,
             missing,
