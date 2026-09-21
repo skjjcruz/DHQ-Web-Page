@@ -1,0 +1,46 @@
+# Refreshes data/usage-snapshot.js (how each coaching staff spreads targets
+# across its receivers and tight ends, with head-coach tenure) four times a
+# day and on demand. Public Sleeper and ESPN endpoints; no secrets.
+name: Usage snapshot
+
+on:
+  push:
+    paths:
+      - 'scripts/build-usage-snapshot.mjs'
+      - '.github/workflows/usage-snapshot.yml'
+  schedule:
+    - cron: '41 4,10,16,22 * * *'   # every six hours, UTC
+  workflow_dispatch:
+    inputs:
+      season:
+        description: 'Season (four-digit year). Leave blank for the current season.'
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: usage-snapshot
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build the snapshot
+        run: node scripts/build-usage-snapshot.mjs ${{ github.event.inputs.season }}
+      - name: Commit if changed
+        run: |
+          git config user.name "dhq-snapshot-bot"
+          git config user.email "noreply@dhqfootball.com"
+          git add data/usage-snapshot.js
+          if git diff --cached --quiet; then
+            echo "Snapshot unchanged, nothing to commit."
+          else
+            git commit -m "Usage snapshot $(date -u '+%Y-%m-%d %H:%M UTC')"
+            git push
+          fi
