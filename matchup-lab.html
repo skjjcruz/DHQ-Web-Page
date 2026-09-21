@@ -134,7 +134,7 @@
     <div class="card" id="summary" style="display:none"></div>
     <div class="card" id="readout" style="display:none"></div>
 </div>
-<div id="buildtag">LAB61</div>
+<div id="buildtag">LAB66</div>
 
 <script>
 // Minimal stand-ins for the app core: Sleeper's scoring keys match its stat
@@ -243,20 +243,41 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
         var got = await Promise.all([getJson(SL + '/stats/nfl/regular/' + season), getJson(SL + '/stats/nfl/regular/' + (season - 1)), getJson(SL + '/projections/nfl/regular/' + season + '/' + week)]
             .concat(weeksDone.map(function (w) { return getJson(SL + '/stats/nfl/regular/' + season + '/' + w).catch(function () { return {}; }); })));
         App.WeeklyProj.setProjections(week, got[2]);
+        // Season-to-date stats are rebuilt from the completed weeks BEFORE the
+        // week being graded, never from Sleeper's running season totals. Once
+        // this week's games are in, those totals contain the answers, and a
+        // projection built from them would grade itself. Weekly rows carry
+        // the same stat keys, so the sum is a drop-in for the season table.
+        var statsCur = {};
+        got.slice(3).forEach(function (wk) {
+            Object.keys(wk || {}).forEach(function (pid) {
+                var row = wk[pid]; if (!row || typeof row !== 'object') return;
+                var acc = statsCur[pid] = statsCur[pid] || {};
+                Object.keys(row).forEach(function (k) { if (typeof row[k] === 'number') acc[k] = (acc[k] || 0) + row[k]; });
+            });
+        });
+        // Sleeper's weekly TEAM_ rows carry yards only; the team totals the
+        // engine needs (attempts, carries, targets, games) come from the
+        // season table when every game it counts is a completed prior week.
+        Object.keys(got[0] || {}).forEach(function (k) {
+            if (k.indexOf('TEAM_') !== 0) return;
+            var row = got[0][k];
+            if (row && row.gp === weeksDone.length) statsCur[k] = row;
+        });
         // This week's box scores so far (players who have already played
         // carry gp >= 1). Lets the tables show what actually happened beside
         // both projections, so the formula can be graded.
         var actual = await getJson(SL + '/stats/nfl/regular/' + season + '/' + week).catch(function () { return {}; });
         var playedTeams = {};
         Object.keys(actual).forEach(function (pid) { var p = S.players[pid]; if (p && p.team && actual[pid] && actual[pid].gp >= 1) playedTeams[p.team] = true; });
-        step('   week ' + week + ' · ' + Object.keys(S.players).length.toLocaleString() + ' players · ' + weeksDone.length + ' completed week(s) · box scores in for ' + Object.keys(playedTeams).length + ' teams' + (Object.keys(playedTeams).length ? ' (' + Object.keys(playedTeams).sort().join(', ') + ')' : ''), 'ok');
+        step('   week ' + week + ' · ' + Object.keys(S.players).length.toLocaleString() + ' players · season stats from ' + (weeksDone.length ? 'weeks 1-' + weeksDone.length : 'no completed weeks') + ' (no peeking at this week) · box scores in for ' + Object.keys(playedTeams).length + ' teams' + (Object.keys(playedTeams).length ? ' (' + Object.keys(playedTeams).sort().join(', ') + ')' : ''), 'ok');
 
         step('2/3 Defense-vs-position ranks, opponents, Vegas + weather…');
         await App.SOS.initialize(String(season), S.players);
         try { await App.NflContext.load([week], season); } catch (e) { /* neutral without it */ }
         var ctxKeys = Object.keys(App.WeeklyProj._ctx.byTeamWeek).filter(function (k) { return k.split('|')[1] === String(week); }).length;
         step('   SOS ' + (App.SOS.ready ? 'ready' : 'unavailable') + ' · game context for ' + ctxKeys + ' teams · PFF snapshot ' + (window.DhqPffMatchup ? 'built ' + String(window.DhqPffMatchup.built).slice(0, 16).replace('T', ' ') : 'MISSING'), App.SOS.ready && window.DhqPffMatchup ? 'ok' : 'warn');
-        return { season: season, week: week, statsCur: got[0], statsPrior: got[1], weeksDone: weeksDone, weekly: got.slice(3), actual: actual };
+        return { season: season, week: week, statsCur: statsCur, statsPrior: got[1], weeksDone: weeksDone, weekly: got.slice(3), actual: actual };
     }
 
     // Actual points this week in the given scoring, for players who have played.
