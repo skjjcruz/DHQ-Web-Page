@@ -63,7 +63,7 @@
     // so role shrinks and the freed weight goes to the two factors that
     // missed Thursday night's shootout: opponent and game environment.
     const WEIGHTS_DHQ = {
-        role: 12, health: 11, opponent: 15, game: 15, coaching: 8, h2h: 8, trench: 8, trend: 8, cast: 6, oppHealth: 6, luck: 3,
+        role: 12, health: 11, opponent: 18, game: 12, coaching: 8, h2h: 8, trench: 8, trend: 8, cast: 6, oppHealth: 6, luck: 3,
     };
 
     // How far a factor at full strength may move the number, as a share
