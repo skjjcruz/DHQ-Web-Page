@@ -63,7 +63,7 @@
         LCB: 'DB', RCB: 'DB', CB: 'DB', NB: 'DB', FS: 'DB', SS: 'DB', S: 'DB', DB: 'DB' };
     const OUT_FOR_SHARE = { OUT: 1, IR: 1, PUP: 1, SUS: 1, NA: 1, COV: 1, D: 0.8 };
 
-    const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
+    const num = (v) => { if (v == null || v === '') return null; const n = Number(v); return Number.isFinite(n) ? n : null; };
     const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
     const normName = (name) => String(name || '').toLowerCase().replace(/[.'’]/g, '').replace(/\s+(jr|sr|ii|iii|iv)$/i, '').replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
 
@@ -273,12 +273,13 @@
             case 'QB': return g('grades_coverage_defense') != null && g('grades_pass_rush_defense') != null ? 0.6 * g('grades_coverage_defense') + 0.4 * g('grades_pass_rush_defense') : g('grades_defense');
             case 'DL': return g('grades_pass_block') != null && g('grades_run_block') != null ? 0.5 * g('grades_pass_block') + 0.5 * g('grades_run_block') : g('grades_offense');
             case 'LB': return g('grades_run_block') != null ? 0.6 * g('grades_run_block') + 0.4 * (g('grades_offense') || g('grades_run_block')) : g('grades_offense');
+            case 'K': return g('grades_defense');
             case 'DB': return g('grades_pass') != null ? 0.6 * g('grades_pass') + 0.4 * (g('grades_pass_route') || g('grades_pass')) : g('grades_offense');
             default: return null;
         }
     }
-    const UNIT_LABEL = { RB: 'run D', WR: 'coverage', TE: 'coverage', QB: 'pass D', DL: 'O-line', LB: 'run block', DB: 'passing' };
-    const PTS_LABEL = { RB: 'RBs', WR: 'WRs', TE: 'TEs', QB: 'QBs', DL: 'DL', LB: 'LBs', DB: 'DBs' };
+    const UNIT_LABEL = { RB: 'run D', WR: 'coverage', TE: 'coverage', QB: 'pass D', DL: 'O-line', LB: 'run block', DB: 'passing', K: 'defense' };
+    const PTS_LABEL = { RB: 'RBs', WR: 'WRs', TE: 'TEs', QB: 'QBs', DL: 'DL', LB: 'LBs', DB: 'DBs', K: 'Ks' };
     function currentRank(T, grp, ctx) {
         if (IDP_GROUP[grp] || grp === 'DL' || grp === 'LB' || grp === 'DB') return ctx.idp && ctx.idp[T] ? num(ctx.idp[T]['vs' + grp]) : null;
         const r = App.SOS && App.SOS.defenseRankings && App.SOS.defenseRankings[T];
@@ -316,7 +317,7 @@
     }
     // Blended rank of `opp` against `grp`, plus the evidence string.
     function opponentFor(grp, opp, ctx, opts) {
-        if (!opp || !BALL_BASIS[grp]) return null;
+        if (!opp || (!BALL_BASIS[grp] && grp !== 'K')) return null;
         ctx._opp = ctx._opp || {};
         if (ctx._opp[grp]) return ctx._opp[grp][opp] || null;
         const snap = pff();
@@ -860,6 +861,18 @@
         if (grp === 'K' && !samples.length) return null;
         const pf = pffPlayer(player) || {};
         const built = DB.buildLine({ position: grp, volume, samples, grades: { route: pf.route, run: pf.run, pass: pf.pass, off: pf.off, prush: pf.prush, cov: pf.cov, tkl: pf.tkl, fg: pf.fg } });
+        if (grp === 'K') {
+            // A kicker's attempts follow his team's scoring: scale his
+            // per-game attempts by the Vegas implied team total against the
+            // league average (owner ruling 2026-09-21).
+            const wk = App.WeeklyProj && App.WeeklyProj._ctx && App.WeeklyProj._ctx.byTeamWeek[String(player.team || '').toUpperCase() + '|' + ctx.week];
+            const implied = wk && wk.vegas ? num(wk.vegas.impliedTotal) : null;
+            if (implied != null && implied > 0) {
+                const scale = clamp(implied / 22.5, 0.6, 1.5);
+                for (const k of Object.keys(built.line)) if (/^(fga|fgm|fgmiss|xpa|xpm|xpmiss|fgm_)/.test(k)) built.line[k] = +(built.line[k] * scale).toFixed(3);
+                built.why += ' · scaled ' + (scale >= 1 ? '+' : '') + Math.round((scale - 1) * 100) + '% for a ' + implied.toFixed(1) + '-pt implied total';
+            }
+        }
         if (!built) return null;
         const pts = DB.scoreLine(built.line, opts.scoring, grp);
         if (pts == null || pts <= 0) return null;
