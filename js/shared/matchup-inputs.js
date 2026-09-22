@@ -618,16 +618,19 @@
     const PIE_PHANTOM = 4;   // games of last season's pace the current season is blended with
     function teamPie(team, grp, week, opts, ctx) {
         const row = opts.statsData && opts.statsData['TEAM_' + team];
-        const gp = row ? num(row.gp) : null;
-        const total = teamBall(ctx, opts.statsData, 'season', team, grp, opts.playersData);
-        if (!gp || gp <= 0 || total <= 0) return null;
+        const gp = row ? (num(row.gp) || 0) : 0;
+        const total = gp > 0 ? teamBall(ctx, opts.statsData, 'season', team, grp, opts.playersData) : 0;
         // Shrink toward the team's own per-game volume last season (the
         // Rams threw 34 targets a game, the league norm is 30); the league
-        // norm only when the team has no last season on file.
+        // norm only when the team has no last season on file. Before the
+        // first game the pie is that prior alone (week 1 2026: an empty pie
+        // was sending every player back to his own last season, and a QB
+        // with no prior season read as OUT at zero).
         const priorRow = opts.priorData && opts.priorData['TEAM_' + team];
         const priorGp = priorRow ? num(priorRow.gp) : null;
         const priorTotal = priorGp > 0 ? teamBall(ctx, opts.priorData, 'prior', team, grp, opts.playersData) : 0;
         const norm = priorTotal > 0 ? priorTotal / priorGp : PIE_NORM[BALL_BASIS[grp]];
+        if (!norm && !(gp > 0 && total > 0)) return null;
         // Last season counts as four phantom games (owner ruling 2026-09-22:
         // the Bills' 50-play shootout in week 1 was cutting Cook's touches 7%),
         // so one game is a fifth of the story, four games half, eight two thirds.
@@ -720,6 +723,7 @@
         if (rawInfo.snapGate) out.snapGate = rawInfo.snapGate;
         if (rawInfo.slotNote) out.slotNote = rawInfo.slotNote;
         if (rawInfo.backupQb) out.backupQb = true;
+        if (rawInfo.snapScale) out.snapScale = rawInfo.snapScale;
         const early = out.gamesPlayed == null || out.gamesPlayed < 3;
         let proj = rawInfo.share;
         if (proj != null) {
@@ -817,7 +821,7 @@
     }
     // His snap share in his team's most recent game (0 when the team
     // played and he has no row, so a healthy scratch reads as 0).
-    function lastGameSnap(pid, team, ctx, opts) {
+    function lastGameSnap(pid, team, ctx, opts, side) {
         const weeks = (ctx.recentWeeks || []).filter(w => w && w.stats).sort((a, b) => b.week - a.week);
         const players = opts.playersData || {};
         for (const wk of weeks) {
@@ -826,7 +830,7 @@
             if (!teamPlayed) continue;
             const st = wk.stats[pid];
             if (!st || !(num(st.gp) >= 1)) return 0;
-            const mine = num(st.off_snp), all = num(st.tm_off_snp);
+            const mine = num(side === 'def' ? st.def_snp : st.off_snp), all = num(side === 'def' ? st.tm_def_snp : st.tm_off_snp);
             return all > 0 ? clamp((mine || 0) / all, 0, 1) : null;
         }
         return null;
@@ -928,6 +932,18 @@
         if (earned != null && base != null) proj = wEarned * earned + (1 - wEarned) * base;
         else if (earned != null) proj = earned;
         else if (base != null) proj = base;
+        // Defenders' volume follows their snaps (owner review 2026-09-22): a
+        // defender's tackles scale with the snaps he plays, and the depth
+        // chart alone was giving part-timers 1.6 points (they scored 0.1)
+        // and full-timers 4.4 (they scored 5.2). His last game's snap share
+        // against a 60% full-time norm, between 0.15 and 1.15; the season's
+        // snap share stands in before his first game. Two weeks simulated:
+        // defenders 486-561 to 549-498 vs Sleeper, miss 1.73 to 1.59.
+        if (proj != null && BALL_BASIS[grp] === 'tackles') {
+            let sn = lastGameSnap(pid, team, ctx, opts, 'def');
+            if (sn == null) { const st0 = opts.statsData && opts.statsData[pid]; const pr0 = opts.priorData && opts.priorData[pid]; const src = st0 && num(st0.tm_def_snp) > 0 ? st0 : (pr0 && num(pr0.tm_def_snp) > 0 ? pr0 : null); if (src) sn = clamp((num(src.def_snp) || 0) / num(src.tm_def_snp), 0, 1); }
+            if (sn != null) { const f = clamp(sn / 0.6, 0.15, 1.15); proj *= f; out.snapScale = { snap: +sn.toFixed(3), factor: +f.toFixed(2) }; }
+        }
         // Backup quarterbacks (owner ruling 2026-09-21): a QB who is not the
         // starter gets zero, whatever he did last year (Rattler's 2025 starts
         // were projecting him for 9 points as the Saints' QB2). Next man up
@@ -1249,7 +1265,9 @@
         // health
         const sleeperStatus = String(player.injury_status || '').toUpperCase();
         let status = SLEEPER_STATUS[sleeperStatus] || (sleeperStatus ? sleeperStatus : '');
-        if (!status && depth && PFF_STATUS[String(depth.st || '').toLowerCase()]) status = PFF_STATUS[String(depth.st).toLowerCase()];
+        // PFF's tag fills in only when Sleeper has none, and never for a man
+        // who has already played this week (his tags are for next week).
+        if (!status && !player.injury_status_after && depth && PFF_STATUS[String(depth.st || '').toLowerCase()]) status = PFF_STATUS[String(depth.st).toLowerCase()];
         if (isByeWeek(team, week) || (num(player.bye_week) === week)) status = 'BYE';
         input.health = { status };
 
