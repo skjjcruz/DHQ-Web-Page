@@ -148,7 +148,7 @@
     <div class="card" id="summary" style="display:none"></div>
     <div class="card" id="readout" style="display:none"></div>
 </div>
-<div id="buildtag">LAB89</div>
+<div id="buildtag">LAB90</div>
 
 <script>
 // Minimal stand-ins for the app core: Sleeper's scoring keys match its stat
@@ -617,7 +617,12 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
         var rows = board.grade ? pool.filter(function (r) { return r.p.grade === board.grade; }) : pool;
         var shown = sortRows(rows);   // every graded player (owner ruling 2026-09-21); why panels are built on tap, so the table stays light
         $('readout').style.display = 'block';
-        $('readout').innerHTML = '<h3 style="margin-top:0">WEEK ' + week + ' · ' + (board.locked ? (board.locked.reconstructed ? 'SCORE SHEET (RECONSTRUCTED)' : 'SCORE SHEET (LOCKED)') : 'ALL NFL PLAYERS') + ' · ' + board.rows.length + ' PLAYERS · ' + esc(scoringName) + '</h3>'
+        var onSheet = board.locked || sheet.mode === 'recomputed';
+        var stepper = onSheet && sheet.weeks.length ? '<div class="pos-tabs" id="weekStep" style="margin:-4px 0 10px">'
+            + '<button data-step="-1" ' + (sheet.week <= sheet.weeks[0] ? 'disabled' : '') + '>&#9664; WEEK ' + (sheet.week - 1) + '</button>'
+            + sheet.weeks.map(function (w) { return '<button data-go="' + w + '" class="' + (sheet.week === w ? 'on' : '') + '">' + w + '</button>'; }).join('')
+            + '<button data-step="1" ' + (sheet.week >= sheet.weeks[sheet.weeks.length - 1] ? 'disabled' : '') + '>WEEK ' + (sheet.week + 1) + ' &#9654;</button></div>' : '';
+        $('readout').innerHTML = '<h3 style="margin-top:0">WEEK ' + week + ' · ' + (board.locked ? (board.locked.reconstructed ? 'SCORE SHEET (RECONSTRUCTED)' : 'SCORE SHEET (LOCKED)') : (onSheet ? 'SCORE SHEET (RECOMPUTED TODAY)' : 'ALL NFL PLAYERS')) + ' · ' + board.rows.length + ' PLAYERS · ' + esc(scoringName) + '</h3>' + stepper
             + '<div class="pos-tabs">' + tabs + '</div>'
             + '<input id="boardSearch" placeholder="search a player or team code" value="' + esc(board.q) + '">'
             + '<div class="grid" style="margin-bottom:4px">' + ['A', 'B', 'C', 'D', 'F'].map(function (g) { return '<div class="tile pick' + (board.grade === g ? ' on' : '') + '" data-grade="' + g + '"><span class="g g' + g + '">' + g + '</span> <b>' + counts[g] + '</b></div>'; }).join('') + '</div>'
@@ -626,7 +631,15 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
             + '<table><tr>' + th('player', 'Player') + th('age', 'Age', 'num hide-m') + th('sleeper', 'Sleeper proj', 'num') + th('dhq', 'DHQ proj', 'num') + th('actual', 'Actual', 'num') + th('pm', '+/-', 'num') + th('wl', 'W/L', 'num') + '</tr>'
             + shown.map(boardRow).join('') + '</table>'
             + '<div class="hint" style="margin-top:12px">Tap a column heading to sort by it; tap again to flip. Sleeper proj = Sleeper\'s published line scored with these rules. DHQ proj = the DHQ baseline (its own stat line, or Sleeper\'s line, per the switch) after the eleven factors. Actual = points scored so far this week. +/- = Actual minus DHQ proj. W/L = green when DHQ was closer to the actual than Sleeper, red when Sleeper was; sorted by how much closer. Tap a row for the why.</div>';
-        Array.prototype.forEach.call(document.querySelectorAll('#readout .pos-tabs button'), function (b) {
+        Array.prototype.forEach.call(document.querySelectorAll('#weekStep button'), function (b) {
+            b.addEventListener('click', function () {
+                var go = b.getAttribute('data-go') != null ? Number(b.getAttribute('data-go')) : sheet.week + Number(b.getAttribute('data-step'));
+                if (sheet.weeks.indexOf(go) < 0) return;
+                sheet.week = go; sheet.mode = 'locked'; renderSheetTabs(); showLocked(go);
+                $('sheet').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        });
+        Array.prototype.forEach.call(document.querySelectorAll('#readout .pos-tabs button[data-pos]'), function (b) {
             b.addEventListener('click', function () { board.pos = b.getAttribute('data-pos'); renderBoard(week, scoringName); });
         });
         Array.prototype.forEach.call(document.querySelectorAll('#readout th.sort'), function (h) {
