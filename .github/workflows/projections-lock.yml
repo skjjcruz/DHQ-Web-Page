@@ -1,0 +1,65 @@
+# Locks the DHQ projection for every graded player before his game kicks
+# off (data/locks/{season}-w{week}.json), so each week keeps a score sheet
+# of what we said at the time. Runs the engine in Node on the same public
+# feeds the page uses; no secrets. Hourly around kickoffs, otherwise every
+# three hours.
+name: Projections lock
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/build-projections-lock.mjs'
+      - '.github/workflows/projections-lock.yml'
+  schedule:
+    - cron: '20 */3 * * *'          # every three hours, UTC
+    - cron: '50 15,16,19,20,23 * * 0'   # Sunday slates (ET early, late, night)
+    - cron: '50 23 * * 1,4'         # Monday and Thursday night
+    - cron: '50 0 * * 1,2,5'        # after those nights turn over UTC
+  workflow_dispatch:
+    inputs:
+      week:
+        description: 'Week number. Leave blank for the current NFL week.'
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: projections-lock
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Lock the projections
+        run: node scripts/build-projections-lock.mjs ${{ github.event.inputs.week }}
+      - name: Commit if changed
+        run: |
+          git config user.name "dhq-snapshot-bot"
+          git config user.email "noreply@dhqfootball.com"
+          mkdir -p /tmp/fresh-locks && cp data/locks/*.json /tmp/fresh-locks/
+          BRANCH="${{ github.ref_name }}"
+          for attempt in 1 2 3; do
+            git fetch origin "$BRANCH"
+            git reset --hard "origin/$BRANCH"
+            cp /tmp/fresh-locks/*.json data/locks/
+            git add data/locks
+            if git diff --cached --quiet; then
+              echo "Locks unchanged, nothing to commit."
+              exit 0
+            fi
+            git commit -m "Projections lock $(date -u '+%Y-%m-%d %H:%M UTC')"
+            if git push origin "HEAD:$BRANCH"; then
+              exit 0
+            fi
+            echo "Push rejected (attempt $attempt), the branch moved; syncing and trying again."
+            sleep $((attempt * 5))
+          done
+          echo "::error::Could not push the locks after three tries."
+          exit 1

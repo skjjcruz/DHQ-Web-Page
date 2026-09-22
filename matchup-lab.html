@@ -134,11 +134,21 @@
         <div class="hint">All NFL players grades every player Sleeper has published a line for this week, scored with the selected league's rules (or Sleeper's half-PPR defaults when "All leagues" is picked).</div>
     </div>
 
+    <div class="card" id="sheet">
+        <h3 style="margin-top:0">SCORE SHEET</h3>
+        <div class="pos-tabs" id="sheetTabs"><span class="meta">Loading weeks…</span></div>
+        <div class="row" style="grid-template-columns:2fr 1fr; align-items:end">
+            <div><label>Scoring</label><select id="sheetScoring"><option value="half">Sleeper half-PPR defaults</option></select></div>
+            <div><button id="btnRecompute" class="ghost" style="width:100%">RECOMPUTE WITH TODAY'S FORMULA</button></div>
+        </div>
+        <div class="hint" id="sheetNote">Each week's projections are locked before kickoff and never change. Recompute runs today's formula on that week (no peeking) so you can see what a change would have done; tap again to go back to the locked score.</div>
+        <div class="hint" id="sheetSeason" style="margin-top:6px"></div>
+    </div>
     <div class="card" id="log" style="display:none"></div>
     <div class="card" id="summary" style="display:none"></div>
     <div class="card" id="readout" style="display:none"></div>
 </div>
-<div id="buildtag">LAB88</div>
+<div id="buildtag">LAB89</div>
 
 <script>
 // Minimal stand-ins for the app core: Sleeper's scoring keys match its stat
@@ -575,6 +585,7 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
             var opts = { playersData: S.players, statsData: shared.statsCur, priorData: shared.statsPrior, scoring: scoring, season: shared.season, sleeperOnly: mode !== 'dhq', baselineMode: mode };
             var res = await App.MatchupInputs.projectRoster(pids, shared.week, opts);
             board.actuals = actualsFor(shared, scoring, pids);
+            board.locked = null;
             board.rows = Object.keys(res.projections).map(function (pid) { return { pid: pid, p: res.projections[pid] }; });
             board.rows.sort(function (a, b) { return b.p.points.median - a.p.points.median; });
             step('   ' + board.rows.length + ' players graded in ' + ((Date.now() - t0) / 1000).toFixed(1) + 's', 'ok');
@@ -606,7 +617,7 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
         var rows = board.grade ? pool.filter(function (r) { return r.p.grade === board.grade; }) : pool;
         var shown = sortRows(rows);   // every graded player (owner ruling 2026-09-21); why panels are built on tap, so the table stays light
         $('readout').style.display = 'block';
-        $('readout').innerHTML = '<h3 style="margin-top:0">WEEK ' + week + ' · ALL NFL PLAYERS · ' + board.rows.length + ' WITH A SLEEPER LINE · ' + esc(scoringName) + '</h3>'
+        $('readout').innerHTML = '<h3 style="margin-top:0">WEEK ' + week + ' · ' + (board.locked ? (board.locked.reconstructed ? 'SCORE SHEET (RECONSTRUCTED)' : 'SCORE SHEET (LOCKED)') : 'ALL NFL PLAYERS') + ' · ' + board.rows.length + ' PLAYERS · ' + esc(scoringName) + '</h3>'
             + '<div class="pos-tabs">' + tabs + '</div>'
             + '<input id="boardSearch" placeholder="search a player or team code" value="' + esc(board.q) + '">'
             + '<div class="grid" style="margin-bottom:4px">' + ['A', 'B', 'C', 'D', 'F'].map(function (g) { return '<div class="tile pick' + (board.grade === g ? ' on' : '') + '" data-grade="' + g + '"><span class="g g' + g + '">' + g + '</span> <b>' + counts[g] + '</b></div>'; }).join('') + '</div>'
@@ -615,7 +626,7 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
             + '<table><tr>' + th('player', 'Player') + th('age', 'Age', 'num hide-m') + th('sleeper', 'Sleeper proj', 'num') + th('dhq', 'DHQ proj', 'num') + th('actual', 'Actual', 'num') + th('pm', '+/-', 'num') + th('wl', 'W/L', 'num') + '</tr>'
             + shown.map(boardRow).join('') + '</table>'
             + '<div class="hint" style="margin-top:12px">Tap a column heading to sort by it; tap again to flip. Sleeper proj = Sleeper\'s published line scored with these rules. DHQ proj = the DHQ baseline (its own stat line, or Sleeper\'s line, per the switch) after the eleven factors. Actual = points scored so far this week. +/- = Actual minus DHQ proj. W/L = green when DHQ was closer to the actual than Sleeper, red when Sleeper was; sorted by how much closer. Tap a row for the why.</div>';
-        Array.prototype.forEach.call(document.querySelectorAll('.pos-tabs button'), function (b) {
+        Array.prototype.forEach.call(document.querySelectorAll('#readout .pos-tabs button'), function (b) {
             b.addEventListener('click', function () { board.pos = b.getAttribute('data-pos'); renderBoard(week, scoringName); });
         });
         Array.prototype.forEach.call(document.querySelectorAll('#readout th.sort'), function (h) {
@@ -642,11 +653,134 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
                 var r = board.rows.filter(function (x) { return x.pid === pid; })[0];
                 if (!r) return;
                 var why = document.createElement('tr'); why.className = 'why';
-                why.innerHTML = '<td colspan="7"><div class="fx">' + factorRows(r.p) + '</div>' + (r.p.missing.length ? '<div class="missing">No data for: ' + esc(r.p.missing.map(labelOf).join(', ')) + '</div>' : '') + '</td>';
+                why.innerHTML = r.p.lockedWhy != null
+                    ? '<td colspan="7"><div class="hint">' + esc(r.p.lockedWhy || 'No detail stored with this lock.') + (r.p.lockedAt ? ' · locked ' + esc(String(r.p.lockedAt).slice(0, 16).replace('T', ' ')) + ' UTC' : '') + '</div></td>'
+                    : '<td colspan="7"><div class="fx">' + factorRows(r.p) + '</div>' + (r.p.missing.length ? '<div class="missing">No data for: ' + esc(r.p.missing.map(labelOf).join(', ')) + '</div>' : '') + '</td>';
                 tr.parentNode.insertBefore(why, tr.nextSibling);
             });
         });
     }
+
+    // ── Score sheet: one tab per week, locked before kickoff ──────────
+    var sheet = { season: null, weeks: [], week: null, locks: {}, mode: 'locked', recomputed: {}, summary: {} };
+    async function initSheet() {
+        try {
+            var st = await getJson(SL + '/state/nfl');
+            sheet.season = Number(st.season) || 2026;
+            var cur = Number(st.week) || 1;
+            sheet.weeks = []; for (var w = 1; w <= cur; w++) sheet.weeks.push(w);
+            sheet.week = cur;
+            renderSheetTabs();
+            showLocked(cur);
+            summarizeSeason();
+        } catch (e) { $('sheetTabs').innerHTML = '<span class="meta">Could not load the NFL week.</span>'; }
+    }
+    function renderSheetTabs() {
+        $('sheetTabs').innerHTML = sheet.weeks.map(function (w) { return '<button data-week="' + w + '" class="' + (sheet.week === w ? 'on' : '') + '">WEEK ' + w + '</button>'; }).join('');
+        Array.prototype.forEach.call($('sheetTabs').querySelectorAll('button'), function (b) {
+            b.addEventListener('click', function () { sheet.week = Number(b.getAttribute('data-week')); sheet.mode = 'locked'; renderSheetTabs(); showLocked(sheet.week); });
+        });
+    }
+    async function lockFor(week) {
+        if (sheet.locks[week] !== undefined) return sheet.locks[week];
+        try { sheet.locks[week] = await getJson('data/locks/' + sheet.season + '-w' + week + '.json?ts=' + Math.floor(Date.now() / 300000)); }
+        catch (e) { sheet.locks[week] = null; }
+        return sheet.locks[week];
+    }
+    function sheetScoringKey(lock) {
+        var want = $('sheetScoring').value;
+        return lock.scorings[want] ? want : 'half';
+    }
+    function fillSheetScoring(lock) {
+        var sel = $('sheetScoring'), keep = sel.value;
+        sel.innerHTML = Object.keys(lock.scorings).map(function (k) { return '<option value="' + esc(k) + '">' + esc(lock.scorings[k].name) + '</option>'; }).join('');
+        if (lock.scorings[keep]) sel.value = keep;
+    }
+    function lockedRows(lock, key) {
+        var sc = lock.scorings[key];
+        return Object.keys(sc.players).map(function (pid) {
+            var row = sc.players[pid], m = lock.players[pid] || {};
+            return { pid: pid, p: { position: m.pos, team: m.team, opponentAbbr: m.opp, points: { median: row[0] }, sleeper: row[1], grade: m.grade || 'C', verdict: m.verdict || 'sit', factors: [], missing: [], why: [], available: true, lockedWhy: m.why || '', lockedAt: m.t } };
+        }).sort(function (a, b) { return b.p.points.median - a.p.points.median; });
+    }
+    async function showLocked(week) {
+        var lock = await lockFor(week);
+        $('readout').style.display = 'block';
+        if (!lock) { $('readout').innerHTML = '<h3 style="margin-top:0">WEEK ' + week + '</h3><div class="hint">No locked projections for this week yet. The lock job writes them before kickoff.</div>'; $('sheetNote').textContent = ''; return; }
+        fillSheetScoring(lock);
+        var key = sheetScoringKey(lock), sc = lock.scorings[key];
+        window.S = window.S || {};
+        S.players = state.players = state.players || await fetchPlayers();
+        var actual = await getJson(SL + '/stats/nfl/regular/' + sheet.season + '/' + week).catch(function () { return {}; });
+        board.rows = lockedRows(lock, key);
+        board.actuals = {};
+        board.rows.forEach(function (r) { var line = actual[r.pid]; if (line && line.gp >= 1) board.actuals[r.pid] = +App.calcRawPts(line, sc.scoring).toFixed(2); });
+        board.locked = { week: week, built: lock.built, reconstructed: !!lock.reconstructed };
+        sheet.mode = 'locked';
+        $('btnRecompute').textContent = "RECOMPUTE WITH TODAY'S FORMULA";
+        $('sheetNote').textContent = lock.reconstructed
+            ? 'Week ' + week + ' was already played when locking began, so this sheet is RECONSTRUCTED with the formula as of ' + lock.built.slice(0, 16).replace('T', ' ') + ' UTC, using only what was known before the week (no peeking). It will not change.'
+            : 'Week ' + week + ': projections LOCKED before each kickoff (last update ' + lock.built.slice(0, 16).replace('T', ' ') + ' UTC). A player whose game has started keeps the number he had; the rest refresh hourly until they kick off.';
+        renderBoard(week, sc.name + (lock.reconstructed ? ' · reconstructed' : ' · locked'));
+    }
+    // Recompute: today's formula on that week, no peeking (the same run as
+    // GRADE ALL NFL PLAYERS, with the sheet's scoring). Tap again: locked.
+    async function recomputeSheet() {
+        var week = sheet.week, lock = await lockFor(week);
+        if (!lock) return;
+        if (sheet.mode === 'recomputed') { showLocked(week); return; }
+        var key = sheetScoringKey(lock), sc = lock.scorings[key];
+        var cached = sheet.recomputed[week + '|' + key];
+        if (!cached) {
+            $('btnRecompute').disabled = true;
+            logEl.innerHTML = ''; $('log').style.display = 'block';
+            try {
+                var saveWeek = $('fWeek').value; $('fWeek').value = String(week);
+                var shared = await loadShared(sheet.season);
+                $('fWeek').value = saveWeek;
+                step('3/3 Recomputing week ' + week + ' with today\'s formula (' + sc.name + ')…');
+                S.weeklyPlayerPoints = {};
+                shared.weeksDone.forEach(function (w, i) { var wk = shared.weekly[i] || {}; S.weeklyPlayerPoints[w] = {}; Object.keys(wk).forEach(function (pid) { if (pid.indexOf('TEAM_') !== 0) S.weeklyPlayerPoints[w][pid] = +App.calcRawPts(wk[pid], sc.scoring).toFixed(2); }); });
+                var pids = Object.keys(lock.players);
+                var opts = { playersData: S.players, statsData: shared.statsCur, priorData: shared.statsPrior, scoring: sc.scoring, season: shared.season, baselineMode: 'dhq' };
+                var res = await App.MatchupInputs.projectRoster(pids, week, opts);
+                cached = sheet.recomputed[week + '|' + key] = { rows: Object.keys(res.projections).map(function (pid) { return { pid: pid, p: res.projections[pid] }; }).sort(function (a, b) { return b.p.points.median - a.p.points.median; }), actuals: actualsFor(shared, sc.scoring, pids) };
+                step('Done.', 'ok');
+            } catch (e) { step('Recompute FAILED: ' + (e && e.message ? e.message : e), 'bad'); $('btnRecompute').disabled = false; return; }
+            $('btnRecompute').disabled = false;
+        }
+        board.rows = cached.rows; board.actuals = cached.actuals; board.locked = null;
+        sheet.mode = 'recomputed';
+        $('btnRecompute').textContent = 'SHOW THE LOCKED SCORE';
+        $('sheetNote').textContent = 'Week ' + week + ' RECOMPUTED with today\'s formula (no peeking). Compare with the locked sheet to see what the changes since then would have done. Tap the button again to go back.';
+        renderBoard(week, sc.name + ' · recomputed today');
+    }
+    // Season to date across every locked week, in the sheet's scoring.
+    async function summarizeSeason() {
+        var parts = [], W = 0, L = 0, T = 0, dm = 0, sm = 0, n = 0, ns = 0;
+        for (var i = 0; i < sheet.weeks.length; i++) {
+            var w = sheet.weeks[i], lock = await lockFor(w); if (!lock) continue;
+            var key = sheetScoringKey(lock), sc = lock.scorings[key];
+            var actual = await getJson(SL + '/stats/nfl/regular/' + sheet.season + '/' + w).catch(function () { return {}; });
+            var ww = 0, ll = 0, tt = 0, wn = 0;
+            Object.keys(sc.players).forEach(function (pid) {
+                var line = actual[pid]; if (!line || !(line.gp >= 1)) return;
+                var a = +App.calcRawPts(line, sc.scoring).toFixed(2), row = sc.players[pid];
+                var de = Math.abs(row[0] - a); n++; dm += de; wn++;
+                if (row[1] == null) return;
+                var se = Math.abs(row[1] - a); ns++; sm += se;
+                if (de < se - 0.05) ww++; else if (se < de - 0.05) ll++; else tt++;
+            });
+            W += ww; L += ll; T += tt;
+            parts.push('Wk ' + w + ' ' + ww + '-' + ll + (wn ? '' : ' (not played)'));
+        }
+        if (!n) { $('sheetSeason').textContent = ''; return; }
+        $('sheetSeason').innerHTML = '<b style="color:#fff">Season to date: ' + W + '-' + L + (T ? '-' + T : '') + ' vs Sleeper</b> · DHQ avg miss ' + (dm / n).toFixed(2) + ' · Sleeper ' + (ns ? (sm / ns).toFixed(2) : '—') + ' · ' + parts.join(' · ');
+    }
+    $('btnRecompute').addEventListener('click', recomputeSheet);
+    $('sheetScoring').addEventListener('change', function () { sheet.mode = 'locked'; showLocked(sheet.week); summarizeSeason(); });
+    window.DhqLab = { sheet: sheet, board: board, showLocked: showLocked, recomputeSheet: recomputeSheet, renderBoard: renderBoard };   // for the headless checks
+    initSheet();
 
     $('btnLeagues').addEventListener('click', loadLeagues);
     $('btnRun').addEventListener('click', run);
