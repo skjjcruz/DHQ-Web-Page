@@ -31,8 +31,15 @@
     // Position norms a thin sample is pulled toward, and the number of
     // phantom opportunities (K) that pull carries.
     const NORM = {
-        WR: { catch: 0.64, ypt: 8.0, tdpt: 0.045, K: 40 },
-        TE: { catch: 0.70, ypt: 7.2, tdpt: 0.050, K: 40 },
+        // Receivers and tight ends by usage rank (2023-25, 96 team-seasons a
+        // rank, 11,779 WR1 targets): the norm a player's own rates are
+        // pulled toward is his rank's, not one league bucket (owner ruling
+        // 2026-09-22). The plain entry is the fallback with no rank.
+        WR: { catch: 0.64, ypt: 8.0, tdpt: 0.045, K: 40, byRank: {
+            1: { catch: 0.654, ypt: 8.37, tdpt: 0.053 }, 2: { catch: 0.625, ypt: 8.01, tdpt: 0.053 }, 3: { catch: 0.611, ypt: 7.78, tdpt: 0.045 },
+            4: { catch: 0.616, ypt: 7.48, tdpt: 0.044 }, 5: { catch: 0.598, ypt: 6.82, tdpt: 0.045 } } },
+        TE: { catch: 0.70, ypt: 7.2, tdpt: 0.050, K: 40, byRank: {
+            1: { catch: 0.723, ypt: 7.56, tdpt: 0.049 }, 2: { catch: 0.724, ypt: 7.13, tdpt: 0.050 }, 3: { catch: 0.712, ypt: 6.56, tdpt: 0.050 } } },
         RB: { ypc: 4.2, tdpc: 0.030, catch: 0.76, ypt: 6.2, tdpt: 0.020, carryShare: 0.80, K: 60 },
         QB: { cmp: 0.65, ypa: 7.0, tdpa: 0.045, intpa: 0.022, rushAttPg: 3.0, rypc: 4.5, rtdpc: 0.04, K: 100 },
         DL: { soloShare: 0.62, sackPg: 0.35, intPg: 0.01, pdPg: 0.15, ffPg: 0.06, K: 8 },
@@ -74,8 +81,11 @@
     //   grades — PFF: { route, run, pass, elusive, def, prush, cov, tkl, fg }
     function buildLine(input) {
         const P = String(input.position || '').toUpperCase();
-        const n = NORM[P];
+        let n = NORM[P];
         if (!n) return null;
+        // his rank's norm when the position has one (rank beyond the table takes the last row)
+        const rk = Number(input.rank);
+        if (n.byRank && Number.isFinite(rk) && rk >= 1) { const keys = Object.keys(n.byRank).map(Number); n = Object.assign({}, n, n.byRank[Math.min(Math.round(rk), Math.max.apply(null, keys))]); }
         const c = pool(input.samples);
         const g = input.grades || {};
         const vol = input.volume != null ? Math.max(0, Number(input.volume)) : null;

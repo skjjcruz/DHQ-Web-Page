@@ -109,3 +109,15 @@ test('make rate is by distance: automatic inside 40, shaky from 50, reads that w
     const good = B.buildLine({ position: 'K', samples: [{ line: Object.assign({}, hist, { fgm: 40, fgm_50p: 10, fgmiss_50p: 0 }) }] });
     assert.ok(B.scoreLine(good.line, { fgm_yds: 0.1, xpm: 1, fgmiss: -1 }, 'K') > B.scoreLine(r.line, { fgm_yds: 0.1, xpm: 1, fgmiss: -1 }, 'K'));
 });
+
+test('a receiver with no history is pulled toward his rank, not one league norm', () => {
+    const wr1 = B.buildLine({ position: 'WR', volume: 8, samples: [], rank: 1 });
+    const wr3 = B.buildLine({ position: 'WR', volume: 8, samples: [], rank: 3 });
+    const wr7 = B.buildLine({ position: 'WR', volume: 8, samples: [], rank: 7 });
+    const none = B.buildLine({ position: 'WR', volume: 8, samples: [] });
+    const pts = (r) => B.scoreLine(r.line, { rec: 0.5, rec_yd: 0.1, rec_td: 6 }, 'WR');
+    assert.ok(pts(wr1) > pts(wr3) && pts(wr3) > pts(wr7), 'WR1 > WR3 > WR7 per target: ' + pts(wr1) + ' ' + pts(wr3) + ' ' + pts(wr7));
+    assert.ok(Math.abs(pts(wr1) / 8 - 1.48) < 0.03, 'a WR1 target is worth about 1.48 half-PPR: ' + pts(wr1) / 8);
+    assert.ok(Math.abs(pts(none) / 8 - 1.39) < 0.03, 'no rank keeps the old league norm: ' + pts(none) / 8);
+    assert.ok(Math.abs(wr7.line.rec_yd / 8 - 6.82) < 1e-6, 'rank past the table takes the last row');
+});
