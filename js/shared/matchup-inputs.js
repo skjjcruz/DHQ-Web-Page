@@ -615,6 +615,7 @@
     // League-average per-game volume the team pie is pulled toward until
     // the team has three games (K = 2 phantom games).
     const PIE_NORM = { attempts: 34, touches: 55, targets: 30, tackles: 58 };   // 2025 medians
+    const PIE_PHANTOM = 4;   // games of last season's pace the current season is blended with
     function teamPie(team, grp, week, opts, ctx) {
         const row = opts.statsData && opts.statsData['TEAM_' + team];
         const gp = row ? num(row.gp) : null;
@@ -627,7 +628,10 @@
         const priorGp = priorRow ? num(priorRow.gp) : null;
         const priorTotal = priorGp > 0 ? teamBall(ctx, opts.priorData, 'prior', team, grp, opts.playersData) : 0;
         const norm = priorTotal > 0 ? priorTotal / priorGp : PIE_NORM[BALL_BASIS[grp]];
-        let perGame = norm ? (total + 2 * norm) / (gp + 2) : total / gp;
+        // Last season counts as four phantom games (owner ruling 2026-09-22:
+        // the Bills' 50-play shootout in week 1 was cutting Cook's touches 7%),
+        // so one game is a fifth of the story, four games half, eight two thirds.
+        let perGame = norm ? (total + PIE_PHANTOM * norm) / (gp + PIE_PHANTOM) : total / gp;
         const wk = App.WeeklyProj && App.WeeklyProj._ctx && App.WeeklyProj._ctx.byTeamWeek[team + '|' + week];
         const spread = wk && wk.vegas ? num(wk.vegas.spread) : null; // positive = underdog
         if (spread != null) {
@@ -992,7 +996,7 @@
             const ppg = (row) => { if (!row || !(num(row.gp) >= 1)) return null; const two = (num(row.pass_2pt) || 0) + (num(row.rush_2pt) || 0); const td = num(row.td) || 0; return (6 * td + 3 * (num(row.fgm) || 0) + (td - two) * 0.96 + 2 * two) / num(row.gp); };
             const cur = opts.statsData && opts.statsData['TEAM_' + T], pri = opts.priorData && opts.priorData['TEAM_' + T];
             const curPpg = ppg(cur), priPpg = ppg(pri) != null ? ppg(pri) : 22.5, curGp = cur ? (num(cur.gp) || 0) : 0;
-            const seasonPpg = curPpg != null ? (curPpg * curGp + priPpg * 2) / (curGp + 2) : priPpg;
+            const seasonPpg = curPpg != null ? (curPpg * curGp + priPpg * PIE_PHANTOM) / (curGp + PIE_PHANTOM) : priPpg;
             const expected = implied != null && implied > 0 ? implied : seasonPpg;
             const teamXpa = clamp(-0.6 + 0.137 * expected, 0.5, 5.5);
             const teamFga = 1.70 + 0.013 * expected;
