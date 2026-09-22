@@ -165,6 +165,7 @@
             let n = Number(r.projTargets).toFixed(1) + ' projected ' + unit;
             if (num(r.freedTargets) >= 0.3) n += ' (+' + Number(r.freedTargets).toFixed(1) + ' freed by injured teammates)';
             if (r.snapGate && num(r.snapGate.snap) != null) n += ' (trimmed: ' + Math.round(num(r.snapGate.snap) * 100) + '% of snaps last game)';
+            if (r.snapScale && num(r.snapScale.snap) != null) n += ' (x' + Number(r.snapScale.factor).toFixed(2) + ' for ' + Math.round(num(r.snapScale.snap) * 100) + '% of snaps last game)';
             if (num(r.sleeperTargets) != null) n += ', Sleeper ' + Number(r.sleeperTargets).toFixed(1);
             notes.push(n);
         }
