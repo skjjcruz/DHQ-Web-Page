@@ -1045,6 +1045,17 @@
         return { median: +pts.toFixed(2), floor: +(pts * 0.7).toFixed(2), ceiling: +(pts * 1.35).toFixed(2), why: built.why, line: built.line };
     }
 
+    // Same rule as WeeklyProj.recentPPG, over a table the caller supplies:
+    // the last `lookback` weeks before `week` in which he scored.
+    function recentPPGFrom(wpp, pid, week, lookback) {
+        if (!wpp) return null;
+        const weeks = Object.keys(wpp).map(Number).filter(w => w > 0 && w < week).sort((a, b) => b - a).slice(0, lookback || 3);
+        if (!weeks.length) return null;
+        const vals = weeks.map(w => Number(wpp[w] && wpp[w][pid]) || 0).filter(v => v > 0);
+        if (!vals.length) return null;
+        return vals.reduce((a, b) => a + b, 0) / vals.length;
+    }
+
     // ── Kick and punt returns ─────────────────────────────────────────
     // Return duty follows the man, not the depth chart (the relay has no
     // KR/PR slots), so the returner is whoever took the team's returns:
@@ -1395,8 +1406,11 @@
         if (tr && tr.mine != null && tr.theirs != null) input.trench = tr;
 
         // trend
-        if (App.WeeklyProj && App.WeeklyProj.recentPPG && App.calcPPG && stats) {
-            const last3 = num(App.WeeklyProj.recentPPG(pid, week, 3));
+        // opts.weeklyPoints (week → pid → league-scored points) lets a caller
+        // hand in every player's recent weeks; the app's own table only holds
+        // players who were on a roster that week (free agents read no trend).
+        if (((App.WeeklyProj && App.WeeklyProj.recentPPG) || opts.weeklyPoints) && App.calcPPG && stats) {
+            const last3 = num(opts.weeklyPoints ? recentPPGFrom(opts.weeklyPoints, pid, week, 3) : App.WeeklyProj.recentPPG(pid, week, 3));
             const seasonPPG = num(App.calcPPG(stats, opts.scoring));
             if (last3 != null && seasonPPG != null) input.trend = { last3, season: seasonPPG };
         }
@@ -1523,7 +1537,7 @@
     }
 
     App.MatchupInputs = App.MatchupInputs || {
-        prepare, build, project, projectRoster, idpRankings, priorRankings, depthCharts, baselineFor, dhqBaselineFor, sleeperPoints, opponentOf, opponentFor, trenchFor, castFor, teamDepth, expectedShare, teamSlotNorm, passPool, freedTargetShare, posGroup, normName, roleFor, oppHealthFor, returnLine,
+        prepare, build, project, projectRoster, idpRankings, priorRankings, depthCharts, baselineFor, dhqBaselineFor, sleeperPoints, opponentOf, opponentFor, trenchFor, castFor, teamDepth, expectedShare, teamSlotNorm, passPool, freedTargetShare, posGroup, normName, roleFor, oppHealthFor, returnLine, recentPPGFrom,
     };
     /* global module */
     if (typeof module !== 'undefined' && module.exports) module.exports = App.MatchupInputs;
