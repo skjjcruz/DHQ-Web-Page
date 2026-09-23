@@ -1027,12 +1027,76 @@
             built.why = built.why.replace(/^[\d.]+ FG att/, fga.toFixed(1) + ' FG att').replace(/[\d.]+ XP att/, xpa.toFixed(1) + ' XP att')
                 + ' · team expected ' + expected.toFixed(1) + ' pts (' + (implied != null && implied > 0 ? 'Vegas' : 'season pace') + ')';
         }
+        // Kick and punt returns ride on top of any position's line, only
+        // where the league pays for them (yards, or the six for a score).
+        if (grp !== 'K' && scoresReturns(opts.scoring)) {
+            const ret = returnLine(pid, player, String(player.team || '').toUpperCase(), opts, ctx);
+            if (ret) {
+                Object.assign(built.line, ret.line);
+                built.returns = ret.line;
+                if (Number(opts.scoring.kr_yd) || Number(opts.scoring.pr_yd)) built.why = (built.why ? built.why + ' · ' : '') + 'returns: ' + ret.why;
+            }
+        }
         const pts = DB.scoreLine(built.line, opts.scoring, grp);
         if (pts == null) return null;
         // zero is a projection (a TE4 with no snaps), not a missing baseline
         if (pts <= 0) return { median: 0, floor: 0, ceiling: 0, why: built.why || 'no projected volume', line: built.line };
         return { median: +pts.toFixed(2), floor: +(pts * 0.7).toFixed(2), ceiling: +(pts * 1.35).toFixed(2), why: built.why, line: built.line };
     }
+
+    // ── Kick and punt returns ─────────────────────────────────────────
+    // Return duty follows the man, not the depth chart (the relay has no
+    // KR/PR slots), so the returner is whoever took the team's returns:
+    // half his share in the team's last game, half his season share
+    // shrunk toward last season's with two games of phantom returns. Team
+    // returns per game are this season's pace shrunk toward last season's
+    // (PIE_PHANTOM games), else the 2025 league rate. Yards a return are
+    // his own shrunk toward the league rate; touchdowns use the league
+    // rate (owner request 2026-09-23). 2025 league rates per team game:
+    // 3.82 kickoff returns at 25.9 yards, 1.52 punt returns at 10.2.
+    const RET_NORM = { kr: { perGame: 3.82, ypr: 25.9, td: 0.0034, k: 20 }, pr: { perGame: 1.52, ypr: 10.2, td: 0.018, k: 15 } };
+    const RET_PHANTOM = 2;   // games of last season's share the current season is blended with
+    function returnLine(pid, player, team, opts, ctx) {
+        const stats = opts.statsData || {}, prior = opts.priorData || {};
+        const me = stats[pid] || null, mePri = prior[pid] || null;
+        const tm = stats['TEAM_' + team] || null, tmPri = prior['TEAM_' + team] || null;
+        // the team's most recent game
+        let last = null;
+        const weeks = (ctx.recentWeeks || []).filter(w => w && w.stats && w.stats['TEAM_' + team]).sort((a, b) => b.week - a.week);
+        if (weeks.length) last = { me: weeks[0].stats[pid] || null, tm: weeks[0].stats['TEAM_' + team] };
+        const line = {}, notes = [];
+        let any = false;
+        for (const kind of ['kr', 'pr']) {
+            const n = RET_NORM[kind];
+            const gp = tm ? (num(tm.gp) || 0) : 0, tot = tm ? (num(tm[kind]) || 0) : 0;
+            const priGp = tmPri ? (num(tmPri.gp) || 0) : 0, priTot = tmPri ? (num(tmPri[kind]) || 0) : 0;
+            const priPg = priGp > 0 ? priTot / priGp : n.perGame;
+            const teamPg = (tot + PIE_PHANTOM * priPg) / (gp + PIE_PHANTOM);
+            const priShare = priTot > 0 && mePri ? clamp((num(mePri[kind]) || 0) / priTot, 0, 1) : 0;
+            const ph = RET_PHANTOM * priPg;
+            const seasonShare = (tot + ph) > 0 ? ((me ? (num(me[kind]) || 0) : 0) + ph * priShare) / (tot + ph) : priShare;
+            let share = seasonShare, lastShare = null;
+            if (last && (num(last.tm[kind]) || 0) > 0) {
+                lastShare = clamp(((last.me && num(last.me[kind])) || 0) / num(last.tm[kind]), 0, 1);
+                share = 0.5 * lastShare + 0.5 * seasonShare;
+            }
+            if (share < 0.05) continue;
+            let ret = 0, yds = 0;
+            for (const r of [me, mePri]) if (r) { ret += num(r[kind]) || 0; yds += num(r[kind + '_yd']) || 0; }
+            const ypr = (yds + n.k * n.ypr) / (ret + n.k);
+            const cnt = teamPg * share;
+            line[kind] = +cnt.toFixed(2);
+            line[kind + '_yd'] = +(cnt * ypr).toFixed(1);
+            line[kind + '_td'] = +(cnt * n.td).toFixed(3);
+            notes.push(cnt.toFixed(1) + ' ' + kind.toUpperCase() + ' (' + Math.round(share * 100) + '% of team' + (lastShare != null ? ', ' + Math.round(lastShare * 100) + '% last game' : '') + ') at ' + ypr.toFixed(0) + ' yds');
+            any = true;
+        }
+        if (!any) return null;
+        line.st_td = +((line.kr_td || 0) + (line.pr_td || 0)).toFixed(3);
+        return { line, why: notes.join(' · ') };
+    }
+    const RET_KEYS = ['kr_yd', 'pr_yd', 'kr_td', 'pr_td', 'st_td'];
+    function scoresReturns(scoring) { return !!scoring && RET_KEYS.some(k => Number(scoring[k])); }
 
     // ── Preseason expectations ────────────────────────────────────────
     // Sleeper's season-long projections, published before the season, are
@@ -1438,7 +1502,7 @@
     }
 
     App.MatchupInputs = App.MatchupInputs || {
-        prepare, build, project, projectRoster, idpRankings, priorRankings, depthCharts, baselineFor, dhqBaselineFor, sleeperPoints, opponentOf, opponentFor, trenchFor, castFor, teamDepth, expectedShare, teamSlotNorm, passPool, freedTargetShare, posGroup, normName, roleFor, oppHealthFor,
+        prepare, build, project, projectRoster, idpRankings, priorRankings, depthCharts, baselineFor, dhqBaselineFor, sleeperPoints, opponentOf, opponentFor, trenchFor, castFor, teamDepth, expectedShare, teamSlotNorm, passPool, freedTargetShare, posGroup, normName, roleFor, oppHealthFor, returnLine,
     };
     /* global module */
     if (typeof module !== 'undefined' && module.exports) module.exports = App.MatchupInputs;
