@@ -148,7 +148,7 @@
     <div class="card" id="summary" style="display:none"></div>
     <div class="card" id="readout" style="display:none"></div>
 </div>
-<div id="buildtag">LAB99</div>
+<div id="buildtag">LAB100</div>
 
 <script>
 // Minimal stand-ins for the app core: Sleeper's scoring keys match its stat
@@ -512,18 +512,36 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
         var curAt = {}, curSlotOf = {}; starters.forEach(function (pid, i) { if (pid && pid !== '0') { curAt[i] = pid; curSlotOf[pid] = i; } });
         var optSlotOf = {};
         lineupPids(optimal, slots).forEach(function (pid, i) { if (pid !== '0') optSlotOf[pid] = i; });
+        // A starter the optimizer moved to a twin slot (RB to the other RB)
+        // stays where he is; swap him back so the chain shows real moves only.
+        var norm = App.StartSit.normSlot || function (x) { return x; };
+        var optAt = {}; Object.keys(optSlotOf).forEach(function (pid) { optAt[optSlotOf[pid]] = pid; });
+        for (var pass = 0; pass < 8; pass++) {
+            var changed = false;
+            Object.keys(optSlotOf).forEach(function (pid) {
+                var cur = curSlotOf[pid], opt = optSlotOf[pid];
+                if (cur == null || cur === opt || norm(slots[cur]) !== norm(slots[opt])) return;
+                var other = optAt[cur];   // whoever the optimizer put in his old slot
+                optSlotOf[pid] = cur; optAt[cur] = pid;
+                if (other) { optSlotOf[other] = opt; optAt[opt] = other; } else delete optAt[opt];
+                changed = true;
+            });
+            if (!changed) break;
+        }
         var out = [];
         Object.keys(optSlotOf).forEach(function (pid) {
             if (curSlotOf[pid] != null) return;   // already starting
-            var slot = optSlotOf[pid], seen = {}, benched = null, guard = 0;
+            var slot = optSlotOf[pid], seen = {}, benched = null, guard = 0, moves = [];
             while (guard++ < 30) {
                 var occ = curAt[slot];
                 if (!occ) break;   // that slot was empty
                 if (optSlotOf[occ] == null) { benched = occ; break; }   // he sits
                 if (seen[occ]) break; seen[occ] = true;
-                slot = optSlotOf[occ];   // he moves; who did he displace there?
+                // he moves to make room; who did he displace there?
+                if (slot !== optSlotOf[occ]) moves.push({ pid: occ, from: slots[slot] || '', to: slots[optSlotOf[occ]] || '' });
+                slot = optSlotOf[occ];
             }
-            out.push({ pid: pid, slot: slots[optSlotOf[pid]] || '', benched: benched });
+            out.push({ pid: pid, slot: slots[optSlotOf[pid]] || '', moves: moves, benched: benched });
         });
         return out;
     }
@@ -565,7 +583,15 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
         var rowsFor = function (list, label, read) { return list.map(function (pid) { return P[pid] ? playerRow(lid + ':' + pid, pid, P[pid], label, read || readOf(pid), A[pid]) : ''; }).join(''); };
         var bRows = rowsFor(bench, 'BN');
         var irRows = rowsFor(reserve, 'IR', 'out'), taxiRows = rowsFor(taxi, 'TAXI', 'sit');
-        var swapLine = function (sw) { return '<div><b>' + esc(nameOf(sw.pid)) + '</b> (' + esc(P[sw.pid].position) + ') at ' + esc(sw.slot) + (sw.benched ? ', sit <b>' + esc(nameOf(sw.benched)) + '</b> (' + esc(P[sw.benched].position) + ')' : '') + '</div>'; };
+        // Every move it takes: the newcomer's slot, each starter who shifts
+        // to make room, and the one who sits (owner finding 2026-09-23: "sit
+        // Derick Hall for Wilson" hid that Bush and Donald each moved a slot).
+        var swapLine = function (sw) {
+            var parts = ['<b>' + esc(nameOf(sw.pid)) + '</b> (' + esc(P[sw.pid].position) + ') at ' + esc(sw.slot)];
+            (sw.moves || []).forEach(function (m) { parts.push('<b>' + esc(nameOf(m.pid)) + '</b> (' + esc(P[m.pid].position) + ') moves ' + esc(m.from) + ' to ' + esc(m.to)); });
+            parts.push(sw.benched ? 'sit <b>' + esc(nameOf(sw.benched)) + '</b> (' + esc(P[sw.benched].position) + ')' : 'fills an empty slot');
+            return '<div>' + parts.join(' · ') + '</div>';
+        };
         // DHQ's lineup vs the one Sleeper's numbers would set.
         var vsSleeper = pairSwaps(lineupPids(bySleeper, slots), slots, byDhq);
         var swapText = vsSleeper.length ? vsSleeper.map(swapLine).join('') : '<div class="meta">DHQ and Sleeper agree on the lineup this week.</div>';
