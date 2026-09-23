@@ -1,0 +1,247 @@
+// ══════════════════════════════════════════════════════════════════
+// js/shared/dhq-proj.js — window.App.DhqProj   (Lab only)
+// Runs the DHQ matchup engine (the one matchup-lab.html grades with) in
+// the background and keeps its weekly projection for every player the
+// app shows, so each surface can print DHQ's number beside Sleeper's.
+// Owner ruling 2026-09-23: "leave a slot for Sleeper projection and just
+// add ours as well so folks can see them side by side". Sleeper's number
+// still drives every lineup call; DHQ's rides alongside.
+//
+// Lazy: the engine files (~560 KB with the PFF and usage snapshots) load
+// a few seconds after the app is up, then the week's shared context is
+// built once (no peeking: season stats are summed from the weeks before
+// the one projected), then players project in small chunks so the page
+// stays responsive. When a batch lands it fires `wr:proj-updated`, the
+// event every projection surface already re-renders on.
+//
+//   App.DhqProj.get(pid)   → { median, why, grade } | null (and queues pid)
+//   App.DhqProj.fmt(pid)   → '12.3' | '…' (working) | '—' (no projection)
+//   App.DhqProj.request(pids)
+// ══════════════════════════════════════════════════════════════════
+(function (root) {
+    'use strict';
+    const App = root.App = root.App || {};
+    const SL = 'https://api.sleeper.app/v1';
+    const VERSION = 'LAB101';
+    const DEPS = [
+        'js/shared/matchup-engine.js', 'js/shared/dhq-baseline.js', 'js/shared/matchup-feeds-espn.js',
+        'js/shared/matchup-inputs.js', 'data/pff-matchup-snapshot.js', 'data/usage-snapshot.js',
+    ];
+    const CHUNK = 25;
+    const POS_OK = { QB: 1, RB: 1, WR: 1, TE: 1, K: 1, DL: 1, LB: 1, DB: 1 };
+
+    const st = {
+        deps: null,          // promise: engine files loaded
+        shared: {},          // `${season}|${week}` → promise of { statsCur, statsPrior, players }
+        key: null,           // `${leagueId}|${week}` the results belong to
+        results: {},         // pid → { median, why, grade } | null (projected, nothing to show)
+        queue: new Set(),
+        running: false,
+        ctx: null, ctxKey: null,
+        error: null,
+    };
+
+    // ── plumbing ──────────────────────────────────────────────────────
+    function loadScript(src) {
+        return new Promise((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = src + '?v=' + VERSION;
+            s.async = false;
+            s.onload = () => resolve();
+            s.onerror = () => reject(new Error('could not load ' + src));
+            document.head.appendChild(s);
+        });
+    }
+    function loadDeps() {
+        if (st.deps) return st.deps;
+        st.deps = (async () => {
+            if (!App.MatchupEngine || !App.DhqBaseline || !App.MatchupInputs) {
+                for (const src of DEPS) await loadScript(src);
+            }
+            if (!App.MatchupInputs || !App.MatchupEngine) throw new Error('engine did not load');
+        })();
+        st.deps.catch(e => { st.deps = null; st.error = e; });
+        return st.deps;
+    }
+    const getJson = (url) => fetch(url).then(r => { if (!r.ok) throw new Error(r.status + ' ' + url); return r.json(); });
+    const S = () => root.S || {};
+    function league() {
+        const s = S(), id = String(s.currentLeagueId || '');
+        if (!id) return null;
+        const lg = (s.leagues || []).find(l => String(l.league_id || l.id) === id);
+        return lg ? { id, scoring: lg.scoring_settings || {} } : null;
+    }
+    function week() {
+        const WP = App.WeeklyProj;
+        if (!WP) return 0;
+        return Number((WP.loadedProjWeek && WP.loadedProjWeek()) || (WP.currentWeek && WP.currentWeek()) || 0);
+    }
+    function season() {
+        const s = S();
+        return Number(s.season || (s.nflState && s.nflState.season) || new Date().getFullYear());
+    }
+
+    // The week's shared inputs, the same way the lab builds them: this
+    // season's stats summed from the completed weeks before `wk`, last
+    // season's table, and an injury tag set aside for anyone whose game this
+    // week has already been played (he played; a tag added afterwards must
+    // not zero him).
+    function sharedFor(yr, wk) {
+        const k = yr + '|' + wk;
+        if (st.shared[k]) return st.shared[k];
+        st.shared[k] = (async () => {
+            const weeksDone = []; for (let w = 1; w < wk; w++) weeksDone.push(w);
+            const got = await Promise.all([
+                getJson(SL + '/stats/nfl/regular/' + yr).catch(() => ({})),
+                getJson(SL + '/stats/nfl/regular/' + (yr - 1)).catch(() => ({})),
+                getJson(SL + '/stats/nfl/regular/' + yr + '/' + wk).catch(() => ({})),
+            ].concat(weeksDone.map(w => getJson(SL + '/stats/nfl/regular/' + yr + '/' + w).catch(() => ({})))));
+            const statsCur = {};
+            got.slice(3).forEach(wkRows => {
+                Object.keys(wkRows || {}).forEach(pid => {
+                    const row = wkRows[pid]; if (!row || typeof row !== 'object') return;
+                    const acc = statsCur[pid] = statsCur[pid] || {};
+                    Object.keys(row).forEach(f => { if (typeof row[f] === 'number') acc[f] = (acc[f] || 0) + row[f]; });
+                });
+            });
+            Object.keys(got[0] || {}).forEach(k2 => {
+                if (k2.indexOf('TEAM_') !== 0) return;
+                const row = got[0][k2];
+                if (row && row.gp === weeksDone.length) statsCur[k2] = row;
+            });
+            const base = S().players || {};
+            const players = Object.assign({}, base);
+            const actual = got[2] || {};
+            Object.keys(actual).forEach(pid => {
+                const p = base[pid];
+                if (p && p.injury_status && actual[pid] && actual[pid].gp >= 1) players[pid] = Object.assign({}, p, { injury_status_after: p.injury_status, injury_status: null });
+            });
+            // matchup context the engine reads (opponents, Vegas, defense ranks)
+            try { if (App.SOS && !App.SOS.ready && App.SOS.initialize) await App.SOS.initialize(String(yr), base); } catch (e) { /* neutral */ }
+            try { if (App.NflContext && App.NflContext.load) await App.NflContext.load([wk], yr); } catch (e) { /* neutral */ }
+            // The relay can fail; the lab reads ESPN's scoreboard directly, so do the same when it did.
+            try {
+                const have = Object.keys((App.WeeklyProj && App.WeeklyProj._ctx.byTeamWeek) || {}).filter(k2 => k2.split('|')[1] === String(wk)).length;
+                if (have < 20 && App.NflContext && App.NflContext.parse) {
+                    const sb = await getJson('https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week=' + wk + '&seasontype=2&dates=' + yr);
+                    App.WeeklyProj.setContext({ byTeamWeek: App.NflContext.parse(sb, wk) });
+                }
+            } catch (e) { /* neutral */ }
+            return { statsCur, statsPrior: got[1] || {}, players };
+        })();
+        st.shared[k].catch(() => { delete st.shared[k]; });
+        return st.shared[k];
+    }
+
+    // ── the worker ────────────────────────────────────────────────────
+    function resetIfMoved() {
+        const lg = league(), wk = week();
+        if (!lg || !wk) return null;
+        const key = lg.id + '|' + wk;
+        if (st.key !== key) { st.key = key; st.results = {}; st.queue.clear(); st.ctx = null; st.ctxKey = null; }
+        return { lg, wk, key };
+    }
+    function notify() {
+        try { root.dispatchEvent(new CustomEvent('wr:proj-updated', { detail: { source: 'dhq', week: week() } })); } catch (e) { /* no window */ }
+    }
+    async function run() {
+        if (st.running) return;
+        st.running = true;
+        try {
+            await loadDeps();
+            while (st.queue.size) {
+                const at = resetIfMoved();
+                if (!at) break;
+                const yr = season();
+                const shared = await sharedFor(yr, at.wk);
+                const MI = App.MatchupInputs;
+                const opts = { playersData: shared.players, statsData: shared.statsCur, priorData: shared.statsPrior, scoring: at.lg.scoring, season: yr, baselineMode: 'dhq' };
+                if (st.ctxKey !== at.key) {
+                    const teams = [...new Set(Object.values(shared.players).map(p => p && p.team).filter(Boolean))];
+                    st.ctx = await MI.prepare(teams, at.wk, opts);
+                    st.ctxKey = at.key;
+                }
+                const now = resetIfMoved(); if (!now || now.key !== at.key) continue;   // league or week changed while preparing
+                const batch = [...st.queue].slice(0, CHUNK);
+                batch.forEach(pid => st.queue.delete(pid));
+                for (const pid of batch) {
+                    if (pid in st.results) continue;
+                    let res = null;
+                    try {
+                        const p = MI.project(pid, at.wk, opts, st.ctx);
+                        if (p && p.points && Number.isFinite(Number(p.points.median))) {
+                            res = { median: p.available === false ? 0 : +Number(p.points.median).toFixed(1), grade: p.grade, verdict: p.verdict, why: (p.why || []).slice(0, 3).join(' · ') };
+                        }
+                    } catch (e) { res = null; }
+                    st.results[pid] = res;
+                }
+                if (!st.queue.size) notify();
+                await new Promise(r => setTimeout(r, 0));   // let the page breathe between chunks
+            }
+        } catch (e) {
+            st.error = e;
+            if (root.wrLog) root.wrLog('dhqProj.run', e);
+        } finally {
+            st.running = false;
+        }
+    }
+    let _kick = null;
+    function kick() { if (_kick) return; _kick = setTimeout(() => { _kick = null; run(); }, 50); }
+
+    function eligible(pid) {
+        const p = (S().players || {})[pid];
+        if (!p || !p.team) return false;
+        const g = App.MatchupInputs ? App.MatchupInputs.posGroup(p) : String((App.normPos && App.normPos(p.position)) || p.position || '').toUpperCase();
+        return !!POS_OK[g] || !!POS_OK[({ DE: 'DL', DT: 'DL', NT: 'DL', CB: 'DB', S: 'DB', SS: 'DB', FS: 'DB', OLB: 'LB', ILB: 'LB', MLB: 'LB' })[String(p.position || '').toUpperCase()]];
+    }
+    function request(pids) {
+        if (!resetIfMoved()) return;
+        let added = false;
+        (pids || []).forEach(pid => {
+            pid = String(pid || '');
+            if (!pid || pid in st.results || st.queue.has(pid)) return;
+            if (!eligible(pid)) { st.results[pid] = null; return; }
+            st.queue.add(pid); added = true;
+        });
+        if (added) kick();
+    }
+    function get(pid) {
+        pid = String(pid || '');
+        if (!resetIfMoved() || !pid) return null;
+        if (pid in st.results) return st.results[pid];
+        request([pid]);
+        return null;
+    }
+    function fmt(pid) {
+        const r = get(pid);
+        if (r) return Number(r.median) > 0 ? Number(r.median).toFixed(1) : '0.0';
+        return String(pid || '') in st.results ? '—' : '…';
+    }
+    // Total of several players (a lineup), '…' while any is still working.
+    function sum(pids) {
+        let t = 0, waiting = false;
+        (pids || []).forEach(pid => { const r = get(pid); if (r) t += Number(r.median) || 0; else if (!(String(pid) in st.results)) waiting = true; });
+        return waiting ? '\u2026' : t.toFixed(1);
+    }
+    // Every rostered player in the league, so rosters, Start/Sit and the
+    // opponent's side are ready before anyone opens them.
+    function warmLeague() {
+        const rs = S().rosters || [];
+        const ids = [];
+        rs.forEach(r => (r.players || []).forEach(pid => ids.push(pid)));
+        if (ids.length) request(ids);
+    }
+    function boot() {
+        let tries = 0;
+        const iv = setInterval(() => {
+            tries++;
+            if (league() && week() && (S().players && Object.keys(S().players).length > 1000)) { clearInterval(iv); setTimeout(warmLeague, 3000); }
+            else if (tries > 120) clearInterval(iv);
+        }, 1000);
+        // a league switch or the week's Sleeper lines landing re-warms the new league
+        root.addEventListener && root.addEventListener('wr:proj-updated', (e) => { if (!(e && e.detail && e.detail.source === 'dhq')) setTimeout(warmLeague, 500); });
+    }
+
+    App.DhqProj = App.DhqProj || { get, fmt, sum, request, warmLeague, _st: st, VERSION };
+    if (typeof document !== 'undefined') boot();
+})(typeof window !== 'undefined' ? window : globalThis);
