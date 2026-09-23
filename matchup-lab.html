@@ -148,7 +148,7 @@
     <div class="card" id="summary" style="display:none"></div>
     <div class="card" id="readout" style="display:none"></div>
 </div>
-<div id="buildtag">LAB93</div>
+<div id="buildtag">LAB94</div>
 
 <script>
 // Minimal stand-ins for the app core: Sleeper's scoring keys match its stat
@@ -250,7 +250,9 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
     async function loadShared(season) {
         step('1/3 NFL state, player database, season stats, weekly stats, Sleeper projections…');
         var nflState = await getJson(SL + '/state/nfl');
-        var week = Number($('fWeek').value.trim()) || App.WeeklyProj.fantasyWeek(nflState);
+        // The NFL week (Sleeper's `week`), not its display week, which lags until
+        // midweek: on a Wednesday GRADE MY ROSTER was still grading week 2.
+        var week = Number($('fWeek').value.trim()) || Number(nflState.week) || App.WeeklyProj.fantasyWeek(nflState);
         window.S = window.S || {};
         S.nflState = nflState; S.season = season; S.currentWeek = week;
         S.players = state.players = state.players || await fetchPlayers();
