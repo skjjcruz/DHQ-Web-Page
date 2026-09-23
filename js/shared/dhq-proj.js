@@ -22,7 +22,7 @@
     'use strict';
     const App = root.App = root.App || {};
     const SL = 'https://api.sleeper.app/v1';
-    const VERSION = 'LAB103';
+    const VERSION = 'LAB105';
     const DEPS = [
         'js/shared/matchup-engine.js', 'js/shared/dhq-baseline.js', 'js/shared/matchup-feeds-espn.js',
         'js/shared/matchup-inputs.js', 'data/pff-matchup-snapshot.js', 'data/usage-snapshot.js',
@@ -281,6 +281,21 @@
         return src && PLATFORM_NAME[src] ? PLATFORM_NAME[src] : 'Sleeper';
     }
 
+    // DHQ's best lineup for a roster: the same slot solver as the app's
+    // optimizer, fed DHQ's numbers (IR and taxi never start; a player's
+    // every Sleeper position counts, so an edge rusher can fill a DL slot).
+    function optimalFor(roster, rosterPositions) {
+        const SS = App.StartSit;
+        if (!SS || !SS.optimalLineupWeekly || !roster) return null;
+        const skip = new Set([].concat(roster.reserve || [], roster.taxi || []).map(String));
+        const players = S().players || {};
+        const list = (roster.players || []).map(String).filter(pid => pid && !skip.has(pid)).map(pid => {
+            const r = get(pid), p = players[pid] || {};
+            const pos = String((App.normPos && App.normPos(p.position)) || p.position || '').toUpperCase();
+            return { pid, pos, positions: (p.fantasy_positions || []).concat([pos]), available: !!(r && Number(r.median) > 0), pts: r ? Number(r.median) || 0 : 0 };
+        });
+        return SS.optimalLineupWeekly(list, rosterPositions || []);
+    }
     // Total of several players (a lineup), '…' while any is still working.
     function sum(pids) {
         let t = 0, waiting = false;
@@ -306,6 +321,6 @@
         root.addEventListener && root.addEventListener('wr:proj-updated', (e) => { if (!(e && e.detail && e.detail.source === 'dhq')) { loadPlatform(); setTimeout(warmLeague, 500); } });
     }
 
-    App.DhqProj = App.DhqProj || { get, fmt, sum, provLabel, loadPlatform, request, warmLeague, _st: st, VERSION };
+    App.DhqProj = App.DhqProj || { get, fmt, sum, optimalFor, provLabel, loadPlatform, request, warmLeague, _st: st, VERSION };
     if (typeof document !== 'undefined') boot();
 })(typeof window !== 'undefined' ? window : globalThis);
