@@ -997,6 +997,7 @@
         if (role && role.backupQb) return { median: 0, floor: 0, ceiling: 0, why: 'backup quarterback, projected zero unless the starter is out', line: {} };
         const pf = pffPlayer(player) || {};
         const built = DB.buildLine({ position: grp, volume, samples, rank: role && num(role.posRank) != null ? role.posRank : null, grades: { route: pf.route, run: pf.run, pass: pf.pass, off: pf.off, prush: pf.prush, cov: pf.cov, tkl: pf.tkl, fg: pf.fg } });
+        if (!built) return null;   // no DHQ line for this position (team defense): the caller falls back
         if (grp === 'K') {
             // A kicker's attempts follow his team's scoring (owner ruling
             // 2026-09-21). From the 2025 team rows: touchdowns (extra-point
