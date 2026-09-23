@@ -22,7 +22,7 @@
     'use strict';
     const App = root.App = root.App || {};
     const SL = 'https://api.sleeper.app/v1';
-    const VERSION = 'LAB106';
+    const VERSION = 'LAB108';
     const DEPS = [
         'js/shared/matchup-engine.js', 'js/shared/dhq-baseline.js', 'js/shared/matchup-feeds-espn.js',
         'js/shared/matchup-inputs.js', 'data/pff-matchup-snapshot.js', 'data/usage-snapshot.js',
@@ -296,6 +296,12 @@
         });
         return SS.optimalLineupWeekly(list, rosterPositions || []);
     }
+    // Numeric total of several players, or null while any is still working.
+    function totalNum(pids) {
+        let t = 0;
+        for (const pid of (pids || [])) { const r = get(pid); if (r) t += Number(r.median) || 0; else if (!(String(pid) in st.results)) return null; }
+        return +t.toFixed(1);
+    }
     // Total of several players (a lineup), '…' while any is still working.
     function sum(pids) {
         let t = 0, waiting = false;
@@ -333,6 +339,6 @@
         root.addEventListener && root.addEventListener('wr:proj-updated', (e) => { if (!(e && e.detail && e.detail.source === 'dhq')) { loadPlatform(); setTimeout(warmLeague, 500); } });
     }
 
-    App.DhqProj = App.DhqProj || { get, fmt, sum, optimalFor, provLabel, loadPlatform, request, warmLeague, _st: st, VERSION };
+    App.DhqProj = App.DhqProj || { get, fmt, sum, totalNum, optimalFor, provLabel, loadPlatform, request, warmLeague, _st: st, VERSION };
     if (typeof document !== 'undefined') boot();
 })(typeof window !== 'undefined' ? window : globalThis);
