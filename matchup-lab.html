@@ -126,7 +126,7 @@
             <option value="dhq">DHQ's own projection (no Sleeper in the formula)</option>
             <option value="sleeper">Sleeper's published line, then the factors</option>
         </select>
-        <div class="hint">Week is blank for the current NFL week. Pick one league or all of them; every league is graded with its own scoring. Baseline picks where the number starts: DHQ builds its own stat line from volume, efficiency and PFF grades, or it starts from Sleeper's line. Sleeper's projection shows in its own column either way.</div>
+        <div class="hint">Week is blank for the week picked on the score sheet (the current NFL week to start). A week already played grades your roster from its locked sheet, with the lineup you started. Pick one league or all of them; every league is graded with its own scoring. Baseline picks where the number starts: DHQ builds its own stat line from volume, efficiency and PFF grades, or it starts from Sleeper's line. Sleeper's projection shows in its own column either way.</div>
         <button id="btnLeagues" class="ghost">LOAD LEAGUES</button>
         <button id="btnRun" disabled>GRADE MY ROSTER</button>
         <button id="btnAll" disabled>GRADE ALL NFL PLAYERS</button>
@@ -148,7 +148,7 @@
     <div class="card" id="summary" style="display:none"></div>
     <div class="card" id="readout" style="display:none"></div>
 </div>
-<div id="buildtag">LAB95</div>
+<div id="buildtag">LAB96</div>
 
 <script>
 // Minimal stand-ins for the app core: Sleeper's scoring keys match its stat
@@ -357,6 +357,37 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
         return { league: league, mine: mine, res: res, lines: lines, actuals: actualsFor(shared, scoring, mine.players) };
     }
 
+    // A past week, from its locked sheet: the numbers DHQ and Sleeper had
+    // before kickoff, the lineup you actually started that week (Sleeper's
+    // matchups for the week), and the box scores in this league's rules.
+    // Owner finding 2026-09-23: with week 2 picked on the sheet, GRADE MY
+    // ROSTER jumped to week 3 and showed no week-2 score.
+    async function gradeLeagueLocked(leagueId, week, lock) {
+        var key = 'league_' + leagueId;
+        if (!lock.scorings[key]) return null;   // this league was not on the sheet that week
+        var parts = await Promise.all([getJson(SL + '/league/' + leagueId), getJson(SL + '/league/' + leagueId + '/rosters'), getJson(SL + '/league/' + leagueId + '/matchups/' + week).catch(function () { return []; })]);
+        var league = parts[0], rosters = parts[1], matchups = parts[2] || [];
+        S.currentLeagueId = leagueId; S.rosters = rosters;
+        var mine = rosters.filter(function (r) { return String(r.owner_id) === String(state.user.user_id) || (r.co_owners || []).map(String).indexOf(String(state.user.user_id)) >= 0; })[0];
+        if (!mine) return { league: league, reason: 'You do not own a roster in this league.' };
+        var wk = matchups.filter(function (m) { return String(m.roster_id) === String(mine.roster_id); })[0];
+        var roster = Object.assign({}, mine);
+        if (wk && (wk.players || []).length) { roster.players = wk.players; roster.starters = wk.starters || []; }
+        if (!(roster.players || []).length) return { league: league, reason: 'Your roster is empty.' };
+        var sc = lock.scorings[key], scoring = league.scoring_settings || sc.scoring || {};
+        var actual = await getJson(SL + '/stats/nfl/regular/' + lock.season + '/' + week).catch(function () { return {}; });
+        var P = {}, actuals = {}, lines = 0;
+        (roster.players || []).forEach(function (pid) {
+            var row = sc.players[pid]; if (!row) return;
+            var m = lock.players[pid] || {};
+            if (row[1] != null) lines++;
+            P[pid] = { position: m.pos, team: m.team, opponentAbbr: m.opp, points: { median: row[0], floor: row[0], ceiling: row[0] }, sleeper: row[1], grade: m.grade || 'C', verdict: m.verdict || 'sit',
+                baseline: { median: row[1] != null ? row[1] : row[0], source: 'locked', why: m.why || '' }, factors: [], missing: [], why: [], available: true, lockedWhy: m.why || '', lockedAt: m.t };
+            var line = actual[pid]; if (line && line.gp >= 1) actuals[pid] = +App.calcRawPts(line, scoring).toFixed(2);
+        });
+        return { league: league, mine: roster, res: { projections: P }, lines: lines, actuals: actuals, locked: { week: week, built: lock.built, reconstructed: !!lock.reconstructed } };
+    }
+
     async function run() {
         var pick = $('fLeague').value;
         if (!pick || !state.user) { step('Load leagues and pick one first.', 'bad'); return; }
@@ -364,20 +395,46 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
         logEl.innerHTML = ''; $('summary').style.display = 'none'; $('readout').style.display = 'none'; $('readout').innerHTML = '';
         var season = Number($('fSeason').value.trim()) || 2026;
         var targets = pick === ALL ? state.leagues.slice() : state.leagues.filter(function (lg) { return lg.league_id === pick; });
+        // The week: typed in the box, else the week picked on the score sheet,
+        // else the current NFL week. A week already played is graded from its
+        // locked sheet; the current week is graded live.
+        var nflWeek = sheet.weeks.length ? sheet.weeks[sheet.weeks.length - 1] : null;
+        var week = Number($('fWeek').value.trim()) || sheet.week || nflWeek;
+        var lock = week && nflWeek && week < nflWeek ? await lockFor(week) : null;
         try {
-            var shared = await loadShared(season);
-            step('3/3 Grading ' + targets.length + ' league' + (targets.length === 1 ? '' : 's') + '…');
-            var results = [];
-            for (var i = 0; i < targets.length; i++) {
-                var lg = targets[i];
-                try {
-                    var r = await gradeLeague(lg.league_id, shared);
-                    results.push(r);
-                    if (r.reason) step('   ' + lg.name + ': ' + r.reason, 'warn');
-                    else step('   ' + lg.name + ': ' + Object.keys(r.res.projections).length + ' players graded · Sleeper lines for ' + r.lines + ' of ' + (r.mine.players || []).length, 'ok');
-                } catch (e) { step('   ' + lg.name + ': FAILED ' + (e && e.message || e), 'bad'); }
+            var results = [], live = [];
+            if (lock) {
+                step('1/3 Week ' + week + ' is in the books: grading your roster from the LOCKED sheet (the numbers before kickoff, the lineup you started).');
+                window.S = window.S || {};
+                S.players = state.players = state.players || await fetchPlayers();
+                for (var j = 0; j < targets.length; j++) {
+                    var lg0 = targets[j];
+                    try {
+                        var r0 = await gradeLeagueLocked(lg0.league_id, week, lock);
+                        if (!r0) { live.push(lg0); step('   ' + lg0.name + ': not on the week ' + week + ' sheet, grading it live (no peeking)', 'warn'); continue; }
+                        results.push(r0);
+                        if (r0.reason) step('   ' + lg0.name + ': ' + r0.reason, 'warn');
+                        else step('   ' + lg0.name + ': ' + Object.keys(r0.res.projections).length + ' players from the locked sheet · box scores in for ' + Object.keys(r0.actuals).length, 'ok');
+                    } catch (e) { step('   ' + lg0.name + ': FAILED ' + (e && e.message || e), 'bad'); }
+                }
+            } else live = targets;
+            if (live.length) {
+                var saveWeek = $('fWeek').value; if (lock) $('fWeek').value = String(week);
+                var shared = await loadShared(season);
+                $('fWeek').value = saveWeek;
+                week = shared.week;
+                step('3/3 Grading ' + live.length + ' league' + (live.length === 1 ? '' : 's') + '…');
+                for (var i = 0; i < live.length; i++) {
+                    var lg = live[i];
+                    try {
+                        var r = await gradeLeague(lg.league_id, shared);
+                        results.push(r);
+                        if (r.reason) step('   ' + lg.name + ': ' + r.reason, 'warn');
+                        else step('   ' + lg.name + ': ' + Object.keys(r.res.projections).length + ' players graded · Sleeper lines for ' + r.lines + ' of ' + (r.mine.players || []).length, 'ok');
+                    } catch (e) { step('   ' + lg.name + ': FAILED ' + (e && e.message || e), 'bad'); }
+                }
             }
-            renderAll(results, shared.week);
+            renderAll(results, week);
             step('Done.', 'ok');
         } catch (err) {
             step('FAILED: ' + (err && err.message || err), 'bad');
@@ -386,6 +443,7 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
     }
 
     function factorRows(p) {
+        if (p.baseline.source === 'locked') return '<div class="i zero">' + fmt(p.points.median) + '</div><div class="l">Locked <span class="meta">' + esc(p.lockedAt ? String(p.lockedAt).slice(0, 16).replace('T', ' ') + ' UTC' : 'before kickoff') + '</span></div><div class="n">' + esc(p.lockedWhy || 'the projection as it stood before kickoff') + '</div>';
         var base = '<div class="i zero">' + fmt(p.baseline.median) + '</div><div class="l">Baseline <span class="meta">' + (p.baseline.source === 'dhq' ? 'DHQ' : p.baseline.source === 'sleeper' ? 'Sleeper' : 'estimate') + '</span></div><div class="n">' + esc(p.baseline.why || (p.baseline.source === 'sleeper' ? "Sleeper's published line, scored with this league's rules" : 'per-game estimate from season stats')) + '</div>';
         return base + p.factors.filter(function (f) { return f.hasData; }).sort(function (a, b) { return Math.abs(b.impactPct) - Math.abs(a.impactPct); }).map(function (f) {
             var cls = f.impactPct > 0.05 ? 'up' : f.impactPct < -0.05 ? 'dn' : 'zero';
@@ -469,7 +527,8 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
             ? '<h3>DHQ WOULD START</h3>' + benchedBetter.map(function (pid) { return '<div><b>' + esc(nameOf(pid)) + '</b> (' + esc(P[pid].position) + ', ' + fmt(P[pid].points.median) + ' pts, grade ' + P[pid].grade + ')</div>'; }).join('')
             : '<h3>YOUR LINEUP</h3><div class="meta">Your starters match the DHQ-optimal lineup.</div>';
 
-        return '<div class="card lg" data-league="' + esc(lid) + '"><h3 style="margin-top:0">WEEK ' + week + ' · ' + esc(league.name) + ' · BASELINE: ' + ($('fBase').value === 'dhq' ? "DHQ'S OWN" : "SLEEPER'S LINE") + '</h3>'
+        var tag = r.locked ? (r.locked.reconstructed ? 'RECONSTRUCTED SHEET' : 'LOCKED SHEET') + ' · ' + esc(String(r.locked.built || '').slice(0, 10)) : 'BASELINE: ' + ($('fBase').value === 'dhq' ? "DHQ'S OWN" : "SLEEPER'S LINE");
+        return '<div class="card lg" data-league="' + esc(lid) + '"><h3 style="margin-top:0">WEEK ' + week + ' · ' + esc(league.name) + ' · ' + tag + '</h3>'
             + '<div class="grid">'
             + ['A', 'B', 'C', 'D', 'F'].map(function (g) { return '<div class="tile pick" data-grade="' + g + '"><span class="g g' + g + '">' + g + '</span> <b>' + counts[g] + '</b>' + (g === 'A' ? 'smash spots' : g === 'B' ? 'good starts' : g === 'C' ? 'coin flips' : g === 'D' ? 'weak spots' : 'sit or out') + '</div>'; }).join('')
             + '</div><div class="hint">Tap a grade to show only those players. Tap again to show everyone.</div>' + scorecard(P, A) + lineupText
