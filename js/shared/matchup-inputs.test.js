@@ -58,3 +58,18 @@ test('week one: last season\'s returner keeps his share before a game is played'
     assert.equal(r.line.kr, 2);
     assert.equal(r.line.pr, 2);
 });
+
+test('last season\'s share counts only for the team he returned for', () => {
+    // the snapshot says KC's returns last season went to someone else
+    globalThis.DhqUsage = { teams: { KC: { returns: { season: 2025, kr: { other: { n: 34, share: 1 } }, krTotal: 34, pr: { other: { n: 34, share: 1 } }, prTotal: 34 } } } };
+    try {
+        const opts = mkOpts(null, { gp: 17, kr: 34, kr_yd: 850, pr: 34, pr_yd: 340 });
+        opts.statsData = { ret: null };
+        assert.equal(I.returnLine('ret', { team: 'KC' }, 'KC', opts, { recentWeeks: [] }), null, 'his old-team returns do not follow him');
+        // but the man the snapshot names keeps his share
+        globalThis.DhqUsage.teams.KC.returns.kr.ret = { n: 17, share: 0.5 };
+        const r = I.returnLine('ret', { team: 'KC' }, 'KC', opts, { recentWeeks: [] });
+        assert.equal(r.line.kr, 2);
+        assert.equal(r.line.pr, undefined);
+    } finally { delete globalThis.DhqUsage; }
+});
