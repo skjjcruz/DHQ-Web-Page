@@ -148,7 +148,7 @@
     <div class="card" id="summary" style="display:none"></div>
     <div class="card" id="readout" style="display:none"></div>
 </div>
-<div id="buildtag">LAB98</div>
+<div id="buildtag">LAB99</div>
 
 <script>
 // Minimal stand-ins for the app core: Sleeper's scoring keys match its stat
@@ -546,8 +546,11 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
         var ss = App.StartSit;
         // IR and taxi players cannot be started, so they never make the lineup.
         var eligible = (mine.players || []).filter(function (pid) { return P[pid] && !parked[pid]; });
-        var byDhq = ss.optimalLineupWeekly(eligible.map(function (pid) { return { pid: pid, pos: P[pid].position, available: P[pid].available, pts: P[pid].points.median }; }), league.roster_positions || []);
-        var bySleeper = ss.optimalLineupWeekly(eligible.map(function (pid) { return { pid: pid, pos: P[pid].position, available: P[pid].available, pts: P[pid].baseline.median }; }), league.roster_positions || []);
+        // Every slot he can fill: Sleeper's fantasy positions (an edge rusher
+        // listed DL and LB may sit in a DL slot) plus the position we grade him at.
+        var posOf = function (pid) { var pl = S.players[pid] || {}; return (pl.fantasy_positions || []).concat([P[pid].position]); };
+        var byDhq = ss.optimalLineupWeekly(eligible.map(function (pid) { return { pid: pid, pos: P[pid].position, positions: posOf(pid), available: P[pid].available, pts: P[pid].points.median }; }), league.roster_positions || []);
+        var bySleeper = ss.optimalLineupWeekly(eligible.map(function (pid) { return { pid: pid, pos: P[pid].position, positions: posOf(pid), available: P[pid].available, pts: P[pid].baseline.median }; }), league.roster_positions || []);
         var pick = function (opt) { var out = {}; (opt && opt.slots || []).forEach(function (s) { if (s && s.pid) out[s.pid] = true; }); return out; };
         var inD = pick(byDhq), inS = pick(bySleeper);
         // Read = the lineup call: START when the DHQ-optimal lineup has him,
