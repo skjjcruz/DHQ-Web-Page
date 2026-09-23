@@ -73,3 +73,9 @@ test('last season\'s share counts only for the team he returned for', () => {
         assert.equal(r.line.pr, undefined);
     } finally { delete globalThis.DhqUsage; }
 });
+
+test('recent points from a supplied table: last three weeks he scored, before this week', () => {
+    const wpp = { 1: { a: 10 }, 2: { a: 0 }, 3: { a: 20 }, 4: { a: 99 } };
+    assert.equal(I.recentPPGFrom(wpp, 'a', 4, 3), 15);   // weeks 3, 2, 1; the zero is skipped; week 4 is not yet played
+    assert.equal(I.recentPPGFrom(wpp, 'b', 4, 3), null);
+});

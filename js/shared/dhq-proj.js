@@ -22,7 +22,7 @@
     'use strict';
     const App = root.App = root.App || {};
     const SL = 'https://api.sleeper.app/v1';
-    const VERSION = 'LAB101';
+    const VERSION = 'LAB102';
     const DEPS = [
         'js/shared/matchup-engine.js', 'js/shared/dhq-baseline.js', 'js/shared/matchup-feeds-espn.js',
         'js/shared/matchup-inputs.js', 'data/pff-matchup-snapshot.js', 'data/usage-snapshot.js',
@@ -127,7 +127,7 @@
                     App.WeeklyProj.setContext({ byTeamWeek: App.NflContext.parse(sb, wk) });
                 }
             } catch (e) { /* neutral */ }
-            return { statsCur, statsPrior: got[1] || {}, players };
+            return { statsCur, statsPrior: got[1] || {}, players, weekly: weeksDone.map((w, i) => ({ week: w, rows: got[3 + i] || {} })), wpp: {} };
         })();
         st.shared[k].catch(() => { delete st.shared[k]; });
         return st.shared[k];
@@ -155,7 +155,13 @@
                 const yr = season();
                 const shared = await sharedFor(yr, at.wk);
                 const MI = App.MatchupInputs;
-                const opts = { playersData: shared.players, statsData: shared.statsCur, priorData: shared.statsPrior, scoring: at.lg.scoring, season: yr, baselineMode: 'dhq' };
+                // every player's recent weeks in this league's scoring, like the lab page builds them
+                if (!shared.wpp[at.lg.id] && App.calcRawPts) {
+                    const wpp = {};
+                    shared.weekly.forEach(({ week: w, rows }) => { const m = wpp[w] = {}; Object.keys(rows).forEach(pid => { if (pid.indexOf('TEAM_') !== 0 && rows[pid]) m[pid] = +App.calcRawPts(rows[pid], at.lg.scoring).toFixed(2); }); });
+                    shared.wpp[at.lg.id] = wpp;
+                }
+                const opts = { playersData: shared.players, statsData: shared.statsCur, priorData: shared.statsPrior, scoring: at.lg.scoring, season: yr, baselineMode: 'dhq', weeklyPoints: shared.wpp[at.lg.id] || null };
                 if (st.ctxKey !== at.key) {
                     const teams = [...new Set(Object.values(shared.players).map(p => p && p.team).filter(Boolean))];
                     st.ctx = await MI.prepare(teams, at.wk, opts);
