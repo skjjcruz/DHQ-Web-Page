@@ -148,7 +148,7 @@
     <div class="card" id="summary" style="display:none"></div>
     <div class="card" id="readout" style="display:none"></div>
 </div>
-<div id="buildtag">LAB97</div>
+<div id="buildtag">LAB98</div>
 
 <script>
 // Minimal stand-ins for the app core: Sleeper's scoring keys match its stat
@@ -486,21 +486,66 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
             + (p.missing.length ? '<div class="missing">No data for: ' + esc(p.missing.map(labelOf).join(', ')) + '</div>' : '') + '</td></tr>';
     }
 
-    // One league's block: grade counts, lineup disagreements, starters, bench.
+    // Sleeper's roster order: starters in the league's slot order, then the
+    // bench by position (offense, kicker, team defense, then DL, LB, DB),
+    // then IR, then taxi (owner ruling 2026-09-23).
+    var POS_ORDER = { QB: 0, RB: 1, WR: 2, TE: 3, K: 4, DEF: 5, DL: 6, LB: 7, DB: 8 };
+    // Pair each newcomer to the DHQ lineup with the starter he displaces,
+    // following the slot chain: he takes a slot; if its current starter
+    // moves to another slot in the DHQ lineup, follow him until reaching a
+    // starter who sits. Keeps a back from reading "in for" a kicker.
+    // The optimizer lists slots narrowest-first; this puts its lineup back
+    // in the roster's own slot order ('0' for an empty slot).
+    function lineupPids(optimal, slots) {
+        var norm = App.StartSit.normSlot || function (x) { return x; };
+        var out = slots.map(function () { return '0'; });
+        var free = slots.map(function (sl, i) { return { i: i, name: norm(sl) }; });
+        (optimal.slots || []).forEach(function (s) {
+            if (!s.pid) return;
+            var k = -1; for (var j = 0; j < free.length; j++) if (free[j].name === s.slot) { k = j; break; }
+            if (k < 0) return;
+            out[free[k].i] = s.pid; free.splice(k, 1);
+        });
+        return out;
+    }
+    function pairSwaps(starters, slots, optimal) {
+        var curAt = {}, curSlotOf = {}; starters.forEach(function (pid, i) { if (pid && pid !== '0') { curAt[i] = pid; curSlotOf[pid] = i; } });
+        var optSlotOf = {};
+        lineupPids(optimal, slots).forEach(function (pid, i) { if (pid !== '0') optSlotOf[pid] = i; });
+        var out = [];
+        Object.keys(optSlotOf).forEach(function (pid) {
+            if (curSlotOf[pid] != null) return;   // already starting
+            var slot = optSlotOf[pid], seen = {}, benched = null, guard = 0;
+            while (guard++ < 30) {
+                var occ = curAt[slot];
+                if (!occ) break;   // that slot was empty
+                if (optSlotOf[occ] == null) { benched = occ; break; }   // he sits
+                if (seen[occ]) break; seen[occ] = true;
+                slot = optSlotOf[occ];   // he moves; who did he displace there?
+            }
+            out.push({ pid: pid, slot: slots[optSlotOf[pid]] || '', benched: benched });
+        });
+        return out;
+    }
     function leagueBlock(r, week) {
         var league = r.league, mine = r.mine, P = r.res.projections;
         var lid = String(league.league_id);
-        var starters = (mine.starters || []).filter(function (pid) { return pid && pid !== '0'; });
+        var rawStarters = mine.starters || [];
+        var starters = rawStarters.filter(function (pid) { return pid && pid !== '0'; });
         var starterSet = {}; starters.forEach(function (pid) { starterSet[pid] = true; });
-        var bench = (mine.players || []).filter(function (pid) { return !starterSet[pid]; });
+        var reserve = (mine.reserve || []).filter(function (pid) { return pid && !starterSet[pid]; });
+        var taxi = (mine.taxi || []).filter(function (pid) { return pid && !starterSet[pid]; });
+        var parked = {}; reserve.concat(taxi).forEach(function (pid) { parked[pid] = true; });
+        var bench = (mine.players || []).filter(function (pid) { return !starterSet[pid] && !parked[pid]; });
         var slots = (league.roster_positions || []).filter(function (s) { return s !== 'BN'; });
-        var order = { start: 0, flex: 1, sit: 2, out: 3 };
-        bench.sort(function (a, b) { var pa = P[a], pb = P[b]; if (!pa || !pb) return pa ? -1 : 1; return (order[pa.verdict] - order[pb.verdict]) || (pb.points.median - pa.points.median); });
+        var byPos = function (a, b) { var pa = P[a], pb = P[b]; if (!pa || !pb) return pa ? -1 : 1; var oa = POS_ORDER[pa.position], ob = POS_ORDER[pb.position]; return ((oa == null ? 9 : oa) - (ob == null ? 9 : ob)) || (pb.points.median - pa.points.median); };
+        bench.sort(byPos); reserve.sort(byPos); taxi.sort(byPos);
 
         var counts = { A: 0, B: 0, C: 0, D: 0, F: 0 };
         Object.keys(P).forEach(function (pid) { counts[P[pid].grade] = (counts[P[pid].grade] || 0) + 1; });
         var ss = App.StartSit;
-        var eligible = (mine.players || []).filter(function (pid) { return P[pid]; });
+        // IR and taxi players cannot be started, so they never make the lineup.
+        var eligible = (mine.players || []).filter(function (pid) { return P[pid] && !parked[pid]; });
         var byDhq = ss.optimalLineupWeekly(eligible.map(function (pid) { return { pid: pid, pos: P[pid].position, available: P[pid].available, pts: P[pid].points.median }; }), league.roster_positions || []);
         var bySleeper = ss.optimalLineupWeekly(eligible.map(function (pid) { return { pid: pid, pos: P[pid].position, available: P[pid].available, pts: P[pid].baseline.median }; }), league.roster_positions || []);
         var pick = function (opt) { var out = {}; (opt && opt.slots || []).forEach(function (s) { if (s && s.pid) out[s.pid] = true; }); return out; };
@@ -513,18 +558,18 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
 
         var A = r.actuals || {};
         var head = '<tr><th class="hide-m">Slot</th><th>Player</th><th class="num">Sleeper proj</th><th class="num">DHQ proj</th><th class="num">Actual</th><th class="num">+/-</th><th class="num">W/L</th><th>Read</th></tr>';
-        var sRows = starters.map(function (pid, i) { return P[pid] ? playerRow(lid + ':' + pid, pid, P[pid], slots[i] || '', readOf(pid), A[pid]) : ''; }).join('');
-        var bRows = bench.map(function (pid) { return P[pid] ? playerRow(lid + ':' + pid, pid, P[pid], 'BN', readOf(pid), A[pid]) : ''; }).join('');
-        var swapsIn = Object.keys(inD).filter(function (pid) { return !inS[pid]; });
-        var swapsOut = Object.keys(inS).filter(function (pid) { return !inD[pid]; });
-        var swapText = swapsIn.length
-            ? swapsIn.map(function (pid, i) { return '<div><b>' + esc(nameOf(pid)) + '</b> in' + (swapsOut[i] ? ' for <b>' + esc(nameOf(swapsOut[i])) + '</b>' : '') + '</div>'; }).join('')
-            : '<div class="meta">DHQ and Sleeper agree on the lineup this week.</div>';
+        var sRows = rawStarters.map(function (pid, i) { return pid && pid !== '0' && P[pid] ? playerRow(lid + ':' + pid, pid, P[pid], slots[i] || '', readOf(pid), A[pid]) : ''; }).join('');
+        var rowsFor = function (list, label, read) { return list.map(function (pid) { return P[pid] ? playerRow(lid + ':' + pid, pid, P[pid], label, read || readOf(pid), A[pid]) : ''; }).join(''); };
+        var bRows = rowsFor(bench, 'BN');
+        var irRows = rowsFor(reserve, 'IR', 'out'), taxiRows = rowsFor(taxi, 'TAXI', 'sit');
+        var swapLine = function (sw) { return '<div><b>' + esc(nameOf(sw.pid)) + '</b> (' + esc(P[sw.pid].position) + ') at ' + esc(sw.slot) + (sw.benched ? ', sit <b>' + esc(nameOf(sw.benched)) + '</b> (' + esc(P[sw.benched].position) + ')' : '') + '</div>'; };
+        // DHQ's lineup vs the one Sleeper's numbers would set.
+        var vsSleeper = pairSwaps(lineupPids(bySleeper, slots), slots, byDhq);
+        var swapText = vsSleeper.length ? vsSleeper.map(swapLine).join('') : '<div class="meta">DHQ and Sleeper agree on the lineup this week.</div>';
         // Your current starters vs the DHQ-optimal lineup: the actionable part.
-        var curSet = {}; starters.forEach(function (pid) { curSet[pid] = true; });
-        var benchedBetter = Object.keys(inD).filter(function (pid) { return !curSet[pid]; });
-        var lineupText = benchedBetter.length
-            ? '<h3>DHQ WOULD START</h3>' + benchedBetter.map(function (pid) { return '<div><b>' + esc(nameOf(pid)) + '</b> (' + esc(P[pid].position) + ', ' + fmt(P[pid].points.median) + ' pts, grade ' + P[pid].grade + ')</div>'; }).join('')
+        var vsMine = pairSwaps(rawStarters, slots, byDhq);
+        var lineupText = vsMine.length
+            ? '<h3>DHQ WOULD START</h3>' + vsMine.map(function (sw) { return swapLine(sw).replace('</div>', ' · ' + fmt(P[sw.pid].points.median) + ' pts, grade ' + P[sw.pid].grade + '</div>'); }).join('')
             : '<h3>YOUR LINEUP</h3><div class="meta">Your starters match the DHQ-optimal lineup.</div>';
 
         var tag = r.locked ? (r.locked.reconstructed ? 'RECONSTRUCTED SHEET' : 'LOCKED SHEET') + ' · ' + esc(String(r.locked.built || '').slice(0, 10)) : 'BASELINE: ' + ($('fBase').value === 'dhq' ? "DHQ'S OWN" : "SLEEPER'S LINE");
@@ -534,7 +579,9 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
             + '</div><div class="hint">Tap a grade to show only those players. Tap again to show everyone.</div>' + scorecard(P, A) + lineupText
             + '<h3>WHERE DHQ DISAGREES WITH SLEEPER\'S LINEUP</h3>' + swapText
             + '<h3>STARTERS</h3><table>' + head + sRows + '</table>'
-            + '<h3>BENCH</h3><table>' + head + bRows + '</table></div>';
+            + '<h3>BENCH</h3><table>' + head + bRows + '</table>'
+            + (irRows ? '<h3>IR</h3><table>' + head + irRows + '</table>' : '')
+            + (taxiRows ? '<h3>TAXI</h3><table>' + head + taxiRows + '</table>' : '') + '</div>';
     }
 
     function renderAll(results, week) {
