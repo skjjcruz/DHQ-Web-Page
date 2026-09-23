@@ -22,7 +22,7 @@
     'use strict';
     const App = root.App = root.App || {};
     const SL = 'https://api.sleeper.app/v1';
-    const VERSION = 'LAB102';
+    const VERSION = 'LAB103';
     const DEPS = [
         'js/shared/matchup-engine.js', 'js/shared/dhq-baseline.js', 'js/shared/matchup-feeds-espn.js',
         'js/shared/matchup-inputs.js', 'data/pff-matchup-snapshot.js', 'data/usage-snapshot.js',
@@ -223,6 +223,64 @@
         if (r) return Number(r.median) > 0 ? Number(r.median).toFixed(1) : '0.0';
         return String(pid || '') in st.results ? '—' : '…';
     }
+    // ── The league platform's own projections (MFL) ──────────────────
+    // MFL publishes projected points per league, already scored with that
+    // league's rules; when the league lives on MFL those become the
+    // platform column (ESPN and Yahoo leagues keep Sleeper's number until
+    // their feeds are wired). Same proxy route the MFL adapter uses (MFL
+    // sends no CORS headers).
+    const PLATFORM_NAME = { sleeper: 'Sleeper', mfl: 'MFL', espn: 'ESPN', yahoo: 'Yahoo' };
+    const plat = { done: {}, busy: false };
+    function mflProxy() {
+        const cfg = (App.CONFIG || (root.OD && root.OD.CONFIG) || {});
+        const url = (cfg.endpoints && cfg.endpoints.mflProxy) || (cfg.functionsBase ? cfg.functionsBase + '/mfl-proxy' : ((root.OD && root.OD.SUPABASE_URL) || App.SUPABASE_URL ? ((root.OD && root.OD.SUPABASE_URL) || App.SUPABASE_URL) + '/functions/v1/mfl-proxy' : null));
+        const anon = cfg.supabaseAnon || (root.OD && (root.OD.SUPABASE_ANON || (root.OD.CONFIG && root.OD.CONFIG.supabaseAnon))) || App.SUPABASE_ANON || null;
+        return { url, anon };
+    }
+    async function mflGet(url) {
+        const px = mflProxy();
+        if (px.url && px.anon) {
+            const token = (root.OD && root.OD.getSessionToken && root.OD.getSessionToken()) || null;
+            const r = await fetch(px.url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (token || px.anon), apikey: px.anon }, body: JSON.stringify({ url }) });
+            if (!r.ok) throw new Error('MFL proxy ' + r.status);
+            return r.json();
+        }
+        const r = await fetch(url); if (!r.ok) throw new Error('MFL ' + r.status); return r.json();
+    }
+    async function loadPlatform() {
+        const s = S();
+        if (String(s.platform || '') !== 'mfl' || plat.busy || !root.MFL || !root.MFL.lookupSleeperPlayerId) return;
+        const lg = league(); if (!lg) return;
+        const WP = App.WeeklyProj; const wk = Number((WP && WP.currentWeek && WP.currentWeek()) || 0); if (!wk) return;
+        const lid = s.mflLeagueId || String(lg.id).replace(/^mfl_/, '').replace(/_\d+$/, '');
+        const yr = s.mflYear || season();
+        const k = yr + '|' + lid + '|' + wk;
+        if (plat.done[k]) return;
+        plat.busy = true;
+        try {
+            let url = 'https://api.myfantasyleague.com/' + yr + '/export?TYPE=projectedScores&L=' + encodeURIComponent(lid) + '&W=' + wk + '&JSON=1';
+            if (s.mflApiKey) url += '&APIKEY=' + encodeURIComponent(s.mflApiKey);
+            const data = await mflGet(url);
+            const list = data && data.projectedScores && data.projectedScores.playerScore;
+            const arr = Array.isArray(list) ? list : (list ? [list] : []);
+            const byPid = {};
+            arr.forEach(p => { if (p && p.id != null && p.score !== '' && p.score != null && Number.isFinite(Number(p.score))) byPid[root.MFL.lookupSleeperPlayerId(String(p.id))] = Number(p.score); });
+            if (Object.keys(byPid).length > 20 && WP.setPlatformPoints) {
+                WP.setPlatformPoints(wk, byPid, 'mfl');
+                plat.done[k] = true;
+                try { root.dispatchEvent(new CustomEvent('wr:proj-updated', { detail: { source: 'mfl', week: wk } })); } catch (e) { /* no window */ }
+            }
+        } catch (e) { if (root.wrLog) root.wrLog('dhqProj.mfl', e); }
+        finally { plat.busy = false; }
+    }
+    // The name on the platform projection column: the league's platform
+    // when its own numbers are loaded for the week, else Sleeper's.
+    function provLabel() {
+        const WP = App.WeeklyProj, wk = week();
+        const src = WP && WP.platformSource ? WP.platformSource(wk) : null;
+        return src && PLATFORM_NAME[src] ? PLATFORM_NAME[src] : 'Sleeper';
+    }
+
     // Total of several players (a lineup), '…' while any is still working.
     function sum(pids) {
         let t = 0, waiting = false;
@@ -241,13 +299,13 @@
         let tries = 0;
         const iv = setInterval(() => {
             tries++;
-            if (league() && week() && (S().players && Object.keys(S().players).length > 1000)) { clearInterval(iv); setTimeout(warmLeague, 3000); }
+            if (league() && week() && (S().players && Object.keys(S().players).length > 1000)) { clearInterval(iv); loadPlatform(); setTimeout(warmLeague, 3000); }
             else if (tries > 120) clearInterval(iv);
         }, 1000);
         // a league switch or the week's Sleeper lines landing re-warms the new league
-        root.addEventListener && root.addEventListener('wr:proj-updated', (e) => { if (!(e && e.detail && e.detail.source === 'dhq')) setTimeout(warmLeague, 500); });
+        root.addEventListener && root.addEventListener('wr:proj-updated', (e) => { if (!(e && e.detail && e.detail.source === 'dhq')) { loadPlatform(); setTimeout(warmLeague, 500); } });
     }
 
-    App.DhqProj = App.DhqProj || { get, fmt, sum, request, warmLeague, _st: st, VERSION };
+    App.DhqProj = App.DhqProj || { get, fmt, sum, provLabel, loadPlatform, request, warmLeague, _st: st, VERSION };
     if (typeof document !== 'undefined') boot();
 })(typeof window !== 'undefined' ? window : globalThis);
