@@ -22,7 +22,7 @@
     'use strict';
     const App = root.App = root.App || {};
     const SL = 'https://api.sleeper.app/v1';
-    const VERSION = 'LAB105';
+    const VERSION = 'LAB106';
     const DEPS = [
         'js/shared/matchup-engine.js', 'js/shared/dhq-baseline.js', 'js/shared/matchup-feeds-espn.js',
         'js/shared/matchup-inputs.js', 'data/pff-matchup-snapshot.js', 'data/usage-snapshot.js',
@@ -317,6 +317,18 @@
             if (league() && week() && (S().players && Object.keys(S().players).length > 1000)) { clearInterval(iv); loadPlatform(); setTimeout(warmLeague, 3000); }
             else if (tries > 120) clearInterval(iv);
         }, 1000);
+        // The app can open a league while it still thinks it is an earlier
+        // week (owner screenshot 2026-09-23: Game Day stuck on week 1 while
+        // the schedule said week 3). When the app's week moves on, load that
+        // week's Sleeper lines; every surface follows the newest loaded week.
+        let seenWeek = 0;
+        setInterval(() => {
+            const WP = App.WeeklyProj, SP = App.SleeperProj;
+            const cw = Number((WP && WP.currentWeek && WP.currentWeek()) || 0);
+            if (!cw || cw === seenWeek) return;
+            seenWeek = cw;
+            if (WP.loadedProjWeek && WP.loadedProjWeek() && WP.loadedProjWeek() < cw && SP && SP.loadCurrent) SP.loadCurrent(season());
+        }, 5000);
         // a league switch or the week's Sleeper lines landing re-warms the new league
         root.addEventListener && root.addEventListener('wr:proj-updated', (e) => { if (!(e && e.detail && e.detail.source === 'dhq')) { loadPlatform(); setTimeout(warmLeague, 500); } });
     }
