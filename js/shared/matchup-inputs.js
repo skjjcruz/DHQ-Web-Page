@@ -1072,7 +1072,27 @@
             const priGp = tmPri ? (num(tmPri.gp) || 0) : 0, priTot = tmPri ? (num(tmPri[kind]) || 0) : 0;
             const priPg = priGp > 0 ? priTot / priGp : n.perGame;
             const teamPg = (tot + PIE_PHANTOM * priPg) / (gp + PIE_PHANTOM);
-            const priShare = priTot > 0 && mePri ? clamp((num(mePri[kind]) || 0) / priTot, 0, 1) : 0;
+            // Last season's share counts only for this team: the usage snapshot
+            // records who returned for each team (owner ruling 2026-09-23, a
+            // returner who changed teams carried his old share to the new one).
+            // A newcomer with a return history elsewhere keeps a slice of it:
+            // three quarters when the team's own returner from last season is
+            // gone, a quarter when he is still here (Duvernay, Abdullah and
+            // Deebo kept returning on new teams; Skyy Moore and Dortch did not).
+            const U = usage(), ur = U && U.teams && U.teams[team] && U.teams[team].returns;
+            let priShare;
+            if (ur && ur[kind]) {
+                if (ur[kind][pid]) priShare = clamp(ur[kind][pid].share || 0, 0, 1);
+                else {
+                    let elsewhere = 0;
+                    for (const t of Object.keys(U.teams)) { const o = U.teams[t].returns; if (o && o[kind] && o[kind][pid]) elsewhere = Math.max(elsewhere, o[kind][pid].share || 0); }
+                    let incPid = null, incShare = 0;
+                    for (const q of Object.keys(ur[kind])) if ((ur[kind][q].share || 0) > incShare) { incShare = ur[kind][q].share; incPid = q; }
+                    const inc = incPid && opts.playersData && opts.playersData[incPid];
+                    const incGone = !inc || String(inc.team || '').toUpperCase() !== team || !!OUT_FOR_SHARE[statusOf(inc)];
+                    priShare = clamp(elsewhere * (incGone ? 0.75 : 0.25), 0, 1);
+                }
+            } else priShare = priTot > 0 && mePri ? clamp((num(mePri[kind]) || 0) / priTot, 0, 1) : 0;
             const ph = RET_PHANTOM * priPg;
             const seasonShare = (tot + ph) > 0 ? ((me ? (num(me[kind]) || 0) : 0) + ph * priShare) / (tot + ph) : priShare;
             let share = seasonShare, lastShare = null;
