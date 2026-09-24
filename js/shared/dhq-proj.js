@@ -22,7 +22,7 @@
     'use strict';
     const App = root.App = root.App || {};
     const SL = 'https://api.sleeper.app/v1';
-    const VERSION = 'LAB110';
+    const VERSION = 'LAB114';
     const DEPS = [
         'js/shared/matchup-engine.js', 'js/shared/dhq-baseline.js', 'js/shared/matchup-feeds-espn.js',
         'js/shared/matchup-inputs.js', 'data/pff-matchup-snapshot.js', 'data/usage-snapshot.js',
@@ -74,7 +74,7 @@
     function week() {
         const WP = App.WeeklyProj;
         if (!WP) return 0;
-        return Number((WP.loadedProjWeek && WP.loadedProjWeek()) || (WP.currentWeek && WP.currentWeek()) || 0);
+        return Number((WP.displayWeek && WP.displayWeek()) || (WP.loadedProjWeek && WP.loadedProjWeek()) || (WP.currentWeek && WP.currentWeek()) || 0);
     }
     function season() {
         const s = S();
