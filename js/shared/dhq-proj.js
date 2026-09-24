@@ -22,7 +22,7 @@
     'use strict';
     const App = root.App = root.App || {};
     const SL = 'https://api.sleeper.app/v1';
-    const VERSION = 'LAB108';
+    const VERSION = 'LAB109';
     const DEPS = [
         'js/shared/matchup-engine.js', 'js/shared/dhq-baseline.js', 'js/shared/matchup-feeds-espn.js',
         'js/shared/matchup-inputs.js', 'data/pff-matchup-snapshot.js', 'data/usage-snapshot.js',
@@ -176,7 +176,7 @@
                     try {
                         const p = MI.project(pid, at.wk, opts, st.ctx);
                         if (p && p.points && Number.isFinite(Number(p.points.median))) {
-                            res = { median: p.available === false ? 0 : +Number(p.points.median).toFixed(1), grade: p.grade, verdict: p.verdict, why: (p.why || []).slice(0, 3).join(' · ') };
+                            res = { median: p.available === false ? 0 : +Number(p.points.median).toFixed(1), floor: p.available === false ? 0 : +Number(p.points.floor || 0).toFixed(1), ceiling: p.available === false ? 0 : +Number(p.points.ceiling || 0).toFixed(1), grade: p.grade, verdict: p.verdict, why: (p.why || []).slice(0, 3).join(' · ') };
                         }
                     } catch (e) { res = null; }
                     st.results[pid] = res;
@@ -302,6 +302,29 @@
         for (const pid of (pids || [])) { const r = get(pid); if (r) t += Number(r.median) || 0; else if (!(String(pid) in st.results)) return null; }
         return +t.toFixed(1);
     }
+    // The week's matchup on DHQ's numbers: your lineup against DHQ's best
+    // lineup for the opponent, with the same win-probability math as the
+    // app's forecast (App.Matchup). Null until every player involved has a
+    // DHQ number, so the screen never mixes half-loaded totals.
+    function matchup(myPids, oppRoster, rosterPositions) {
+        const M = App.Matchup;
+        if (!M || !M.dist || !M.forecast || !oppRoster) return null;
+        const mine = (myPids || []).map(String);
+        if (!mine.length || totalNum(mine) == null) return null;
+        const opt = optimalFor(oppRoster, rosterPositions);
+        if (!opt || !(opt.total > 0)) return null;
+        const oppIds = opt.starters.map(x => String(x.pid));
+        const cur = (oppRoster.starters || []).filter(x => x && x !== '0').map(String);
+        if (totalNum(oppIds) == null) return null;
+        const map = {};
+        mine.concat(oppIds, cur).forEach(pid => {
+            const r = get(pid); if (!r) return;
+            const med = Number(r.median) || 0;
+            map[pid] = { available: med > 0, points: { median: med, floor: r.floor != null ? Number(r.floor) : med * 0.7, ceiling: r.ceiling != null ? Number(r.ceiling) : med * 1.35 } };
+        });
+        const fc = M.forecast(M.dist(mine, map, 'median'), M.dist(oppIds, map, 'median'));
+        return { fc, oppIdeal: +Number(opt.total).toFixed(1), oppCur: totalNum(cur) || 0, oppIds };
+    }
     // Total of several players (a lineup), '…' while any is still working.
     function sum(pids) {
         let t = 0, waiting = false;
@@ -339,6 +362,6 @@
         root.addEventListener && root.addEventListener('wr:proj-updated', (e) => { if (!(e && e.detail && e.detail.source === 'dhq')) { loadPlatform(); setTimeout(warmLeague, 500); } });
     }
 
-    App.DhqProj = App.DhqProj || { get, fmt, sum, totalNum, optimalFor, provLabel, loadPlatform, request, warmLeague, _st: st, VERSION };
+    App.DhqProj = App.DhqProj || { get, fmt, sum, totalNum, optimalFor, matchup, provLabel, loadPlatform, request, warmLeague, _st: st, VERSION };
     if (typeof document !== 'undefined') boot();
 })(typeof window !== 'undefined' ? window : globalThis);
