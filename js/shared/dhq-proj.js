@@ -22,7 +22,7 @@
     'use strict';
     const App = root.App = root.App || {};
     const SL = 'https://api.sleeper.app/v1';
-    const VERSION = 'LAB114';
+    const VERSION = 'LAB117';
     const DEPS = [
         'js/shared/matchup-engine.js', 'js/shared/dhq-baseline.js', 'js/shared/matchup-feeds-espn.js',
         'js/shared/matchup-inputs.js', 'data/pff-matchup-snapshot.js', 'data/usage-snapshot.js',
@@ -327,6 +327,54 @@
         const fc = M.forecast(M.dist(mine, map, 'median'), M.dist(cur, map, 'median'));
         return { fc, oppIdeal: +Number(opt.total).toFixed(1), oppCur: totalNum(cur) || 0, oppIds };
     }
+    // ── Putting a lineup into slots with the fewest moves ─────────────
+    // The optimizer picks WHO starts; this decides WHERE, keeping every
+    // starter who can stay in his current slot there (owner report
+    // 2026-09-24: benching a DL for an LB read "replace Derick Hall with
+    // Eric Wilson" because the slot filler shuffled three players when
+    // two moves did it). Min-cost assignment (Hungarian): 0 to stay put,
+    // 1 to move, impossible where the player's positions (every Sleeper
+    // position he holds) do not fit the slot.
+    function posList(pid) {
+        const p = (S().players || {})[pid] || {};
+        const base = App.MatchupInputs ? App.MatchupInputs.posGroup(p) : String((App.normPos && App.normPos(p.position)) || p.position || '').toUpperCase();
+        return [...new Set((p.fantasy_positions || []).map(x => String(x || '').toUpperCase()).concat([base]))].filter(Boolean);
+    }
+    function hungarian(a) {   // a: n rows × m cols, n ≤ m; returns row → col
+        const n = a.length, m = n ? a[0].length : 0, INF = 1e18;
+        const u = new Array(n + 1).fill(0), v = new Array(m + 1).fill(0), p = new Array(m + 1).fill(0), way = new Array(m + 1).fill(0);
+        for (let i = 1; i <= n; i++) {
+            p[0] = i; let j0 = 0;
+            const minv = new Array(m + 1).fill(INF), used = new Array(m + 1).fill(false);
+            do {
+                used[j0] = true; const i0 = p[j0]; let delta = INF, j1 = 0;
+                for (let j = 1; j <= m; j++) if (!used[j]) {
+                    const cur = a[i0 - 1][j - 1] - u[i0] - v[j];
+                    if (cur < minv[j]) { minv[j] = cur; way[j] = j0; }
+                    if (minv[j] < delta) { delta = minv[j]; j1 = j; }
+                }
+                for (let j = 0; j <= m; j++) { if (used[j]) { u[p[j]] += delta; v[j] -= delta; } else minv[j] -= delta; }
+                j0 = j1;
+            } while (p[j0] !== 0);
+            do { const j1 = way[j0]; p[j0] = p[j1]; j0 = j1; } while (j0);
+        }
+        const out = new Array(n).fill(-1);
+        for (let j = 1; j <= m; j++) if (p[j]) out[p[j] - 1] = j - 1;
+        return out;
+    }
+    // pids: who starts; slots: [{ idx, elig: [...] }]; current: idx → pid.
+    // Returns idx → pid, or null when the lineup cannot fit the slots.
+    function assignSlots(pids, slots, current) {
+        const list = (pids || []).map(String).filter(Boolean);
+        const sl = (slots || []).filter(x => x && Array.isArray(x.elig));
+        if (!list.length || list.length > sl.length) return null;
+        const BIG = 1e6, cur = current || {};
+        const cost = list.map(pid => { const pos = posList(pid); return sl.map(x => !pos.some(q => x.elig.includes(q)) ? BIG : (String(cur[x.idx] || '') === pid ? 0 : 1)); });
+        const pick = hungarian(cost);
+        const out = {};
+        for (let r = 0; r < list.length; r++) { const c = pick[r]; if (c < 0 || cost[r][c] >= BIG) return null; out[sl[c].idx] = list[r]; }
+        return out;
+    }
     // Total of several players (a lineup), '…' while any is still working.
     function sum(pids) {
         let t = 0, waiting = false;
@@ -364,6 +412,8 @@
         root.addEventListener && root.addEventListener('wr:proj-updated', (e) => { if (!(e && e.detail && e.detail.source === 'dhq')) { loadPlatform(); setTimeout(warmLeague, 500); } });
     }
 
-    App.DhqProj = App.DhqProj || { get, fmt, sum, totalNum, optimalFor, matchup, provLabel, loadPlatform, request, warmLeague, _st: st, VERSION };
+    App.DhqProj = App.DhqProj || { get, fmt, sum, totalNum, optimalFor, matchup, assignSlots, hungarian, posList, provLabel, loadPlatform, request, warmLeague, _st: st, VERSION };
     if (typeof document !== 'undefined') boot();
+    /* global module */
+    if (typeof module !== 'undefined' && module.exports) module.exports = App.DhqProj;
 })(typeof window !== 'undefined' ? window : globalThis);
