@@ -148,7 +148,7 @@
     <div class="card" id="summary" style="display:none"></div>
     <div class="card" id="readout" style="display:none"></div>
 </div>
-<div id="buildtag">LAB100</div>
+<div id="buildtag">LAB122</div>
 
 <script>
 // Minimal stand-ins for the app core: Sleeper's scoring keys match its stat
@@ -745,10 +745,16 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
             + '</tr>';
     }
 
-    function renderBoard(week, scoringName) {
+    // Search text without case, accents or punctuation, so "jamarr" finds
+    // Ja'Marr Chase and "st brown" finds Amon-Ra St. Brown.
+    function plain(v) { return String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]+/g, '').replace(/\s+/g, ' ').trim(); }
+    // bodyOnly: typing in the search box redraws only the results under it.
+    // Redrawing the box itself on every keystroke was swallowing letters
+    // and bouncing the phone keyboard.
+    function renderBoard(week, scoringName, bodyOnly) {
         var tabs = ['ALL'].concat(BOARD_POS).map(function (g) { return '<button data-pos="' + g + '" class="' + (board.pos === g ? 'on' : '') + '">' + g + '</button>'; }).join('');
-        var q = board.q.toLowerCase();
-        var pool = board.rows.filter(function (r) { return (board.pos === 'ALL' || r.p.position === board.pos) && (!q || nameOf(r.pid).toLowerCase().indexOf(q) >= 0 || String(r.p.team || '').toLowerCase() === q); });
+        var q = plain(board.q);
+        var pool = board.rows.filter(function (r) { return (board.pos === 'ALL' || r.p.position === board.pos) && (!q || plain(nameOf(r.pid)).indexOf(q) >= 0 || plain(r.p.team) === q); });
         var counts = { A: 0, B: 0, C: 0, D: 0, F: 0 };
         pool.forEach(function (r) { counts[r.p.grade]++; });
         var rows = board.grade ? pool.filter(function (r) { return r.p.grade === board.grade; }) : pool;
@@ -759,14 +765,16 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
             + '<button data-step="-1" ' + (sheet.week <= sheet.weeks[0] ? 'disabled' : '') + '>&#9664; WEEK ' + (sheet.week - 1) + '</button>'
             + sheet.weeks.map(function (w) { return '<button data-go="' + w + '" class="' + (sheet.week === w ? 'on' : '') + '">' + w + '</button>'; }).join('')
             + '<button data-step="1" ' + (sheet.week >= sheet.weeks[sheet.weeks.length - 1] ? 'disabled' : '') + '>WEEK ' + (sheet.week + 1) + ' &#9654;</button></div>' : '';
-        $('readout').innerHTML = '<h3 style="margin-top:0">WEEK ' + week + ' · ' + (board.locked ? (board.locked.reconstructed ? 'SCORE SHEET (RECONSTRUCTED)' : 'SCORE SHEET (LOCKED)') : (onSheet ? 'SCORE SHEET (RECOMPUTED TODAY)' : 'ALL NFL PLAYERS')) + ' · ' + board.rows.length + ' PLAYERS · ' + esc(scoringName) + '</h3>' + stepper
-            + '<div class="pos-tabs">' + tabs + '</div>'
-            + '<input id="boardSearch" placeholder="search a player or team code" value="' + esc(board.q) + '">'
-            + '<div class="grid" style="margin-bottom:4px">' + ['A', 'B', 'C', 'D', 'F'].map(function (g) { return '<div class="tile pick' + (board.grade === g ? ' on' : '') + '" data-grade="' + g + '"><span class="g g' + g + '">' + g + '</span> <b>' + counts[g] + '</b></div>'; }).join('') + '</div>'
+        var body = '<div class="grid" style="margin-bottom:4px">' + ['A', 'B', 'C', 'D', 'F'].map(function (g) { return '<div class="tile pick' + (board.grade === g ? ' on' : '') + '" data-grade="' + g + '"><span class="g g' + g + '">' + g + '</span> <b>' + counts[g] + '</b></div>'; }).join('') + '</div>'
             + '<div class="hint" style="margin-bottom:10px">Tap a grade to show only those players. Tap again to show everyone.</div>'
             + scorecard(Object.fromEntries(rows.map(function (r) { return [r.pid, r.p]; })), Object.fromEntries(rows.filter(function (r) { return board.actuals && board.actuals[r.pid] != null; }).map(function (r) { return [r.pid, board.actuals[r.pid]]; })))
             + '<table><tr>' + th('player', 'Player') + th('age', 'Age', 'num hide-m') + th('sleeper', 'Sleeper proj', 'num') + th('dhq', 'DHQ proj', 'num') + th('actual', 'Actual', 'num') + th('pm', '+/-', 'num') + th('wl', 'W/L', 'num') + '</tr>'
-            + shown.map(boardRow).join('') + '</table>'
+            + (shown.length ? shown.map(boardRow).join('') : '<tr><td colspan="7" class="meta">No players match that search.</td></tr>') + '</table>';
+        if (bodyOnly && $('boardBody')) { $('boardBody').innerHTML = body; bindBoardBody(week, scoringName); return; }
+        $('readout').innerHTML = '<h3 style="margin-top:0">WEEK ' + week + ' · ' + (board.locked ? (board.locked.reconstructed ? 'SCORE SHEET (RECONSTRUCTED)' : 'SCORE SHEET (LOCKED)') : (onSheet ? 'SCORE SHEET (RECOMPUTED TODAY)' : 'ALL NFL PLAYERS')) + ' · ' + board.rows.length + ' PLAYERS · ' + esc(scoringName) + '</h3>' + stepper
+            + '<div class="pos-tabs">' + tabs + '</div>'
+            + '<input id="boardSearch" type="search" placeholder="search a player or team code" value="' + esc(board.q) + '" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">'
+            + '<div id="boardBody">' + body + '</div>'
             + '<div class="hint" style="margin-top:12px">Tap a column heading to sort by it; tap again to flip. Sleeper proj = Sleeper\'s published line scored with these rules. DHQ proj = the DHQ baseline (its own stat line, or Sleeper\'s line, per the switch) after the eleven factors. Actual = points scored so far this week. +/- = Actual minus DHQ proj. W/L = green when DHQ was closer to the actual than Sleeper, red when Sleeper was; sorted by how much closer. Tap a row for the why.</div>';
         Array.prototype.forEach.call(document.querySelectorAll('#weekStep button'), function (b) {
             b.addEventListener('click', function () {
@@ -779,21 +787,26 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
         Array.prototype.forEach.call(document.querySelectorAll('#readout .pos-tabs button[data-pos]'), function (b) {
             b.addEventListener('click', function () { board.pos = b.getAttribute('data-pos'); renderBoard(week, scoringName); });
         });
+        var search = $('boardSearch');
+        var timer = null;
+        search.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(function () { board.q = search.value; renderBoard(week, scoringName, true); }, 150); });
+        search.addEventListener('keydown', function (e) { if (e.key === 'Enter') search.blur(); });
+        bindBoardBody(week, scoringName);
+    }
+    // Taps inside the results: sort headings, grade tiles, the why panels.
+    function bindBoardBody(week, scoringName) {
         Array.prototype.forEach.call(document.querySelectorAll('#readout th.sort'), function (h) {
             h.addEventListener('click', function () {
                 var key = h.getAttribute('data-sort');
                 // first tap: high to low for numbers, A to Z for names; second tap flips
                 if (board.sort.key === key) board.sort.dir = -board.sort.dir;
                 else board.sort = { key: key, dir: key === 'player' ? 1 : -1 };
-                renderBoard(week, scoringName);
+                renderBoard(week, scoringName, true);
             });
         });
         Array.prototype.forEach.call(document.querySelectorAll('#readout .tile.pick'), function (tile) {
-            tile.addEventListener('click', function () { var g = tile.getAttribute('data-grade'); board.grade = board.grade === g ? null : g; renderBoard(week, scoringName); });
+            tile.addEventListener('click', function () { var g = tile.getAttribute('data-grade'); board.grade = board.grade === g ? null : g; renderBoard(week, scoringName, true); });
         });
-        var search = $('boardSearch');
-        var timer = null;
-        search.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(function () { board.q = search.value.trim(); var pos = search.selectionStart; renderBoard(week, scoringName); var s2 = $('boardSearch'); s2.focus(); try { s2.setSelectionRange(pos, pos); } catch (e) { /* noop */ } }, 250); });
         // Why panels are built on tap, not up front, so a 1,500-row board stays light.
         Array.prototype.forEach.call(document.querySelectorAll('tr.p.b'), function (tr) {
             tr.addEventListener('click', function () {
