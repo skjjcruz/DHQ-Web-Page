@@ -28,7 +28,7 @@
     // displayed projection is that platform's number (owner ruling
     // 2026-09-23: "if someone is using another app that gives projections,
     // like MFL, it uses their projections").
-    const _ctx = { byTeamWeek: {}, byPid: {}, projLines: {}, platPts: {}, platSrc: {} };
+    const _ctx = { byTeamWeek: {}, byPid: {}, projLines: {}, platPts: {}, platSrc: {}, projWeeks: {} };
 
     function setContext(ctx) {
         if (!ctx) return;
@@ -43,6 +43,7 @@
         for (const pid of Object.keys(byPid)) {
             if (byPid[pid]) _ctx.projLines[w + '|' + pid] = byPid[pid];
         }
+        _ctx.projWeeks[w] = true;
     }
     function setPlatformPoints(week, byPid, source) {
         if (!byPid || typeof byPid !== 'object') return;
@@ -52,11 +53,13 @@
             if (Number.isFinite(v)) _ctx.platPts[w + '|' + pid] = v;
         }
         _ctx.platSrc[w] = source || 'platform';
+        _ctx.projWeeks[w] = true;
     }
     function platformPoints(pid, week) {
         const v = _ctx.platPts[(Number(week) || 0) + '|' + pid];
         return v == null ? null : v;
     }
+    function hasProjWeek(week) { return !!_ctx.projWeeks[Number(week) || 0]; }
     function platformSource(week) { return _ctx.platSrc[Number(week) || 0] || null; }
     // Any field whose presence means Sleeper is actually projecting production.
     // Deliberately broad: a quarterback line can carry passing yards and
@@ -149,7 +152,25 @@
     function currentWeek() {
         const s = root.S || {};
         const w = Number(s.currentWeek || 0);
-        return w > 0 ? w : fantasyWeek(s.nflState);
+        if (w > 0) return w;
+        // Before the league has loaded there is no week to read; the newest
+        // loaded projection week beats a blind 1 (owner report 2026-09-24:
+        // Game Day opened on week 1's opponent in week 3).
+        return s.nflState ? fantasyWeek(s.nflState) : (loadedProjWeek() || 1);
+    }
+    // The week this-week surfaces show: the current week once its lines are
+    // loaded; until then the newest loaded week, while the current week's
+    // lines are fetched (at most once a minute).
+    const _askedAt = {};
+    function displayWeek() {
+        const cw = currentWeek();
+        if (hasProjWeek(cw)) return cw;
+        const SP = App.SleeperProj;
+        if (SP && SP.loadCurrent && (!_askedAt[cw] || Date.now() - _askedAt[cw] > 60000)) {
+            _askedAt[cw] = Date.now();
+            try { SP.loadCurrent(); } catch (e) { /* stays on the loaded week */ }
+        }
+        return loadedProjWeek() || cw;
     }
 
     // Weekly actuals are stored league-scored as weeklyPlayerPoints[week][pid].
@@ -364,7 +385,7 @@
         // explicit future weeks and keep the estimate path: Sleeper publishes
         // one week at a time.
         const sleeperOnly = !!opts.sleeperOnly;
-        const week = opts.week || (sleeperOnly && loadedProjWeek()) || currentWeek();
+        const week = opts.week || (sleeperOnly ? displayWeek() : currentWeek());
         const leagueId = (currentLeague && (currentLeague.league_id || currentLeague.id)) || '';
         const mode = opts.mode || modeFor(leagueId);
         const objective = opts.objective || objectiveForMode(mode);
@@ -389,7 +410,7 @@
     }
 
     App.WeeklyProj = App.WeeklyProj || {
-        setContext, setProjections, projLine, setPlatformPoints, platformPoints, platformSource, loadedProjWeek, currentWeek, fantasyWeek, recentPPG, weeklyHistory, formStats, buildBaseline,
+        setContext, setProjections, projLine, setPlatformPoints, platformPoints, platformSource, hasProjWeek, displayWeek, loadedProjWeek, currentWeek, fantasyWeek, recentPPG, weeklyHistory, formStats, buildBaseline,
         projectPlayer, projectRoster, optimalForRoster,
         objectiveForMode, modeFor,
         _ctx,
