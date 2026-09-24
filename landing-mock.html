@@ -121,18 +121,18 @@
   .lede .kicker { display: block; color: var(--text-1); font-weight: 600; font-size: 20px; margin-bottom: 6px; }
 
   .platform {
-    display: inline-grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; margin-bottom: 10px;
+    display: inline-grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; margin-bottom: 10px;
     background: var(--bg-1); border: 1px solid var(--border-strong); border-radius: var(--r-sm);
   }
   .platform button {
-    min-width: 104px; height: 36px; padding: 0 16px; border: 1px solid transparent; border-radius: var(--r-xs);
+    min-width: 92px; height: 36px; padding: 0 14px; border: 1px solid transparent; border-radius: var(--r-xs);
     background: transparent; color: var(--text-2); cursor: pointer;
     font: 700 15px/1 var(--display); letter-spacing: .1em; text-transform: uppercase;
   }
   .platform button:hover { color: var(--text-1); }
   .platform button[aria-pressed="true"] { background: var(--bg-2); color: var(--forge); border-color: rgba(232,178,58,.45); }
   .platform button:focus-visible { outline: 2px solid var(--forge-bright); outline-offset: 2px; }
-  #mfl-hint { margin-top: 10px; }
+  #key-hint { margin-top: 10px; }
   form.go { display: flex; gap: 10px; max-width: 480px; }
   .field { flex: 1; position: relative; }
   .field label { position: absolute; left: -9999px; }
@@ -205,6 +205,7 @@
     .tile { scroll-snap-align: start; }
   }
   @media (max-width: 480px) {
+    .eyebrow { font-size: 11px; letter-spacing: .09em; white-space: nowrap; }
     form.go { flex-direction: column; }
     button.cta { width: 100%; }
     .lede { font-size: 17px; }
@@ -236,12 +237,13 @@
   <main id="top">
     <section class="hero">
       <div>
-        <span class="eyebrow">Built for Sleeper and MFL leagues</span>
+        <span class="eyebrow">Built for Sleeper, MFL and ESPN leagues</span>
         <h1>Generic advice <em>stops here.</em></h1>
         <p class="lede"><strong class="kicker">Stop playing by other people's rules.</strong> <span id="ask">Type your Sleeper name.</span> DHQ reads your league and shows you who to start, which trades your leaguemates will take, and where you really stand. <span class="win">Because Winning Matters 🏆</span></p>
         <div class="platform" role="group" aria-label="Where your league lives">
           <button type="button" id="pick-sleeper" data-platform="sleeper" aria-pressed="true">Sleeper</button>
           <button type="button" id="pick-mfl" data-platform="mfl" aria-pressed="false">MFL</button>
+          <button type="button" id="pick-espn" data-platform="espn" aria-pressed="false">ESPN</button>
         </div>
         <form class="go" id="go" novalidate>
           <div class="field">
@@ -252,7 +254,7 @@
           </div>
           <button class="cta" type="submit">See my league</button>
         </form>
-        <p class="fine" id="mfl-hint" hidden>Your league ID is the number after <b>L=</b> in your MFL web address.</p>
+        <p class="fine" id="key-hint" hidden></p>
         <p class="fine"><b>Free.</b> No account, no password. Dynasty, redraft, superflex and IDP.</p>
         <div class="note" id="note" hidden></div>
       </div>
@@ -315,7 +317,7 @@
     var label = document.getElementById('league-key-label');
     var note = document.getElementById('note');
     var ask = document.getElementById('ask');
-    var hint = document.getElementById('mfl-hint');
+    var hint = document.getElementById('key-hint');
     var icoUser = document.getElementById('ico-user');
     var icoHash = document.getElementById('ico-hash');
     var buttons = document.querySelectorAll('.platform button');
@@ -323,7 +325,10 @@
 
     var COPY = {
       sleeper: { ask: 'Type your Sleeper name.', placeholder: 'Your Sleeper username', mode: 'text', auto: 'username' },
-      mfl: { ask: 'Type your MFL league ID.', placeholder: 'Your MFL league ID', mode: 'numeric', auto: 'off' }
+      mfl: { ask: 'Type your MFL league ID.', placeholder: 'Your MFL league ID', mode: 'numeric', auto: 'off',
+             hint: 'Your league ID is the number after <b>L=</b> in your MFL web address.' },
+      espn: { ask: 'Type your ESPN league ID.', placeholder: 'Your ESPN league ID', mode: 'numeric', auto: 'off',
+              hint: 'Your league ID is the number after <b>leagueId=</b> in your ESPN league\'s web address. Private leagues take one extra step.' }
     };
 
     function setPlatform(next) {
@@ -337,8 +342,9 @@
       input.setAttribute('autocomplete', c.auto);
       input.value = '';
       icoUser.toggleAttribute('hidden', next !== 'sleeper');
-      icoHash.toggleAttribute('hidden', next !== 'mfl');
-      hint.hidden = next !== 'mfl';
+      icoHash.toggleAttribute('hidden', next === 'sleeper');
+      hint.innerHTML = c.hint || '';
+      hint.hidden = !c.hint;
       note.hidden = true;
     }
     buttons.forEach(function (b) {
@@ -352,9 +358,12 @@
       if (platform === 'sleeper') {
         if (!v) { note.textContent = 'Type your Sleeper username first. It is the name on your Sleeper profile, not your email.'; input.focus(); return; }
         note.textContent = 'On the live page, this opens ' + v + "'s leagues as a guest. No account needed. Signup comes later, inside the app.";
-      } else {
+      } else if (platform === 'mfl') {
         if (!/^\d{3,8}$/.test(v)) { note.textContent = 'Type your MFL league ID. It is the number after L= in your MFL web address, like 41208.'; input.focus(); return; }
         note.textContent = 'On the live page, this opens MFL league ' + v + ' for the 2026 season as a guest. No account needed.';
+      } else {
+        if (!/^\d{4,12}$/.test(v)) { note.textContent = "Type your ESPN league ID. It is the number after leagueId= in your ESPN league's web address."; input.focus(); return; }
+        note.textContent = 'On the live page, this opens ESPN league ' + v + ' for the 2026 season. Public leagues open right away. Private leagues add two ESPN cookies on the next step.';
       }
     });
   })();
