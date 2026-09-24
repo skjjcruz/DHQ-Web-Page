@@ -22,7 +22,7 @@
     'use strict';
     const App = root.App = root.App || {};
     const SL = 'https://api.sleeper.app/v1';
-    const VERSION = 'LAB119';
+    const VERSION = 'LAB123';
     const DEPS = [
         'js/shared/matchup-engine.js', 'js/shared/dhq-baseline.js', 'js/shared/matchup-feeds-espn.js',
         'js/shared/matchup-inputs.js', 'data/pff-matchup-snapshot.js', 'data/usage-snapshot.js',
@@ -421,6 +421,9 @@
         };
     }
     // Total of several players (a lineup), '…' while any is still working.
+    // Changes whenever a batch of DHQ numbers lands (or the league or week
+    // moves), so a cached result built on DHQ's numbers knows to rebuild.
+    function stamp() { return (st.key || '') + ':' + Object.keys(st.results).length; }
     function sum(pids) {
         let t = 0, waiting = false;
         (pids || []).forEach(pid => { const r = get(pid); if (r) t += Number(r.median) || 0; else if (!(String(pid) in st.results)) waiting = true; });
@@ -457,7 +460,7 @@
         root.addEventListener && root.addEventListener('wr:proj-updated', (e) => { if (!(e && e.detail && e.detail.source === 'dhq')) { loadPlatform(); setTimeout(warmLeague, 500); } });
     }
 
-    App.DhqProj = App.DhqProj || { get, fmt, sum, totalNum, optimalFor, matchup, lineupCheck, slotList, assignSlots, hungarian, posList, provLabel, loadPlatform, request, warmLeague, _st: st, VERSION };
+    App.DhqProj = App.DhqProj || { get, fmt, sum, totalNum, stamp, week, optimalFor, matchup, lineupCheck, slotList, assignSlots, hungarian, posList, provLabel, loadPlatform, request, warmLeague, _st: st, VERSION };
     if (typeof document !== 'undefined') boot();
     /* global module */
     if (typeof module !== 'undefined' && module.exports) module.exports = App.DhqProj;
