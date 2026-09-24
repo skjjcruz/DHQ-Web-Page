@@ -22,7 +22,7 @@
     'use strict';
     const App = root.App = root.App || {};
     const SL = 'https://api.sleeper.app/v1';
-    const VERSION = 'LAB117';
+    const VERSION = 'LAB119';
     const DEPS = [
         'js/shared/matchup-engine.js', 'js/shared/dhq-baseline.js', 'js/shared/matchup-feeds-espn.js',
         'js/shared/matchup-inputs.js', 'data/pff-matchup-snapshot.js', 'data/usage-snapshot.js',
@@ -375,6 +375,51 @@
         for (let r = 0; r < list.length; r++) { const c = pick[r]; if (c < 0 || cost[r][c] >= BIG) return null; out[sl[c].idx] = list[r]; }
         return out;
     }
+    // ── One lineup check for every surface ───────────────────────────
+    // Game Day's top box, the Home Lineup Check widget and the phone hero
+    // tile all read this (owner ruling 2026-09-24: "make the lineup tab
+    // feed the widget so they both say the same things"). DHQ's best
+    // lineup for the roster, placed with the fewest moves, against the
+    // lineup set (or, on Game Day, the one in the slots). Same shape as
+    // WeeklyProj.optimalForRoster's result where they overlap, so callers
+    // can swap it in; null until every player involved has a DHQ number.
+    const BENCH_SLOTS = new Set(['BN', 'BE', 'BENCH', 'IR', 'TAXI', 'RES']);
+    function slotList(league) {
+        const SS = App.StartSit; if (!SS) return [];
+        const out = []; let t = 0;
+        ((league && league.roster_positions) || []).forEach(raw => {
+            const nm = SS.normSlot(raw);
+            if (BENCH_SLOTS.has(nm)) return;
+            const elig = (SS.FLEX_ALLOWED && SS.FLEX_ALLOWED[nm]) || (SS.BASE_POSITIONS && SS.BASE_POSITIONS.has(nm) ? [nm] : null);
+            if (!elig) { t++; return; }
+            out.push({ idx: t, slotName: nm, elig }); t++;
+        });
+        return out;
+    }
+    function lineupCheck(roster, league, working) {
+        if (!roster || !league || !resetIfMoved()) return null;
+        const slots = slotList(league);
+        const current = {};
+        if (working) Object.keys(working).forEach(k => { if (working[k]) current[k] = String(working[k]); });
+        else slots.forEach(x => { const pid = (roster.starters || [])[x.idx]; if (pid && String(pid) !== '0') current[x.idx] = String(pid); });
+        const curPids = Object.values(current);
+        const cur = totalNum(curPids);
+        const best = optimalFor(roster, league.roster_positions || []);
+        if (cur == null || !best || !(best.total > 0)) return null;
+        const bestPids = best.starters.map(x => String(x.pid));
+        if (totalNum(bestPids) == null) return null;
+        const placed = assignSlots(bestPids, slots, current) || {};
+        const d = Math.round((best.total - cur) * 10) / 10;
+        const nameOfSlot = k => { const x = slots.find(y => String(y.idx) === String(k)); return x ? x.slotName : ''; };
+        const base = pid => { const l = posList(pid); return l.length ? l[l.length - 1] : ''; };
+        const startInstead = Object.keys(placed).filter(k => !curPids.includes(placed[k])).map(k => ({ pid: placed[k], slot: nameOfSlot(k), pos: base(placed[k]), pts: (get(placed[k]) || {}).median || 0 }));
+        const benchInstead = curPids.filter(pid => !bestPids.includes(pid));
+        const moves = Object.keys(placed).filter(k => curPids.includes(placed[k]) && String(current[k] || '') !== placed[k]).map(k => ({ pid: placed[k], slot: nameOfSlot(k), pos: base(placed[k]), from: nameOfSlot(Object.keys(current).find(c => current[c] === placed[k])) }));
+        return {
+            week: week(), objective: 'dhq', source: 'dhq', optimal: best, placed, slots,
+            delta: { currentTotal: cur, optimalTotal: +Number(best.total).toFixed(1), delta: Math.max(0, d), isOptimal: d <= 0.05, startInstead, benchInstead, moves },
+        };
+    }
     // Total of several players (a lineup), '…' while any is still working.
     function sum(pids) {
         let t = 0, waiting = false;
@@ -412,7 +457,7 @@
         root.addEventListener && root.addEventListener('wr:proj-updated', (e) => { if (!(e && e.detail && e.detail.source === 'dhq')) { loadPlatform(); setTimeout(warmLeague, 500); } });
     }
 
-    App.DhqProj = App.DhqProj || { get, fmt, sum, totalNum, optimalFor, matchup, assignSlots, hungarian, posList, provLabel, loadPlatform, request, warmLeague, _st: st, VERSION };
+    App.DhqProj = App.DhqProj || { get, fmt, sum, totalNum, optimalFor, matchup, lineupCheck, slotList, assignSlots, hungarian, posList, provLabel, loadPlatform, request, warmLeague, _st: st, VERSION };
     if (typeof document !== 'undefined') boot();
     /* global module */
     if (typeof module !== 'undefined' && module.exports) module.exports = App.DhqProj;
