@@ -133,6 +133,9 @@
   .platform button[aria-pressed="true"] { background: var(--bg-2); color: var(--forge); border-color: rgba(232,178,58,.45); }
   .platform button:focus-visible { outline: 2px solid var(--forge-bright); outline-offset: 2px; }
   #key-hint { margin-top: 10px; }
+  .signup { margin: 18px 0 0; max-width: 480px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 14px; line-height: 1.55; color: var(--text-2); }
+  .signup a { color: var(--forge); font-weight: 600; text-decoration: none; white-space: nowrap; }
+  .signup a:hover, .signup a:focus-visible { color: var(--forge-bright); text-decoration: underline; }
   form.go { display: flex; gap: 10px; max-width: 480px; }
   .field { flex: 1; position: relative; }
   .field label { position: absolute; left: -9999px; }
@@ -256,6 +259,7 @@
         </form>
         <p class="fine" id="key-hint" hidden></p>
         <p class="fine"><b>Free.</b> No account, no password. Dynasty, redraft, superflex and IDP.</p>
+        <p class="signup">Sign up for a free DHQ account to lock in early access to new releases, back up your draft boards, and take your leagues to every device. <a href="#signup" id="signup-link">Create free account&nbsp;&rarr;</a></p>
         <div class="note" id="note" hidden></div>
       </div>
 
@@ -349,6 +353,12 @@
     }
     buttons.forEach(function (b) {
       b.addEventListener('click', function () { setPlatform(b.dataset.platform); input.focus(); });
+    });
+
+    document.getElementById('signup-link').addEventListener('click', function (e) {
+      e.preventDefault();
+      note.hidden = false;
+      note.textContent = 'On the live page, this opens the sign-up sheet: Continue with Google, Continue with Apple, or email.';
     });
 
     form.addEventListener('submit', function (e) {
