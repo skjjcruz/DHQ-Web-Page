@@ -74,7 +74,7 @@
         if (!ok && isGuest) {
           try {
             var ga = JSON.parse(localStorage.getItem('od_auth_v1') || 'null');
-            if ((ga && ga.username) || localStorage.getItem('mfl_league_id')) ok = true;
+            if ((ga && ga.username) || localStorage.getItem('mfl_league_id') || localStorage.getItem('espn_league_id')) ok = true;
           } catch (e) {}
         }
         if (!ok) {
@@ -3132,9 +3132,9 @@ WRShared.preloadMany(WR_SHARED_FILES);
      "alex" lazy group — inert at boot, loaded on first GM's Office / Strategy open. -->
 <script type="text/wr-deferred" data-wr-defer="alex" src="js/tabs/strategy-editor.js?v=2cf1fbab8f"></script>
 <!-- 7. League detail: coordinator shell, depends on all above -->
-    <script src="js/league-detail.js?v=LAB104"></script>
+    <script src="js/league-detail.js?v=LAB104e"></script>
 <!-- 8. App: OwnerDashboard + ReactDOM.render (loads last) -->
-<script src="js/app.js?v=977b18c616"></script>
+<script src="js/app.js?v=5c57b38ffa"></script>
 
 <!-- All JSX code extracted to js/ modules. Only bootstrap remains. -->
 <script>
