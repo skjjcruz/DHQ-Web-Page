@@ -45,3 +45,24 @@ test('a lineup that cannot fit the slots returns null', () => {
     assert.equal(D.assignSlots(tooManyLb, slots, current), null);
     assert.ok(D.assignSlots(best, slots, current));
 });
+
+test('weekDists prices every team in this week\'s games, mine from my Game Day lineup', () => {
+    const saved = { S: globalThis.S, WP: App.WeeklyProj, M: App.Matchup };
+    require('./matchup.js');
+    globalThis.S = { currentLeagueId: 'L', leagues: [{ league_id: 'L', scoring_settings: {} }], players: {} };
+    App.WeeklyProj = { displayWeek: () => 3 };
+    const st = D._st;
+    D.get('x');   // settles the league/week key
+    Object.assign(st.results, { a: { median: 20, floor: 14, ceiling: 27 }, b: { median: 10, floor: 7, ceiling: 13 }, c: { median: 30, floor: 21, ceiling: 40 }, z: { median: 25, floor: 18, ceiling: 33 } });
+    const lg = { rosters: [{ roster_id: 1, starters: ['a', 'b'] }, { roster_id: 2, starters: ['z'] }] };
+    const wd = D.weekDists(lg, [[1, 2]], 3, 1, ['c']);
+    assert.equal(wd.week, 3);
+    assert.equal(wd.byRoster['1'].mean, 30, 'my working lineup (c), not the saved one (a + b)');
+    assert.equal(wd.byRoster['2'].mean, 25);
+    const fc = App.Matchup.forecast(App.Matchup.dist(['c'], { c: { points: { median: 30, floor: 21, ceiling: 40 } } }, 'median'), App.Matchup.dist(['z'], { z: { points: { median: 25, floor: 18, ceiling: 33 } } }, 'median'));
+    assert.equal(wd.myWinPct, fc.winPct, 'same number the matchup box shows');
+    assert.equal(D.weekDists(lg, [[1, 2]], 4, 1, ['c']), null, 'another week: DHQ has no numbers for it');
+    delete st.results.z;
+    assert.equal(D.weekDists(lg, [[1, 2]], 3, 1, ['c']), null, 'waits until every team is projected');
+    globalThis.S = saved.S; App.WeeklyProj = saved.WP; App.Matchup = saved.M;
+});
