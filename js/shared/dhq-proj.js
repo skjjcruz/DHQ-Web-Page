@@ -22,7 +22,7 @@
     'use strict';
     const App = root.App = root.App || {};
     const SL = 'https://api.sleeper.app/v1';
-    const VERSION = 'LAB124';
+    const VERSION = 'LAB125';
     const DEPS = [
         'js/shared/matchup-engine.js', 'js/shared/dhq-baseline.js', 'js/shared/matchup-feeds-espn.js',
         'js/shared/matchup-inputs.js', 'data/pff-matchup-snapshot.js', 'data/usage-snapshot.js',
@@ -333,6 +333,52 @@
         const fc = M.forecast(M.dist(mine, map, 'median'), M.dist(cur, map, 'median'));
         return { fc, oppIdeal: +Number(opt.total).toFixed(1), oppCur: totalNum(cur) || 0, oppIds };
     }
+    // A lineup's scoring distribution on DHQ's numbers (App.Matchup.dist:
+    // mean of medians, spread from each player's floor-ceiling band), or
+    // null while any of its players is still being projected.
+    function teamDist(pids) {
+        const M = App.Matchup;
+        const ids = (pids || []).map(String).filter(x => x && x !== '0');
+        if (!M || !M.dist || !ids.length || totalNum(ids) == null) return null;
+        const map = {};
+        ids.forEach(pid => {
+            const r = get(pid); if (!r) return;
+            const med = Number(r.median) || 0;
+            map[pid] = { available: med > 0, points: { median: med, floor: r.floor != null ? Number(r.floor) : med * 0.7, ceiling: r.ceiling != null ? Number(r.ceiling) : med * 1.35 } };
+        });
+        const d = M.dist(ids, map, 'median');
+        return d && d.n > 0 ? d : null;
+    }
+    // This week's games for the season simulator (App.PlayoffOdds weekDists):
+    // every team's set lineup on DHQ's numbers, the user's own from the
+    // lineup in the Game Day slots when given. Null until every team in
+    // `pairs` is fully projected, so the odds never mix half-loaded weeks.
+    function weekDists(lg, pairs, wk, myRosterId, myStarters) {
+        if (!lg || !Array.isArray(pairs) || !pairs.length || Number(wk) !== week()) return null;
+        const byId = {};
+        (lg.rosters || []).forEach(r => { byId[String(r.roster_id)] = r; });
+        const byRoster = {};
+        for (const pair of pairs) {
+            for (const rid of pair.map(String)) {
+                const r = byId[rid];
+                if (!r) return null;
+                const mine = myRosterId != null && rid === String(myRosterId) && myStarters && myStarters.length;
+                const d = teamDist(mine ? myStarters : r.starters);
+                if (!d) return null;
+                byRoster[rid] = { mean: d.mean, sd: d.sd };
+            }
+        }
+        // The user's own game, priced exactly as the matchup box prices it.
+        let myWinPct = null;
+        const my = myRosterId != null ? pairs.find(p => p.map(String).includes(String(myRosterId))) : null;
+        if (my && App.Matchup && App.Matchup.forecast) {
+            const opp = my.map(String).find(x => x !== String(myRosterId));
+            const a = byRoster[String(myRosterId)], b = byRoster[opp];
+            const fc = a && b ? App.Matchup.forecast({ mean: a.mean, sd: a.sd, n: 1 }, { mean: b.mean, sd: b.sd, n: 1 }) : null;
+            if (fc && fc.winPct != null) myWinPct = fc.winPct;
+        }
+        return { week: Number(wk), byRoster, myWinPct, stamp: stamp() };
+    }
     // ── Putting a lineup into slots with the fewest moves ─────────────
     // The optimizer picks WHO starts; this decides WHERE, keeping every
     // starter who can stay in his current slot there (owner report
@@ -466,7 +512,7 @@
         root.addEventListener && root.addEventListener('wr:proj-updated', (e) => { if (!(e && e.detail && e.detail.source === 'dhq')) { loadPlatform(); setTimeout(warmLeague, 500); } });
     }
 
-    App.DhqProj = App.DhqProj || { get, fmt, sum, totalNum, stamp, week, optimalFor, matchup, lineupCheck, slotList, assignSlots, hungarian, posList, provLabel, loadPlatform, request, warmLeague, _st: st, VERSION };
+    App.DhqProj = App.DhqProj || { get, fmt, sum, totalNum, stamp, week, teamDist, weekDists, optimalFor, matchup, lineupCheck, slotList, assignSlots, hungarian, posList, provLabel, loadPlatform, request, warmLeague, _st: st, VERSION };
     if (typeof document !== 'undefined') boot();
     /* global module */
     if (typeof module !== 'undefined' && module.exports) module.exports = App.DhqProj;
