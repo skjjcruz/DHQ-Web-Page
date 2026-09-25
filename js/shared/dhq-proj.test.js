@@ -47,7 +47,7 @@ test('a lineup that cannot fit the slots returns null', () => {
 });
 
 test('weekDists prices every team in this week\'s games, mine from my Game Day lineup', () => {
-    const saved = { S: globalThis.S, WP: App.WeeklyProj, M: App.Matchup };
+    const saved = { S: globalThis.S, WP: App.WeeklyProj };
     require('./matchup.js');
     globalThis.S = { currentLeagueId: 'L', leagues: [{ league_id: 'L', scoring_settings: {} }], players: {} };
     App.WeeklyProj = { displayWeek: () => 3 };
@@ -64,5 +64,20 @@ test('weekDists prices every team in this week\'s games, mine from my Game Day l
     assert.equal(D.weekDists(lg, [[1, 2]], 4, 1, ['c']), null, 'another week: DHQ has no numbers for it');
     delete st.results.z;
     assert.equal(D.weekDists(lg, [[1, 2]], 3, 1, ['c']), null, 'waits until every team is projected');
-    globalThis.S = saved.S; App.WeeklyProj = saved.WP; App.Matchup = saved.M;
+    globalThis.S = saved.S; App.WeeklyProj = saved.WP;
+});
+
+test('rosterDists prices every living team for a chopped week', () => {
+    const saved = { S: globalThis.S, WP: App.WeeklyProj };
+    globalThis.S = { currentLeagueId: 'L', leagues: [{ league_id: 'L', scoring_settings: {} }], players: {} };
+    App.WeeklyProj = { displayWeek: () => 3 };
+    const st = D._st;
+    D.get('x');
+    Object.assign(st.results, { a: { median: 20, floor: 14, ceiling: 27 }, b: { median: 10, floor: 7, ceiling: 13 }, z: { median: 25, floor: 18, ceiling: 33 } });
+    const lg = { rosters: [{ roster_id: 1, starters: ['a', 'b'] }, { roster_id: 2, starters: ['z'] }, { roster_id: 3, starters: ['q'] }] };
+    const wd = D.rosterDists(lg, ['1', '2'], 3, 1, null);
+    assert.equal(wd.byRoster['1'].mean, 30, 'saved starters when no Game Day lineup is given');
+    assert.equal(wd.byRoster['2'].mean, 25);
+    assert.equal(D.rosterDists(lg, ['1', '2', '3'], 3, 1, null), null, 'waits for every living team');
+    globalThis.S = saved.S; App.WeeklyProj = saved.WP;
 });
