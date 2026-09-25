@@ -22,7 +22,7 @@
     'use strict';
     const App = root.App = root.App || {};
     const SL = 'https://api.sleeper.app/v1';
-    const VERSION = 'LAB123';
+    const VERSION = 'LAB124';
     const DEPS = [
         'js/shared/matchup-engine.js', 'js/shared/dhq-baseline.js', 'js/shared/matchup-feeds-espn.js',
         'js/shared/matchup-inputs.js', 'data/pff-matchup-snapshot.js', 'data/usage-snapshot.js',
@@ -176,7 +176,7 @@
                     try {
                         const p = MI.project(pid, at.wk, opts, st.ctx);
                         if (p && p.points && Number.isFinite(Number(p.points.median))) {
-                            res = { median: p.available === false ? 0 : +Number(p.points.median).toFixed(1), floor: p.available === false ? 0 : +Number(p.points.floor || 0).toFixed(1), ceiling: p.available === false ? 0 : +Number(p.points.ceiling || 0).toFixed(1), grade: p.grade, verdict: p.verdict, why: (p.why || []).slice(0, 3).join(' · ') };
+                            res = { median: p.available === false ? 0 : +Number(p.points.median).toFixed(1), floor: p.available === false ? 0 : +Number(p.points.floor || 0).toFixed(1), ceiling: p.available === false ? 0 : +Number(p.points.ceiling || 0).toFixed(1), grade: p.grade, verdict: p.verdict, why: whyText(p.why) };
                         }
                     } catch (e) { res = null; }
                     st.results[pid] = res;
@@ -194,6 +194,12 @@
     let _kick = null;
     function kick() { if (_kick) return; _kick = setTimeout(() => { _kick = null; run(); }, 50); }
 
+    // The three factors that moved his number most, in plain words:
+    // "Opponent vs position +8% · Role & opportunity +5%".
+    function whyText(list) {
+        return (list || []).filter(f => f && f.label && Math.abs(Number(f.impactPct) || 0) >= 1).slice(0, 3)
+            .map(f => f.label + ' ' + (f.impactPct > 0 ? '+' : '') + Math.round(f.impactPct) + '%').join(' · ');
+    }
     function eligible(pid) {
         const p = (S().players || {})[pid];
         if (!p || !p.team) return false;
