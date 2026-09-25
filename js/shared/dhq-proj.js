@@ -22,7 +22,7 @@
     'use strict';
     const App = root.App = root.App || {};
     const SL = 'https://api.sleeper.app/v1';
-    const VERSION = 'LAB125';
+    const VERSION = 'LAB126';
     const DEPS = [
         'js/shared/matchup-engine.js', 'js/shared/dhq-baseline.js', 'js/shared/matchup-feeds-espn.js',
         'js/shared/matchup-inputs.js', 'data/pff-matchup-snapshot.js', 'data/usage-snapshot.js',
@@ -353,21 +353,28 @@
     // every team's set lineup on DHQ's numbers, the user's own from the
     // lineup in the Game Day slots when given. Null until every team in
     // `pairs` is fully projected, so the odds never mix half-loaded weeks.
-    function weekDists(lg, pairs, wk, myRosterId, myStarters) {
-        if (!lg || !Array.isArray(pairs) || !pairs.length || Number(wk) !== week()) return null;
+    // The same for any set of rosters (a chopped league has no pairings:
+    // every living team plays the whole league).
+    function rosterDists(lg, ids, wk, myRosterId, myStarters) {
+        if (!lg || !Array.isArray(ids) || !ids.length || Number(wk) !== week()) return null;
         const byId = {};
         (lg.rosters || []).forEach(r => { byId[String(r.roster_id)] = r; });
         const byRoster = {};
-        for (const pair of pairs) {
-            for (const rid of pair.map(String)) {
-                const r = byId[rid];
-                if (!r) return null;
-                const mine = myRosterId != null && rid === String(myRosterId) && myStarters && myStarters.length;
-                const d = teamDist(mine ? myStarters : r.starters);
-                if (!d) return null;
-                byRoster[rid] = { mean: d.mean, sd: d.sd };
-            }
+        for (const rid of ids.map(String)) {
+            const r = byId[rid];
+            if (!r) return null;
+            const mine = myRosterId != null && rid === String(myRosterId) && myStarters && myStarters.length;
+            const d = teamDist(mine ? myStarters : r.starters);
+            if (!d) return null;
+            byRoster[rid] = { mean: d.mean, sd: d.sd };
         }
+        return { week: Number(wk), byRoster, stamp: stamp() };
+    }
+    function weekDists(lg, pairs, wk, myRosterId, myStarters) {
+        if (!Array.isArray(pairs) || !pairs.length) return null;
+        const got = rosterDists(lg, [].concat(...pairs), wk, myRosterId, myStarters);
+        if (!got) return null;
+        const byRoster = got.byRoster;
         // The user's own game, priced exactly as the matchup box prices it.
         let myWinPct = null;
         const my = myRosterId != null ? pairs.find(p => p.map(String).includes(String(myRosterId))) : null;
@@ -512,7 +519,7 @@
         root.addEventListener && root.addEventListener('wr:proj-updated', (e) => { if (!(e && e.detail && e.detail.source === 'dhq')) { loadPlatform(); setTimeout(warmLeague, 500); } });
     }
 
-    App.DhqProj = App.DhqProj || { get, fmt, sum, totalNum, stamp, week, teamDist, weekDists, optimalFor, matchup, lineupCheck, slotList, assignSlots, hungarian, posList, provLabel, loadPlatform, request, warmLeague, _st: st, VERSION };
+    App.DhqProj = App.DhqProj || { get, fmt, sum, totalNum, stamp, week, teamDist, weekDists, rosterDists, optimalFor, matchup, lineupCheck, slotList, assignSlots, hungarian, posList, provLabel, loadPlatform, request, warmLeague, _st: st, VERSION };
     if (typeof document !== 'undefined') boot();
     /* global module */
     if (typeof module !== 'undefined' && module.exports) module.exports = App.DhqProj;
