@@ -40,6 +40,7 @@
     })();
     </script>
 
+  <meta name="dhq-build" content="b136-ac110243ba">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, viewport-fit=cover">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://skjjcruz.github.io https://browser.sentry-cdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://sxshiqyxhhifvtfqawbq.supabase.co https://*.sentry.io; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; object-src 'none';">
   <title>Dynasty HQ — Go Pro</title>
@@ -101,6 +102,8 @@
       .back{min-height:40px;padding:0 12px;margin-top:6px}
     }
   </style>
+  <!-- Live update: reloads onto a new deploy at a safe moment (js/shared/live-update.js) -->
+  <script src="js/shared/live-update.js?v=4adfcaa1a6"></script>
 </head>
 <body>
   <main class="card">
@@ -145,7 +148,7 @@
     <button class="back" onclick="window.location.href='index.html'">&larr; Back to my leagues</button>
   </main>
 
-  <script src="js/billing.js?v=20260722webonly1"></script>
+  <script src="js/billing.js?v=cdc5732cbc"></script>
   <script>
     const SUPABASE_URL = 'https://sxshiqyxhhifvtfqawbq.supabase.co';
     const SESSION_KEY = 'fw_session_v1';

@@ -40,6 +40,7 @@
     })();
     </script>
 
+  <meta name="dhq-build" content="b136-ac110243ba">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, viewport-fit=cover">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://skjjcruz.github.io https://browser.sentry-cdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://sxshiqyxhhifvtfqawbq.supabase.co https://api.sleeper.app https://api.myfantasyleague.com https://*.myfantasyleague.com https://lm-api-reads.fantasy.espn.com https://fantasysports.yahooapis.com https://*.sentry.io; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; object-src 'none';">
   <title>Dynasty HQ — Connect your leagues</title>
@@ -155,6 +156,8 @@
       .signout{min-height:40px;padding:0 12px;margin-top:6px}
     }
   </style>
+  <!-- Live update: reloads onto a new deploy at a safe moment (js/shared/live-update.js) -->
+  <script src="js/shared/live-update.js?v=4adfcaa1a6"></script>
 </head>
 <body>
   <main class="card">
@@ -635,6 +638,20 @@
       } catch {}
       window.location.href = 'landing.html';
     }
+
+    // Live update (js/shared/live-update.js): once the visitor starts
+    // connecting, a silent reload would lose it — a typed ID or ESPN cookies
+    // (unsaved until Connect), a team picker waiting (the league is already
+    // stored, so the head check would drop them into the app with no team),
+    // or a platform linked but Enter not tapped (the rest of onboarding would
+    // be skipped). Hold until they go in.
+    try {
+      window.App.LiveUpdate.hold('connect', () => !!(mflPending || espnPending || Object.keys(linked).some(k => linked[k]) ||
+        ['sleeperName', 'mflLeagueId', 'espnLeagueId', 'espnS2', 'espnSwid'].some(id => {
+          const el = document.getElementById(id);
+          return el && !el.disabled && el.value.trim();
+        })));
+    } catch (e) { /* updater absent */ }
 
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter') return;

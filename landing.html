@@ -40,6 +40,7 @@
     })();
     </script>
 
+<meta name="dhq-build" content="b136-ac110243ba">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://skjjcruz.github.io https://browser.sentry-cdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://sxshiqyxhhifvtfqawbq.supabase.co https://api.sleeper.app https://api.myfantasyleague.com https://*.myfantasyleague.com https://lm-api-reads.fantasy.espn.com https://fantasysports.yahooapis.com https://*.sentry.io; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; object-src 'none';">
 <title>Dynasty HQ — Generic advice stops here.</title>
@@ -424,6 +425,8 @@
     .auth-linkbtn { min-height: 40px; padding: 0 6px; }
   }
 </style>
+<!-- Live update: reloads onto a new deploy at a safe moment (js/shared/live-update.js) -->
+<script src="js/shared/live-update.js?v=4adfcaa1a6"></script>
 </head>
 <body>
 <div class="brandwash" aria-hidden="true"></div>
@@ -558,7 +561,7 @@
     </section>
   </div>
 </div>
-  <script src="vendor/supabase.min.js"></script>
+  <script src="vendor/supabase.min.js?v=7d46902303"></script>
 <script>window.supabase||document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.101.1/dist/umd/supabase.min.js"><\/script>')</script>
   <script>
     const FW_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4c2hpcXl4aGhpZnZ0ZnFhd2JxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3MTExMzAsImV4cCI6MjA4ODI4NzEzMH0.zJi9W986ZLaANiZN6pt6ReFwaQU6yPeidsERIWo2ibI';
@@ -1129,6 +1132,11 @@
     buttons.forEach(function (b) {
       b.addEventListener('click', function () { setPlatform(b.dataset.platform); input.focus(); });
     });
+    // Live update (js/shared/live-update.js): what's typed here is not saved
+    // until submit, and the focus guard stops covering it once the visitor
+    // taps away — hold the silent reload while the box has text. (The auth
+    // sheet is a modal, which already holds it while open.)
+    try { window.App.LiveUpdate.hold('landing-form', function () { return !!(input.value || '').trim(); }); } catch (e) { /* updater absent */ }
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       var v = (input.value || '').trim();
