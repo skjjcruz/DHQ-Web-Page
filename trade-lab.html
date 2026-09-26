@@ -114,7 +114,7 @@
     <link rel="preload" as="script" href="vendor/supabase.min.js">
     <link rel="preload" as="script" href="vendor/react.production.min.js">
     <link rel="preload" as="script" href="vendor/react-dom.production.min.js">
-    <script src="js/shared/shared-loader.js?v=c84baabc7a"></script>
+    <script src="js/shared/shared-loader.js?v=b36524fd84"></script>
     <!-- Season-rollover cache hygiene — must run early, before any surface reads caches. -->
     <script src="js/shared/season-guard.js?v=988bfb076d"></script>
     <!-- Native-shell external-link guard: outside links must never strand the WKWebView. -->
@@ -2982,27 +2982,27 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <!-- 2b. Unified Player Card (SI-2) — window.WR.openPlayerCard — replaces CDN modal -->
 <!-- Shared visual primitives (WR.Card / Badge / Chip / ConfChip / DeltaLine / Kpi / InsightCard) -->
 <script src="js/components/wr-primitives.js?v=402be1b81d"></script>
-    <script src="js/components/player-card.js?v=LAB124"></script>
+    <script src="js/components/player-card.js?v=5852dbc66f"></script>
 <!-- 2c. Saved List Views (SI-1) — window.WR.SavedViews — shared across list surfaces -->
 <script src="js/shared/saved-views.js?v=75e7680585"></script>
 <!-- 2c-2. Saved Alex Reports — window.WR.SavedReports — local cache + ai_analysis server sync -->
 <script src="js/shared/saved-reports.js?v=c0601d4b86"></script>
 <!-- 2d. GM Mode helper (Phase 1) — window.WR.GmMode — canonical mode/preset source of truth -->
 <script src="js/shared/gm-mode.js?v=4e60342750"></script>
-<script src="js/shared/startsit-engine.js?v=35b259534b"></script>
-<script src="js/shared/weekly-proj.js?v=LAB114"></script>
+<script src="js/shared/startsit-engine.js?v=a579674752"></script>
+<script src="js/shared/weekly-proj.js?v=d2a597a1e1"></script>
 <script src="js/shared/sleeper-proj.js?v=fce29dbc33"></script>
-<script src="js/shared/dhq-proj.js?v=LAB126"></script>
+<script src="js/shared/dhq-proj.js?v=326f6acd99"></script>
 <script src="js/shared/nfl-context.js?v=d6f0ac9e4c"></script>
 <script src="js/shared/matchup.js?v=770ee90e33"></script>
 <!-- Season Odds engines (lab port 2026-08-16): plain Node-testable scripts —
      the luck ledger feeds the playoff Monte Carlo, so luck loads first. -->
 <script src="js/shared/luck-engine.js?v=21984470ab"></script>
-<script src="js/shared/chopped.js?v=LAB126"></script>
-<script src="js/shared/chop-odds.js?v=LAB126"></script>
-<script src="js/shared/playoff-odds.js?v=LAB125"></script>
+<script src="js/shared/chopped.js?v=a0cc781b90"></script>
+<script src="js/shared/chop-odds.js?v=cf44609086"></script>
+<script src="js/shared/playoff-odds.js?v=9b2c46bc64"></script>
 <script src="js/shared/faab-engine.js?v=cb7b06413d"></script>
-<script src="js/utils/schedule-engine.js?v=LAB123"></script>
+<script src="js/utils/schedule-engine.js?v=042613eb29"></script>
 <script src="js/utils/gamelog-engine.js?v=038341a613"></script>
 <script src="js/shared/draft-gameplan.js?v=4c5de549f0"></script>
 <!-- 2e. Alex behavioral-insight settings — window.WR.AlexSettings — shared tuning for every Alex surface -->
@@ -3043,7 +3043,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <script src="js/shared/txn-store.js?v=1976999bb6"></script>
 <!-- 3. Shared utilities: player valuation constants + projection engine -->
 <script src="js/utils/sos-engine.js?v=a988d9091c"></script>
-<script src="js/utils/player-value.js?v=LAB114"></script>
+<script src="js/utils/player-value.js?v=192d4c74f1"></script>
 <!-- 4. Feature modules (no internal dependencies between these) -->
 <!-- data-wr-defer scripts are DEFERRED: emitted INERT (type="text/wr-deferred" by
      every build/serve pipeline) so the browser does NOT parse/execute them at app
@@ -3054,12 +3054,12 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <script type="text/wr-deferred" data-wr-defer="trade" src="js/trade-calc.js?v=801997c835"></script>
 <script src="js/lab-cutdown.js?v=cd15d7635f"></script>
 <script src="js/post-draft.js?v=61bcda3c71"></script>
-<script type="text/wr-deferred" data-wr-defer="fa" src="js/free-agency.js?v=LAB114"></script>
+<script type="text/wr-deferred" data-wr-defer="fa" src="js/free-agency.js?v=f64d65abac"></script>
 <!-- Season Odds panel loads with Game Day (owner ruling 2026-07-30) — must
      precede lineup.js in the group so window.WrSeasonOdds exists on first render. -->
-<script type="text/wr-deferred" data-wr-defer="lineup" src="js/components/season-odds-panel.js?v=LAB125"></script>
-<script src="js/components/chop-block-panel.js?v=LAB126"></script>
-<script type="text/wr-deferred" data-wr-defer="lineup" src="js/tabs/lineup.js?v=LAB126"></script>
+<script type="text/wr-deferred" data-wr-defer="lineup" src="js/components/season-odds-panel.js?v=11c4727959"></script>
+<script src="js/components/chop-block-panel.js?v=46e81a6756"></script>
+<script type="text/wr-deferred" data-wr-defer="lineup" src="js/tabs/lineup.js?v=c77345e5ec"></script>
 <!-- 4b. Draft Command Center modules — group "draft" (~28 scripts, ~1.26MB),
      loaded on first Draft-tab open. -->
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/styles.js?v=456c35bb55"></script>
@@ -3093,7 +3093,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <!-- 5. League detail tab components (extracted from league-detail.js) -->
 <!-- v2 widget modules (load before dashboard.js which consumes them) -->
 <script src="js/widgets/roster-pulse.js?v=c80df61d34"></script>
-<script src="js/widgets/lineup-check.js?v=LAB121"></script>
+<script src="js/widgets/lineup-check.js?v=7d5f2ca51c"></script>
 <script src="js/widgets/window-forecast.js?v=efebefe605"></script>
 <script src="js/widgets/gap-plan.js?v=cc0e7f7a06"></script>
 <script src="js/widgets/league-landscape.js?v=c4d383ee19"></script>
@@ -3110,14 +3110,14 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <script src="js/widgets/my-trophies.js?v=947128399d"></script>
 <!-- League Calendar widget — depends on window.WrCalendar (js/tabs/calendar.js) -->
 <script src="js/widgets/league-calendar.js?v=74e7808f06"></script>
-<script src="js/tabs/dashboard.js?v=LAB119"></script>
+<script src="js/tabs/dashboard.js?v=54cccdff79"></script>
 <script src="js/tabs/flash-brief.js?v=b068789af9"></script>
 <!-- Group "analysis": analytics.js embeds LeagueMapTab, so both defer together
      (league-map.js first — DOM order is execution order within a group). -->
-<script type="text/wr-deferred" data-wr-defer="analysis" src="js/tabs/league-map.js?v=LAB101"></script>
-<script type="text/wr-deferred" data-wr-defer="myteam" src="js/tabs/my-team.js?v=LAB104"></script>
+<script type="text/wr-deferred" data-wr-defer="analysis" src="js/tabs/league-map.js?v=6485fc4453"></script>
+<script type="text/wr-deferred" data-wr-defer="myteam" src="js/tabs/my-team.js?v=431b90ca2b"></script>
 <!-- Compare: extracted from My Roster's former sub-view, now a top-level ROSTER-group tab. -->
-<script type="text/wr-deferred" data-wr-defer="compare" src="js/tabs/compare.js?v=LAB127"></script>
+<script type="text/wr-deferred" data-wr-defer="compare" src="js/tabs/compare.js?v=4ab3b1a7e3"></script>
 <script type="text/wr-deferred" data-wr-defer="analysis" src="js/tabs/analytics.js?v=ca189e3799"></script>
 <script type="text/wr-deferred" data-wr-defer="trophies" src="js/tabs/trophy-room.js?v=8006bf779f"></script>
 <script src="js/tabs/calendar.js?v=80df875303"></script>
@@ -3132,7 +3132,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
      "alex" lazy group — inert at boot, loaded on first GM's Office / Strategy open. -->
 <script type="text/wr-deferred" data-wr-defer="alex" src="js/tabs/strategy-editor.js?v=2cf1fbab8f"></script>
 <!-- 7. League detail: coordinator shell, depends on all above -->
-    <script src="js/league-detail.js?v=LAB104e"></script>
+    <script src="js/league-detail.js?v=ce2775cc2c"></script>
 <!-- 8. App: OwnerDashboard + ReactDOM.render (loads last) -->
 <script src="js/app.js?v=5c57b38ffa"></script>
 
@@ -3202,7 +3202,7 @@ window.addEventListener('appinstalled', () => {
 <!-- Deploy tag (owner ask 2026-08-19): a tiny always-visible build code so the
      owner can read back exactly which version his device is running before
      testing — kills the stale-cache guessing game. Bump the code every deploy. -->
-<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b131 · LAB127</div>
+<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b133 · LAB128</div>
 </body>
 </html>
 <!-- build 1774212614 -->

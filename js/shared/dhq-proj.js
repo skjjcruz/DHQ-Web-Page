@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════════════════
-// js/shared/dhq-proj.js — window.App.DhqProj   (Lab only)
+// js/shared/dhq-proj.js — window.App.DhqProj
 // Runs the DHQ matchup engine (the one matchup-lab.html grades with) in
 // the background and keeps its weekly projection for every player the
 // app shows, so each surface can print DHQ's number beside Sleeper's.
@@ -27,6 +27,16 @@
         'js/shared/matchup-engine.js', 'js/shared/dhq-baseline.js', 'js/shared/matchup-feeds-espn.js',
         'js/shared/matchup-inputs.js', 'data/pff-matchup-snapshot.js', 'data/usage-snapshot.js',
     ];
+    // The PFF and usage snapshots are rebuilt on a schedule in the Lab repo
+    // (skjjcruz/DHQ-Web-Page), where the PFF key is a repo secret and never
+    // reaches a browser. The Lab reads its own copies; the website and the
+    // app read the Lab's published ones, so every surface sees one fresh set.
+    const DATA_HOME = 'https://skjjcruz.github.io/DHQ-Web-Page/';
+    function depUrl(src) {
+        if (!/^data\//.test(src)) return src;
+        const onLab = /\/DHQ-Web-Page\//.test((root.location && root.location.pathname) || '');
+        return onLab ? src : DATA_HOME + src;
+    }
     const CHUNK = 25;
     const POS_OK = { QB: 1, RB: 1, WR: 1, TE: 1, K: 1, DL: 1, LB: 1, DB: 1 };
 
@@ -45,7 +55,7 @@
     function loadScript(src) {
         return new Promise((resolve, reject) => {
             const s = document.createElement('script');
-            s.src = src + '?v=' + VERSION;
+            s.src = depUrl(src) + '?v=' + VERSION;
             s.async = false;
             s.onload = () => resolve();
             s.onerror = () => reject(new Error('could not load ' + src));
