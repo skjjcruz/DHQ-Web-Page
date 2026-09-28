@@ -97,9 +97,7 @@ function getAppSession() {
         // getSessionToken(): "has a session" must mean "has a usable session",
         // otherwise callers fire doomed requests, hit 401, and silently
         // resolve the account to the free tier instead of re-authing.
-        // A legacy Sleeper-username token is not an app-account session
-        // either (see _isLegacySessionToken): the fw-* endpoints reject it.
-        if (session?.token && session?.user?.id && !_jwtExpired(session.token) && !_isLegacySessionToken(session.token)) return session;
+        if (session?.token && session?.user?.id && !_jwtExpired(session.token)) return session;
     } catch {}
     return null;
 }
@@ -117,12 +115,6 @@ function _clearDeadAppSession(reason) {
         email = raw ? (JSON.parse(raw)?.user?.email || null) : null;
     } catch {}
     try { localStorage.removeItem(FW_SESSION_KEY); } catch {}
-    // login.html keeps a second copy of a legacy Sleeper token in
-    // od_session_v1; once that copy has expired too it is dead weight.
-    try {
-        const legacy = JSON.parse(localStorage.getItem(SESSION_LS_KEY) || 'null');
-        if (legacy?.token && _jwtExpired(legacy.token)) localStorage.removeItem(SESSION_LS_KEY);
-    } catch {}
     // Device secrets (ESPN/MFL logins, AI keys) are NOT wiped here: a 401 is
     // not proof of a deliberate revocation — the server answers 401 for a
     // transient app_users read failure too. The session is dropped; if someone
@@ -148,49 +140,6 @@ function _jwtClaims(token) {
         try { json = decodeURIComponent(bin.split('').map(c => '%' + c.charCodeAt(0).toString(16).padStart(2, '0')).join('')); } catch {}
         const claims = JSON.parse(json);
         return claims && typeof claims === 'object' ? claims : null;
-    } catch { return null; }
-}
-
-// Legacy Sleeper-username login (login.html → get-session-token). That JWT
-// carries app_metadata.sleeper_username and NO user_id / session_version.
-// login.html stores it in fw_session_v1 — the key every page gate reads for
-// "signed in" — and OD.acquireSessionToken keeps a copy in od_session_v1.
-// It is not an app-account session: requireActiveAppSession (fw-refresh-
-// session, fw-profile, …) answers 401 to it. So it must never be sent to
-// those endpoints, and that 401 must never be read as "dead app session"
-// (the client used to clear fw_session_v1 on it, and the index.html gate
-// then bounced every legacy user to the landing page on their first
-// reload). Its own exp governs expiry; RLS reads keep using it through
-// getSessionToken() with the sleeper_username claim.
-function _isLegacySessionToken(token) {
-    const meta = _jwtClaims(token)?.app_metadata;
-    return !!(meta && typeof meta.sleeper_username === 'string' && meta.sleeper_username && !meta.user_id);
-}
-
-// Users bitten before that fix lost fw_session_v1 but still hold the live
-// od_session_v1 copy (+ od_auth_v1). With no fw_session_v1 every gate treats
-// them as signed out. Rebuild it from the copy in login.html's exact shape
-// ({token, expiresAt, user:{sleeperUsername, isGifted}}) — never from an
-// expired token, never for a guest tab (wr_guest_v1: a leftover legacy copy
-// must not make a guest tab "owned"), never over an existing fw_session_v1.
-// index.html's pre-paint gate does the same on non-localhost origins before
-// the app loads; this covers localhost/dev, where that gate returns early.
-// Returns the re-hydrated session or null.
-function _rehydrateLegacySession() {
-    try {
-        if (localStorage.getItem(FW_SESSION_KEY)) return null;
-        if (localStorage.getItem('wr_guest_v1') === '1') return null;
-        const legacy = JSON.parse(localStorage.getItem(SESSION_LS_KEY) || 'null');
-        if (!legacy?.token || !_isLegacySessionToken(legacy.token) || _jwtExpired(legacy.token)) return null;
-        const claims = _jwtClaims(legacy.token);
-        const expiresAt = legacy.expiresAt || (typeof claims.exp === 'number' ? new Date(claims.exp * 1000).toISOString() : null);
-        const session = {
-            token: legacy.token,
-            expiresAt,
-            user: { sleeperUsername: claims.app_metadata.sleeper_username, isGifted: !!(legacy.isGifted || claims.app_metadata.is_gifted) },
-        };
-        localStorage.setItem(FW_SESSION_KEY, JSON.stringify(session));
-        return session;
     } catch { return null; }
 }
 
@@ -354,9 +303,6 @@ function _jwtAgeHours(token) {
 // tier/products from the live subscription. Expired tokens are cleared —
 // refresh cannot resurrect them, and leaving them in storage strands the
 // user in a signed-in-but-free limbo — so sign-in becomes the recovery path.
-// A legacy Sleeper-username token (_isLegacySessionToken) is left alone
-// while unexpired: fw-refresh-session cannot slide it (401), and that 401
-// is not a revocation.
 //
 // Memoized per stored token, not per page load: SPA-style sign-in (or an
 // OAuth callback that lands after boot already ran) swaps the stored session
@@ -379,22 +325,12 @@ function ensureFreshAppSession() {
         try {
             const raw = localStorage.getItem(FW_SESSION_KEY);
             const session = raw ? JSON.parse(raw) : null;
-            if (!session?.token) {
-                // No app session — a legacy login bitten by the old clear
-                // path may still be recoverable from its od_session_v1 copy.
-                // Not an app account either way, so nothing to refresh.
-                if (_rehydrateLegacySession()) _sessionSyncToken = _storedSessionToken();
-                return null;
-            }
+            if (!session?.token) return null;
             if (_jwtExpired(session.token)) {
                 _clearDeadAppSession('expired');
                 _sessionSyncToken = null;
                 return null;
             }
-            // Legacy Sleeper login: no app account to refresh or repair.
-            // (It has no user.id, so the repair branch below would otherwise
-            // send it to fw-refresh-session on every load and clear it.)
-            if (_isLegacySessionToken(session.token)) return null;
             const needsRepair = !session?.user?.id;
             const age = _jwtAgeHours(session.token);
             const stale = age === null || age > 24;
