@@ -40,7 +40,7 @@
     })();
     </script>
 
-  <meta name="dhq-build" content="b144-ae8e804324">
+  <meta name="dhq-build" content="b145-52864f43cf">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, viewport-fit=cover">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://skjjcruz.github.io https://browser.sentry-cdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://sxshiqyxhhifvtfqawbq.supabase.co https://*.sentry.io; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; object-src 'none';">
   <title>Dynasty HQ — Go Pro</title>
@@ -53,7 +53,9 @@
       function reveal(){ var s=document.getElementById('preboot-hide'); if(s&&s.parentNode){ s.parentNode.removeChild(s); } }
       try {
         var sess = JSON.parse(localStorage.getItem('fw_session_v1') || 'null');
-        if (!sess || !sess.token) { window.location.replace('landing.html'); return; }
+        // No account yet (a guest, or signed out): the sign-in sheet, not the
+        // landing page's guest bounce straight back into the app (a loop).
+        if (!sess || !sess.token) { window.location.replace('landing.html?signin'); return; }
         reveal();
       } catch (e) { reveal(); }
     })();
@@ -103,7 +105,7 @@
     }
   </style>
   <!-- Live update: reloads onto a new deploy at a safe moment (js/shared/live-update.js) -->
-  <script src="js/shared/live-update.js?v=4adfcaa1a6"></script>
+  <script src="js/shared/live-update.js?v=76a854447b"></script>
 </head>
 <body>
   <main class="card">

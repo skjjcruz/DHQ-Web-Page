@@ -40,7 +40,7 @@
     })();
     </script>
 
-  <meta name="dhq-build" content="b144-ae8e804324">
+  <meta name="dhq-build" content="b145-52864f43cf">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, viewport-fit=cover">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://skjjcruz.github.io https://browser.sentry-cdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://sxshiqyxhhifvtfqawbq.supabase.co https://api.sleeper.app https://api.myfantasyleague.com https://*.myfantasyleague.com https://lm-api-reads.fantasy.espn.com https://fantasysports.yahooapis.com https://*.sentry.io; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; object-src 'none';">
   <title>Dynasty HQ — Connect your leagues</title>
@@ -49,6 +49,8 @@
        else (no session, or already onboarded) is redirected without a flash. -->
   <style id="preboot-hide">html{visibility:hidden!important}</style>
   <noscript><style>html{visibility:visible!important}</style></noscript>
+  <!-- Owner-stamped device identity (DHQ-Shared identity.js): server write of the handle + the one sign-out clear. -->
+  <script src="reconai-shared/identity.js?v=e11b51d15d"></script>
   <script>
     (function () {
       function reveal(){ var s=document.getElementById('preboot-hide'); if(s&&s.parentNode){ s.parentNode.removeChild(s); } }
@@ -57,12 +59,22 @@
         var guestMode = false;
         try { guestMode = localStorage.getItem('wr_guest_v1') === '1'; } catch (e) {}
         if ((!sess || !sess.token) && !guestMode) { window.location.replace('landing.html'); return; }
+        // ?reconnect=espn|mfl: an onboarded user whose private ESPN league
+        // (cookies) or MFL league (API key) ended with the last app session
+        // re-enters them here — the hub links to it. Let them through.
+        var reconnect = new URLSearchParams(window.location.search).get('reconnect');
+        if (reconnect === 'espn' || reconnect === 'mfl') { reveal(); return; }
+        // A handle / league this device remembers but the account doesn't
+        // have yet waits here for a one-tap confirm (identity.js).
+        var idn = window.OD && window.OD.identity;
+        if (idn && idn.pendingConfirm && idn.pendingConfirm()) { reveal(); return; }
         var profile = JSON.parse(localStorage.getItem('od_profile_v1') || 'null');
         var legacy  = JSON.parse(localStorage.getItem('od_auth_v1') || 'null');
         // Onboarded = any league source bound (Sleeper OR MFL) or an explicit
         // completed flag. MFL-only users must not bounce back to this page.
+        // od_auth_v1 has two shapes ({username} here, {sleeperUsername} from the hub).
         var onboarded = (profile && (profile.onboardingComplete === true || profile.sleeperUsername))
-          || (legacy && legacy.username)
+          || (legacy && (legacy.username || legacy.sleeperUsername))
           || localStorage.getItem('mfl_league_id')
           || localStorage.getItem('espn_league_id');
         if (onboarded) {
@@ -157,7 +169,7 @@
     }
   </style>
   <!-- Live update: reloads onto a new deploy at a safe moment (js/shared/live-update.js) -->
-  <script src="js/shared/live-update.js?v=4adfcaa1a6"></script>
+  <script src="js/shared/live-update.js?v=76a854447b"></script>
 </head>
 <body>
   <main class="card">
@@ -167,6 +179,16 @@
     <p class="sub">Your account is set. Where do you play? Connect one or both.</p>
 
     <div class="alert" id="alert"></div>
+
+    <div class="espn-box" id="confirmBox" hidden>
+      <h2>Welcome back. Is this you?</h2>
+      <p>This device remembers:</p>
+      <ul id="confirmList" style="margin:6px 0 10px 18px"></ul>
+      <div class="row">
+        <button class="btn-link" type="button" id="confirmYes">Yes, use these</button>
+        <button class="btn-link" type="button" id="confirmNo">Not mine</button>
+      </div>
+    </div>
 
     <div class="switch" role="group" aria-label="Where do you play?">
       <button id="tabSleeper" onclick="pick('sleeper')">Sleeper<span class="sm" id="smSleeper">username</span><span class="tick">&#10003;</span></button>
@@ -184,6 +206,10 @@
       <div class="duo">
         <input class="input" id="mflLeagueId" placeholder="MFL league ID (e.g. 41208)" inputmode="numeric" autocomplete="off">
         <input class="input" id="mflYear" value="2026" aria-label="Season" inputmode="numeric" autocomplete="off">
+      </div>
+      <button class="private-toggle" id="mflPrivateToggle" type="button" onclick="toggleMflPrivate()">Private league? Add your MFL API key</button>
+      <div class="private" id="mflPrivate">
+        <input class="input" id="mflApiKey" placeholder="MFL API key (kept only until you close the app)" autocomplete="off" autocapitalize="off" spellcheck="false">
       </div>
       <div class="espn-box" id="mflTeams" hidden>
         <h2 id="mflTeamsTitle">Which team is yours?</h2>
@@ -265,11 +291,14 @@
       } catch { return 'sess_' + Date.now().toString(36); }
     }
     // iOS/iPadOS browsers all carry a Safari/ UA token; the app shell's bare
-    // WKWebView does not (iPads report "Macintosh" for desktop pages).
+    // WKWebView does not. iPads in desktop mode report "Macintosh", so a Mac
+    // UA counts only with touch (MacIntel + maxTouchPoints > 1): a Mac app's
+    // webview is not the iOS app (same rule as js/shared/live-update.js).
     function detectSurface() {
       try {
         const ua = navigator.userAgent || '';
-        const apple = /iPhone|iPad|iPod|Macintosh/.test(ua);
+        const ipadDesktop = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+        const apple = /iPhone|iPad|iPod/.test(ua) || ipadDesktop;
         return apple && /AppleWebKit/.test(ua) && !/Safari\//.test(ua) ? 'ios_app' : 'web';
       } catch { return 'web'; }
     }
@@ -290,10 +319,18 @@
         if (localStorage.getItem('dhq_internal_v1')) return 'owner';
         const auth = JSON.parse(localStorage.getItem('od_auth_v1') || 'null');
         const prof = JSON.parse(localStorage.getItem('od_profile_v1') || 'null');
-        const names = [auth && auth.username, prof && prof.sleeperUsername].map(n => String(n || '').toLowerCase());
+        const names = [auth && auth.username, auth && auth.sleeperUsername, prof && prof.sleeperUsername].map(n => String(n || '').toLowerCase());
         if (names.some(n => DHQ_OWNER_HANDLES.includes(n))) { localStorage.setItem('dhq_internal_v1', 'owner'); return 'owner'; }
       } catch (e) {}
       return null;
+    }
+    // The deploy stamps (scripts/build-deploy.cjs);
+    // no stamp (local dev) → no field.
+    function buildId() {
+      try {
+        const b = window.DHQ_BUILD || (document.querySelector('meta[name="dhq-build"]') || {}).content;
+        return typeof b === 'string' && b.trim() ? b.trim().slice(0, 80) : null;
+      } catch (e) { return null; }
     }
     function trackConnectEvent(eventName, username, metadata) {
       // This page posts with the anonymous key, and the insert policy only
@@ -327,6 +364,7 @@
               surface: detectSurface(),
               host: location.hostname || null,
               ...(dhqInternalTag() ? { internal: dhqInternalTag() } : {}),
+              ...(buildId() ? { build: buildId() } : {}),
               ...(metadata || {}),
             },
           }]),
@@ -341,6 +379,43 @@
     });
 
     const linked = { sleeper: false, mfl: false, espn: false };
+    const IDN = (window.OD && window.OD.identity) || null;
+    // A guest on a device whose identity cache is an account's (the guest
+    // flag was set by an older page): start the guest clean, so they never
+    // see — or connect on top of — the account's leagues.
+    try {
+      if (IDN && !IDN.accountToken() && localStorage.getItem('wr_guest_v1') === '1' && IDN.getStamp() && IDN.getStamp() !== 'guest'
+        && !new URLSearchParams(window.location.search).get('reconnect')) IDN.beginGuest();
+    } catch (e) {}
+
+    // Record what was just connected on the signed-in ACCOUNT (the Sleeper
+    // handle and the ESPN/MFL league pointers — never cookies or API keys).
+    // This page used to write only this device, so every signup's handle
+    // lived nowhere else and a new device / sign-out stranded them (B1).
+    // keepalive: survives the navigation into the app. Guests: no account,
+    // nothing to write. enterApp awaits the last one (capped).
+    // Hold live-update reloads while a connect or its account write is in
+    // flight (window.__dhqBusy, read by js/shared/live-update.js).
+    async function holdBusy(run) {
+      window.__dhqBusy = (window.__dhqBusy || 0) + 1;
+      try { return await run(); }
+      finally { window.__dhqBusy = Math.max(0, (window.__dhqBusy || 1) - 1); }
+    }
+    function connectSleeper() { return holdBusy(connectSleeperRun); }
+    function connectMfl() { return holdBusy(connectMflRun); }
+    function connectEspn() { return holdBusy(connectEspnRun); }
+    function enterApp() { return holdBusy(enterAppRun); }
+    let pendingPush = Promise.resolve(false);
+    function pushToAccount() {
+      if (!IDN || !IDN.accountToken()) return pendingPush;
+      try {
+        // First connect on a device from before owner stamping: this device's
+        // identity is now this account's.
+        if (!IDN.getStamp()) IDN.setStamp(IDN.currentOwner());
+        pendingPush = IDN.pushIdentity();
+      } catch (e) { pendingPush = Promise.resolve(false); }
+      return pendingPush;
+    }
 
     function destForUser() {
       const pref = localStorage.getItem('fw_preferred_view');
@@ -400,7 +475,7 @@
       }
     }
 
-    async function connectSleeper() {
+    async function connectSleeperRun() {
       const input = document.getElementById('sleeperName');
       const username = input.value.trim();
       const btn = document.getElementById('btnSleeper');
@@ -415,10 +490,13 @@
           return;
         }
         const uname = user.username || username;
-        localStorage.setItem(AUTH_KEY, JSON.stringify({ username: uname, sleeperUserId: user.user_id, createdAt: new Date().toISOString() }));
+        // Both od_auth_v1 shapes ({username} and {sleeperUsername}), so every
+        // reader finds it.
+        localStorage.setItem(AUTH_KEY, JSON.stringify({ username: uname, sleeperUsername: uname, sleeperUserId: user.user_id, createdAt: new Date().toISOString() }));
         localStorage.setItem('od_locked_username_v2', uname);
         try { if (localStorage.getItem('wr_guest_v1') !== '1') patchProfile({ sleeperUsername: uname, sleeperUserId: user.user_id }); } catch (e) {}
         input.disabled = true;
+        pushToAccount();
         trackConnectEvent('sleeper_connected', uname, { sleeperUsername: uname });
         markLinked('sleeper', '@' + uname);
       } catch (err) {
@@ -427,7 +505,7 @@
       }
     }
 
-    async function connectMfl() {
+    async function connectMflRun() {
       const idInput = document.getElementById('mflLeagueId');
       const yearInput = document.getElementById('mflYear');
       const leagueId = idInput.value.trim().replace(/\D/g, '');
@@ -441,7 +519,9 @@
         // succeeded here (found 2026-09-25). Ask through our server relay
         // (the same mfl-proxy the app uses); fall back to a direct call only
         // when the relay itself can't be reached.
-        const mflUrl = `https://api.myfantasyleague.com/${encodeURIComponent(year)}/export?TYPE=league&L=${encodeURIComponent(leagueId)}&JSON=1`;
+        const mflKey = (document.getElementById('mflApiKey').value || '').trim();
+        const mflUrl = `https://api.myfantasyleague.com/${encodeURIComponent(year)}/export?TYPE=league&L=${encodeURIComponent(leagueId)}&JSON=1`
+          + (mflKey ? `&APIKEY=${encodeURIComponent(mflKey)}` : '');
         let data = null;
         let relayed = false;
         try {
@@ -463,10 +543,23 @@
           btn.disabled = false; btn.textContent = 'Connect MFL league';
           return;
         }
+        const sameLeague = localStorage.getItem('mfl_league_id') === leagueId && localStorage.getItem('mfl_year') === year;
+        const keptTeam = sameLeague ? localStorage.getItem('mfl_franchise_id') : null;
         localStorage.setItem('mfl_league_id', leagueId);
         localStorage.setItem('mfl_year', year);
         // A team saved from an earlier connect is not known to be this league's.
         try { localStorage.removeItem('mfl_franchise_id'); } catch (e) {}
+        // A private league's API key lives only for this app session (like
+        // the ESPN cookies); the app reads it from sessionStorage.
+        try { if (mflKey) { sessionStorage.setItem('mfl_api_key', mflKey); localStorage.removeItem('mfl_api_key'); } } catch (e) {}
+        // Reconnecting the same league (a private key that ended with the last
+        // app session): the team is already known — keep it and go back in.
+        if (RECONNECT === 'mfl' && keptTeam) {
+          idInput.disabled = true; yearInput.disabled = true;
+          mflPending = { leagueId, year, leagueName };
+          finishMfl(keptTeam, leagueName);
+          return;
+        }
         idInput.disabled = true; yearInput.disabled = true;
         mflPending = { leagueId, year, leagueName };
         // Which franchise is yours? Same step as ESPN — without it the app
@@ -514,10 +607,17 @@
         else localStorage.removeItem('mfl_franchise_id');
       } catch (e) {}
       document.getElementById('mflTeams').hidden = true;
+      pushToAccount();
       trackConnectEvent('mfl_connected', null, { mflLeagueId: mflPending.leagueId, teamPicked: franchiseId != null });
       markLinked('mfl', teamName || mflPending.leagueName);
       mflPending = null;
       if (mflAutoEnter) enterApp();
+    }
+
+    function toggleMflPrivate() {
+      const el = document.getElementById('mflPrivate');
+      el.classList.toggle('show');
+      if (el.classList.contains('show')) document.getElementById('mflApiKey').focus();
     }
 
     function toggleEspnPrivate() {
@@ -540,7 +640,7 @@
     let espnPending = null;      // { leagueId, year, leagueName } while a team is being picked
     let espnAutoEnter = false;   // came from the front door: go straight in once linked
 
-    async function connectEspn() {
+    async function connectEspnRun() {
       const idInput = document.getElementById('espnLeagueId');
       const yearInput = document.getElementById('espnYear');
       const typed = idInput.value;
@@ -634,27 +734,46 @@
         else localStorage.removeItem('espn_team_id');
       } catch (e) {}
       document.getElementById('espnTeams').hidden = true;
+      pushToAccount();
       trackConnectEvent('espn_connected', null, { espnLeagueId: espnPending.leagueId, teamPicked: teamId != null });
       markLinked('espn', teamName || espnPending.leagueName);
       espnPending = null;
       if (espnAutoEnter) enterApp();
     }
 
-    function enterApp() {
+    let entering = false;
+    async function enterAppRun() {
       if (!Object.keys(TABS).some(k => linked[k])) return;
+      if (entering) return;
+      entering = true;
       const platforms = Object.keys(TABS).filter(k => linked[k]);
-      patchProfile({ platforms, onboardingComplete: true });
+      // Reconnecting keeps the platforms already on the profile.
+      const prevPlatforms = RECONNECT ? (getProfile().platforms || []) : [];
+      patchProfile({ platforms: Array.from(new Set([...prevPlatforms, ...platforms])), onboardingComplete: true });
       let connectedName = null;
-      try { connectedName = (JSON.parse(localStorage.getItem(AUTH_KEY) || 'null') || {}).username || null; } catch (e) {}
-      trackConnectEvent('entered_app', connectedName, { platforms: platforms.join('+') });
+      try { const a = JSON.parse(localStorage.getItem(AUTH_KEY) || 'null') || {}; connectedName = a.sleeperUsername || a.username || null; } catch (e) {}
+      trackConnectEvent('entered_app', connectedName, { platforms: platforms.join('+'), ...(RECONNECT ? { reconnect: RECONNECT } : {}) });
       showAlert('success', 'You’re in! Loading Dynasty HQ…');
-      setTimeout(() => { window.location.href = destForUser(); }, 700);
+      // The account write must land before we leave (keepalive covers a
+      // slow one; the cap keeps a dead network from holding the user here).
+      const settle = (p) => (IDN ? IDN.settle(p, 4000) : Promise.resolve());
+      await Promise.all([settle(pushToAccount()), new Promise(r => setTimeout(r, 700))]);
+      window.location.href = destForUser();
     }
 
-    function signOut() {
+    // "Not you? Sign out": the same one clear as every other sign-out
+    // (DHQ-Shared identity.js signOutClear — credentials only; the Supabase
+    // session is dropped with local scope).
+    async function signOut() {
+      if (IDN) {
+        try { await IDN.signOutClear(); } catch (e) {}
+        window.location.href = 'landing.html';
+        return;
+      }
       try {
+        // identity.js missing (stale cache / partial deploy): credentials by
+        // hand; the handle cache stays, like every other sign-out.
         localStorage.removeItem(SESSION_KEY);
-        localStorage.removeItem(AUTH_KEY);
         localStorage.removeItem('od_session_v1');
         // Clear the guest flag too — landing.html forwards mid-setup guests
         // back here, so a lingering flag would trap them in a loop.
@@ -679,7 +798,7 @@
     // be skipped). Hold until they go in.
     try {
       window.App.LiveUpdate.hold('connect', () => !!(mflPending || espnPending || Object.keys(linked).some(k => linked[k]) ||
-        ['sleeperName', 'mflLeagueId', 'espnLeagueId', 'espnS2', 'espnSwid'].some(id => {
+        ['sleeperName', 'mflLeagueId', 'mflApiKey', 'espnLeagueId', 'espnS2', 'espnSwid'].some(id => {
           const el = document.getElementById(id);
           return el && !el.disabled && el.value.trim();
         })));
@@ -692,6 +811,68 @@
       if (id === 'mflLeagueId' || id === 'mflYear') connectMfl();
       if (id === 'espnLeagueId' || id === 'espnYear') connectEspn();
     });
+
+    // ── ?reconnect=espn|mfl — a private league whose cookies / API key
+    // ended with the last app session (the hub links here). Open that
+    // platform with the saved league filled in and the private fields shown.
+    const RECONNECT = (function () {
+      const r = new URLSearchParams(window.location.search).get('reconnect');
+      return r === 'espn' || r === 'mfl' ? r : null;
+    })();
+    (function reconnectPrivate() {
+      if (!RECONNECT) return;
+      try {
+        document.querySelector('.step').textContent = 'Reconnect';
+        document.querySelector('h1').textContent = RECONNECT === 'espn' ? 'Reconnect your ESPN league' : 'Reconnect your MFL league';
+        document.querySelector('.sub').textContent = 'Private leagues need their sign-in again after the app restarts. It stays only until you close the app.';
+      } catch (e) {}
+      pick(RECONNECT);
+      if (RECONNECT === 'espn') {
+        const id = localStorage.getItem('espn_league_id');
+        if (id) document.getElementById('espnLeagueId').value = id;
+        const y = localStorage.getItem('espn_year');
+        if (y) document.getElementById('espnYear').value = y;
+        document.getElementById('espnPrivate').classList.add('show');
+        espnAutoEnter = true;
+        setTimeout(() => { try { document.getElementById('espnS2').focus(); } catch (e) {} }, 50);
+      } else {
+        const id = localStorage.getItem('mfl_league_id');
+        if (id) document.getElementById('mflLeagueId').value = id;
+        const y = localStorage.getItem('mfl_year');
+        if (y) document.getElementById('mflYear').value = y;
+        document.getElementById('mflPrivate').classList.add('show');
+        mflAutoEnter = true;
+        setTimeout(() => { try { document.getElementById('mflApiKey').focus(); } catch (e) {} }, 50);
+      }
+    })();
+
+    // ── One-tap confirm of what this device remembers (identity.js) ──
+    // A fresh sign-in on a device from before owner stamping can't know whose
+    // cached handle / leagues these are, so they were set aside instead of
+    // used or uploaded. The user confirms (uploaded to the account) or not.
+    (function offerRemembered() {
+      const p = IDN && IDN.pendingConfirm ? IDN.pendingConfirm() : null;
+      if (!p) return;
+      const box = document.getElementById('confirmBox');
+      const list = document.getElementById('confirmList');
+      const add = (text) => { const li = document.createElement('li'); li.textContent = text; list.appendChild(li); };
+      if (p.handle) add('Sleeper: @' + p.handle);
+      if (p.mfl) add('MFL league ' + p.mfl.leagueId + ' (' + p.mfl.year + ')');
+      if (p.espn) add('ESPN league ' + p.espn.leagueId + ' (' + p.espn.year + ')');
+      box.hidden = false;
+      document.getElementById('confirmYes').addEventListener('click', () => holdBusy(async () => {
+        document.getElementById('confirmYes').disabled = true;
+        await IDN.settle(IDN.confirmPending(), 4000);
+        trackConnectEvent('remembered_confirmed', p.handle || null, { platforms: ['sleeper', 'mfl', 'espn'].filter(k => k === 'sleeper' ? p.handle : p[k]).join('+') });
+        window.location.href = destForUser();
+      }));
+      document.getElementById('confirmNo').addEventListener('click', () => {
+        IDN.dropPending();
+        box.hidden = true;
+        // Already has a league through the account (server handle): go in.
+        if (IDN.hasLeagueSource()) window.location.href = destForUser();
+      });
+    })();
 
     // ── Handoff from the one-page front door (owner ruling 2026-09-24) ──
     // landing.html's one box leaves a one-time note of what the visitor
