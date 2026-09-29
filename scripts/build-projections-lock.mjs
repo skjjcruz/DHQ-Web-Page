@@ -119,10 +119,16 @@ async function main() {
             const T = String(p.team || '').toUpperCase();
             const prev = existing && !existing.reconstructed && existing.scorings[key] && existing.scorings[key].players[pid];
             if (prev && started[T] && existing.players[pid]) { rows[pid] = prev; if (key === 'half') { out.players[pid] = existing.players[pid]; kept++; } continue; }
-            rows[pid] = [p.points.median, p.sleeper != null ? +p.sleeper.toFixed(2) : null];
+            // [typical week (graded), Sleeper, average week]
+            rows[pid] = [p.points.median, p.sleeper != null ? +p.sleeper.toFixed(2) : null, p.points.mean != null ? p.points.mean : p.points.median];
             if (key === 'half') {
                 const why = (p.baseline && p.baseline.why ? 'Baseline: ' + p.baseline.why + ' · ' : '') + (p.why || []).slice(0, 3).map(w => w.label + ' ' + (w.impactPct > 0 ? '+' : '') + w.impactPct + '%: ' + w.note).join(' · ');
-                out.players[pid] = { pos: p.position, team: T, opp: p.opponentAbbr || null, grade: p.grade, verdict: p.verdict, why: why.slice(0, 320), t: now.toISOString() };
+                // The injury tag and the Vegas line at lock time, so later
+                // audits can grade the Questionable calls and the game factor
+                // (audit of weeks 1-3 2026 could do neither).
+                const g = (p.input && p.input.game) || {};
+                out.players[pid] = { pos: p.position, team: T, opp: p.opponentAbbr || null, grade: p.grade, verdict: p.verdict, why: why.slice(0, 320), t: now.toISOString(),
+                    inj: (players[pid] && players[pid].injury_status) || null, imp: g.impliedTotal != null ? g.impliedTotal : null, spr: g.spread != null ? g.spread : null };
                 written++;
             }
         }
