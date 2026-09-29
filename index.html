@@ -41,7 +41,7 @@
     })();
     </script>
 
-    <meta name="dhq-build" content="b145-52864f43cf">
+    <meta name="dhq-build" content="b146-3fcfb5da9d">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, viewport-fit=cover">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://skjjcruz.github.io https://browser.sentry-cdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://sxshiqyxhhifvtfqawbq.supabase.co https://api.sleeper.app https://site.api.espn.com https://sports.core.api.espn.com https://api.myfantasyleague.com https://*.myfantasyleague.com https://lm-api-reads.fantasy.espn.com https://site.web.api.espn.com https://fantasysports.yahooapis.com https://api.fantasycalc.com https://*.sentry.io; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; object-src 'none';">
 
@@ -166,7 +166,7 @@
     <link rel="preload" as="script" href="vendor/supabase.min.js">
     <link rel="preload" as="script" href="vendor/react.production.min.js">
     <link rel="preload" as="script" href="vendor/react-dom.production.min.js">
-    <script src="js/shared/shared-loader.js?v=356c2c878c"></script>
+    <script src="js/shared/shared-loader.js?v=c072242079"></script>
     <!-- Season-rollover cache hygiene — must run early, before any surface reads caches. -->
     <script src="js/shared/season-guard.js?v=988bfb076d"></script>
     <!-- Native-shell external-link guard: outside links must never strand the WKWebView. -->
@@ -3169,7 +3169,8 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <!-- 0. Theme engine — must load before any widget/component (plain JS, no Babel needed) -->
 <script src="js/theme.js?v=e827d463e4"></script>
 <!-- 0b. Alex voice helper — seeded phrase variation + template-first AI upgrade (plain JS) -->
-<script src="js/shared/alex-voice.js?v=882d4f6ede"></script>
+<script src="js/shared/alex-voice.js?v=ebcfc86f18"></script>
+<script src="js/shared/alex-answer-chip.js?v=87899cf865"></script>
 <!-- (removed unused 'Press Start 2P' web font — it was a render-blocking request but referenced by no font-family) -->
 
 <!-- War Room modules — loaded in dependency order by Babel standalone -->
@@ -3196,12 +3197,13 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <!-- 2d. GM Mode helper (Phase 1) — window.WR.GmMode — canonical mode/preset source of truth -->
 <script src="js/shared/gm-mode.js?v=930ae4274e"></script>
 <script src="js/shared/startsit-engine.js?v=a579674752"></script>
+<script src="js/shared/startsit-verdict.js?v=c000cb6957"></script>
 <script src="js/shared/weekly-proj.js?v=d2a597a1e1"></script>
 <!-- One FAAB rule for every surface (budget AND, on Sleeper, waiver_type 2) — boot-loaded; before dashboard-digest.js. -->
 <script src="js/shared/faab-league.js?v=e5eb2cc3bd"></script>
 <script src="js/shared/sleeper-proj.js?v=fce29dbc33"></script>
-<script src="js/shared/dhq-proj.js?v=LAB141"></script>
-<script src="js/shared/nfl-context.js?v=LAB141"></script>
+<script src="js/shared/dhq-proj.js?v=2a35c3c5c0"></script>
+<script src="js/shared/nfl-context.js?v=59e742f647"></script>
 <script src="js/shared/matchup.js?v=ede3b76a3d"></script>
 <!-- League live scores + standings engines (C2 port 2026-09-27): one shared Sleeper
      scoreboard poller, the completed-week baseline, live standings. Plain JS,
@@ -3280,7 +3282,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <script src="js/components/chop-block-panel.js?v=8065ab0217"></script>
 <!-- Around the league (live scoreboard + standings) — must precede lineup.js in the group. -->
 <script type="text/wr-deferred" data-wr-defer="lineup" src="js/components/league-live-scoreboard.js?v=d7420b20bf"></script>
-<script type="text/wr-deferred" data-wr-defer="lineup" src="js/tabs/lineup.js?v=b34e292933"></script>
+<script type="text/wr-deferred" data-wr-defer="lineup" src="js/tabs/lineup.js?v=3b26adcfba"></script>
 <!-- The Wire — league newspaper (C2 port 2026-09-27). ONE deferred group
      'wire', injected when the league "The Wire" tab first opens (LeagueWireTabLazy
      in league-detail.js). Plain-JS engines ride as text/babel so every pipeline
@@ -3446,7 +3448,7 @@ window.addEventListener('appinstalled', () => {
 <!-- Deploy tag (owner ask 2026-08-19): a tiny always-visible build code so the
      owner can read back exactly which version his device is running before
      testing — kills the stale-cache guessing game. Bump the code every deploy. -->
-<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b145 · LAB141</div>
+<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b146 · LAB142</div>
 </body>
 </html>
 <!-- build 1774212614 -->
