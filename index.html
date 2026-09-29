@@ -41,6 +41,7 @@
     })();
     </script>
 
+    <meta name="dhq-build" content="b145-52864f43cf">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, viewport-fit=cover">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://skjjcruz.github.io https://browser.sentry-cdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://sxshiqyxhhifvtfqawbq.supabase.co https://api.sleeper.app https://site.api.espn.com https://sports.core.api.espn.com https://api.myfantasyleague.com https://*.myfantasyleague.com https://lm-api-reads.fantasy.espn.com https://site.web.api.espn.com https://fantasysports.yahooapis.com https://api.fantasycalc.com https://*.sentry.io; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; object-src 'none';">
 
@@ -52,29 +53,65 @@
     (function () {
       try {
         if (['localhost', '127.0.0.1'].includes(window.location.hostname)) return;
-        var sess = JSON.parse(localStorage.getItem('fw_session_v1') || 'null');
-        var token = sess && sess.token;
-        var ok = false;
-        if (token && typeof token === 'string' && token.split('.').length === 3) {
+        // Decode-only JWT payload (never trusted for auth — the server does that).
+        function decodeJwt(t) {
+          if (!t || typeof t !== 'string' || t.split('.').length !== 3) return null;
           try {
-            var part = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+            var part = t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
             var padded = part.length % 4 ? part + '='.repeat(4 - (part.length % 4)) : part;
-            var payload = JSON.parse(decodeURIComponent(window.atob(padded).split('').map(function (c) {
+            return JSON.parse(decodeURIComponent(window.atob(padded).split('').map(function (c) {
               return '%' + c.charCodeAt(0).toString(16).padStart(2, '0');
             }).join('')));
-            ok = !payload.exp || Number(payload.exp) * 1000 > Date.now();
-          } catch (e) { ok = false; }
+          } catch (e) { return null; }
         }
+        var sess = JSON.parse(localStorage.getItem('fw_session_v1') || 'null');
+        var token = sess && sess.token;
+        var payload = decodeJwt(token);
+        var ok = !!payload && (!payload.exp || Number(payload.exp) * 1000 > Date.now());
         // Guest lane: a guest with a connected league enters without a JWT
         // (local-only, free tier; server features stay signed-out). An
         // MFL-only guest has no od_auth_v1 — the league id is their proof
         // (owner bug report 2026-08-31).
         var isGuest = false;
         try { isGuest = localStorage.getItem('wr_guest_v1') === '1'; } catch (e) {}
+        // Legacy Sleeper login (login.html) keeps the same JWT in fw_session_v1
+        // and od_session_v1. A 2026-09 client bug deleted fw_session_v1 for
+        // those users (their token got a 401 from fw-refresh-session), so this
+        // gate then bounced them to landing.html and wiped od_auth_v1 — a
+        // forced re-sign-in. Re-hydrate fw_session_v1 from a still-live legacy
+        // copy (sleeper_username claim, no user_id, unexpired) in login.html's
+        // exact shape. Never from an expired token, never over an app-account
+        // session (those keep their own expiry path below), never for a guest
+        // tab. The shared client (ensureFreshAppSession) does the same for
+        // localhost, where this gate returns early.
+        // Only this device's own legacy login is re-hydrated: the identity
+        // owner stamp (DHQ-Shared identity.js) must be that handle's — a
+        // leftover od_session_v1 from another person must not sign them in.
+        // No stamp = a device from before stamping (the bitten users above).
+        var stamp = null;
+        try { stamp = localStorage.getItem('dhq_identity_owner_v1'); } catch (e) {}
+        if (!ok && !isGuest && !(payload && payload.app_metadata && payload.app_metadata.user_id)) {
+          try {
+            var legacy = JSON.parse(localStorage.getItem('od_session_v1') || 'null');
+            var lp = decodeJwt(legacy && legacy.token);
+            var meta = lp && lp.app_metadata;
+            var legacyLive = !!lp && typeof lp.exp === 'number' && lp.exp * 1000 > Date.now();
+            var stampOk = !stamp || (meta && typeof meta.sleeper_username === 'string' && stamp === 'legacy:' + meta.sleeper_username.toLowerCase());
+            if (legacyLive && stampOk && meta && typeof meta.sleeper_username === 'string' && meta.sleeper_username && !meta.user_id) {
+              sess = {
+                token: legacy.token,
+                expiresAt: legacy.expiresAt || new Date(lp.exp * 1000).toISOString(),
+                user: { sleeperUsername: meta.sleeper_username, isGifted: !!(legacy.isGifted || meta.is_gifted) },
+              };
+              localStorage.setItem('fw_session_v1', JSON.stringify(sess));
+              ok = true;
+            }
+          } catch (e) {}
+        }
         if (!ok && isGuest) {
           try {
             var ga = JSON.parse(localStorage.getItem('od_auth_v1') || 'null');
-            if ((ga && ga.username) || localStorage.getItem('mfl_league_id')) ok = true;
+            if ((ga && (ga.username || ga.sleeperUsername)) || localStorage.getItem('mfl_league_id') || localStorage.getItem('espn_league_id')) ok = true;
           } catch (e) {}
         }
         if (!ok) {
@@ -82,9 +119,24 @@
           // marketing page, and never with their keys wiped (an app relaunch
           // between tapping Guest and connecting a league hit this path).
           if (isGuest) { window.location.replace('connect-sleeper.html'); return; }
-          try { localStorage.removeItem('od_auth_v1'); } catch (e) {}
-          if (sess && !ok) { try { localStorage.removeItem('fw_session_v1'); } catch (e) {} }
-          window.location.replace('landing.html');
+          // The dead token is a credential and goes. The identity cache
+          // (od_auth_v1 & co.) is NOT touched: a handle is not a credential,
+          // and wiping it here stranded every user whose 7-day token lapsed.
+          // The owner stamp keeps it safe for whoever signs in next.
+          // Before the token goes: record whose identity cache this is (the
+          // same owner signing back in then keeps it — identity.js).
+          if (!stamp && payload && payload.app_metadata) {
+            var ownerStamp = payload.app_metadata.user_id ? 'account:' + payload.app_metadata.user_id
+              : (typeof payload.app_metadata.sleeper_username === 'string' && payload.app_metadata.sleeper_username ? 'legacy:' + payload.app_metadata.sleeper_username.toLowerCase() : null);
+            if (ownerStamp) { try { localStorage.setItem('dhq_identity_owner_v1', ownerStamp); stamp = ownerStamp; } catch (e) {} }
+          }
+          if (sess) { try { localStorage.removeItem('fw_session_v1'); } catch (e) {} }
+          // A lapsed legacy (Sleeper-username) login signs back in on
+          // login.html; an account on landing's sign-in sheet (?reauth).
+          var legacyName = (payload && payload.app_metadata && !payload.app_metadata.user_id && payload.app_metadata.sleeper_username) || '';
+          if (legacyName) { window.location.replace('login.html?for=' + encodeURIComponent(legacyName)); return; }
+          var hadAccount = !!(sess && sess.token) || (!!stamp && stamp.indexOf('account:') === 0);
+          window.location.replace(hadAccount ? 'landing.html?reauth=1' : 'landing.html');
         }
       } catch (e) {}
     })();
@@ -114,7 +166,7 @@
     <link rel="preload" as="script" href="vendor/supabase.min.js">
     <link rel="preload" as="script" href="vendor/react.production.min.js">
     <link rel="preload" as="script" href="vendor/react-dom.production.min.js">
-    <script src="js/shared/shared-loader.js?v=c84baabc7a"></script>
+    <script src="js/shared/shared-loader.js?v=356c2c878c"></script>
     <!-- Season-rollover cache hygiene — must run early, before any surface reads caches. -->
     <script src="js/shared/season-guard.js?v=988bfb076d"></script>
     <!-- Native-shell external-link guard: outside links must never strand the WKWebView. -->
@@ -164,6 +216,7 @@ const WR_SHARED_FILES = [
   'event-bus.js',
   'platform-provider.js',
   'sleeper-api.js',
+  'identity.js',
   'supabase-client.js',
   'tier.js',
   'pick-value-model.js',
@@ -2473,6 +2526,30 @@ WRShared.preloadMany(WR_SHARED_FILES);
            its inline left:80px was desktop-sidebar clearance. */
         .wr-corner-toast { bottom:calc(12px + var(--wr-bottom-inset)) !important; right:12px !important; }
         .wr-dhq-bubble { bottom:calc(12px + var(--wr-bottom-inset)) !important; left:12px !important; right:12px !important; min-width:0 !important; }
+        /* DHQ bubble → slim progress strip (phone audit B): the desktop card
+           covered ~140px of content for the whole build and sat on z 300,
+           ABOVE bottom sheets (200). Here it drops under the sheet/action-bar
+           layers, loses the long explainer, and gains a × (JSX renders it
+           display:none; shown only here). Title + step + bar are kept. */
+        .wr-dhq-bubble { bottom:calc(8px + var(--wr-bottom-inset)) !important; z-index:140 !important; padding:7px 6px 8px 12px !important; border-width:1px !important; border-radius:var(--card-radius-sm, 8px) !important; box-shadow:0 4px 16px rgba(0,0,0,0.5) !important; }
+        .wr-dhq-bubble-head { gap:8px !important; margin-bottom:6px !important; }
+        .wr-dhq-bubble-spin { width:14px !important; height:14px !important; flex:none; }
+        .wr-dhq-bubble-text { flex:1 1 auto; min-width:0; }
+        .wr-dhq-bubble-title { font-size:var(--text-label, 0.75rem) !important; line-height:1.25; }
+        .wr-dhq-bubble-step { font-size:var(--text-label, 0.75rem) !important; line-height:1.25; margin-top:1px !important; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .wr-dhq-bubble-note { display:none !important; }
+        .wr-dhq-bubble-close { display:inline-flex !important; align-items:center; justify-content:center; flex:none; width:36px; height:36px; margin:-6px 0 -6px 0; padding:0; background:none; border:0; color:var(--silver); opacity:0.7; font-size:0.9rem; cursor:pointer; }
+
+        /* Build tag (#dhq-build-tag, end of <body>): its desktop bottom-right
+           corner lands on the dock's last label and on sheet footers here.
+           Ride just above the dock instead. The league shell's .app-container
+           is its own z:1 stacking context (sheets, strip and toasts all live
+           inside it), so no z-index can slot the tag beneath them — step it
+           aside instead while any bottom-anchored overlay is up. */
+        body:has(.wr-phone-dock) #dhq-build-tag { bottom:calc(var(--wr-bottom-inset) + 2px) !important; right:4px !important; }
+        /* The franchise board's bottom bar (no league dock): same lift, clear of the home indicator. */
+        body:has(.hub-bottombar):not(:has(.wr-phone-dock)) #dhq-build-tag { bottom:calc(var(--sab, 0px) + 68px) !important; right:4px !important; }
+        body:has(.wr-sheet-backdrop, [aria-modal="true"], .wr-alex-panel, .wr-dhq-bubble, .wr-phone-actionbar, .wr-corner-toast, .wr-settings-modal) #dhq-build-tag { visibility:hidden !important; }
 
         /* iOS zoom-on-focus guard: Safari zooms any focused input under
            16px. Phone tier only (plan D7). */
@@ -2572,6 +2649,19 @@ WRShared.preloadMany(WR_SHARED_FILES);
            token in JS; the class-styled roots normalize here. */
         .fa-page { padding-left: var(--wr-phone-gutter, 12px) !important; padding-right: var(--wr-phone-gutter, 12px) !important; }
         .draft-cc-scope { padding-left: var(--wr-phone-gutter, 12px) !important; padding-right: var(--wr-phone-gutter, 12px) !important; }
+        /* GM's Office (+ its Strategy sub-view) and Trophy Room / Calendar
+           roots shipped with no side padding — first letters sat on the
+           screen edge. Same gutter as Draft / Analytics. */
+        .gm-office-shell, .trophy-room-root { padding-left: var(--wr-phone-gutter, 12px) !important; padding-right: var(--wr-phone-gutter, 12px) !important; box-sizing: border-box; }
+        /* Trophy Room › All-Time Leaders snap strip: tiles sized so ~2.4 fit
+           — the third tile clearly peeks (reads as "swipe") instead of being
+           shaved a few px short of whole. */
+        .wr-kpi-strip.tr-leaders-strip > * { flex: 0 0 calc((100% - 16px) / 2.4); min-width: 0; box-sizing: border-box; }
+        /* Same peek for the other swipe strips that showed only a sliver of
+           the next tile (read as cut, not "swipe"): GM's Office KPIs and the
+           Trophy Room strips (All-Time stats banner, My Trophies stats,
+           Chronicles RS record). */
+        .wr-kpi-strip.gmoff-kpis > *, .trophy-room-root .wr-kpi-strip > * { flex: 0 0 calc((100% - 16px) / 2.4); min-width: 0; box-sizing: border-box; }
 
         /* dvh audit (plan Phase 3): full-height overlay tracks the visual
            viewport so Safari's collapsing URL bar can't clip the bottom.
@@ -2933,12 +3023,127 @@ WRShared.preloadMany(WR_SHARED_FILES);
          payload downloads + parses. ReactDOM.render replaces it on mount. -->
     <div id="root">
         <style>@keyframes wr-boot-pulse{0%,100%{opacity:.35}50%{opacity:1}}</style>
-        <div style="min-height:80vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px">
+        <div id="wr-boot-splash" style="min-height:80vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px">
             <img src="icon-192.png" alt="" width="56" height="56" style="border-radius:14px">
             <div class="wr-wordmark" style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;letter-spacing:.12em;color:var(--gold)">DYNASTY HQ</div>
             <div style="font-size:13px;color:var(--silver);animation:wr-boot-pulse 1.4s ease-in-out infinite">Opening the war room…</div>
         </div>
     </div>
+    <!-- Boot guard (deploy safety, 2026-09-28): the splash above must never be a
+         dead end. Records which scripts failed to load (capture-phase error
+         listener: everything below this point), and if the app does not mount —
+         the bootstrap check at the end of <body> calls __dhqBoot.fail(), or the
+         splash is still up after 25s — it reports a client_error, retries ONCE
+         with a cache-busting reload (sessionStorage guard: no loops), then shows
+         a Reload button. Error recovery, not an update banner. -->
+    <script>
+    (function () {
+        var failed = [], done = false, t0 = Date.now(), KEY = 'dhq_boot_retry_v1';
+        // Same row shape / endpoint as connect-sleeper.html's trackConnectEvent.
+        // sendBeacon can't carry the apikey + JSON content-type PostgREST needs,
+        // so this is a keepalive fetch (survives the retry navigation).
+        var TRACK_URL = 'https://sxshiqyxhhifvtfqawbq.supabase.co/rest/v1/analytics_events';
+        var TRACK_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4c2hpcXl4aGhpZnZ0ZnFhd2JxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3MTExMzAsImV4cCI6MjA4ODI4NzEzMH0.zJi9W986ZLaANiZN6pt6ReFwaQU6yPeidsERIWo2ibI';
+        window.addEventListener('error', function (e) {
+            var el = e && e.target, u = el && el !== window && (el.tagName === 'SCRIPT' || el.tagName === 'LINK') ? (el.src || el.href) : '';
+            if (u && failed.indexOf(u) < 0 && failed.length < 20) failed.push(u);
+        }, true);
+        function failedUrls() {
+            var out = failed.slice();
+            try { // Chromium also records the status of scripts that failed before this listener
+                performance.getEntriesByType('resource').forEach(function (r) {
+                    if (r.initiatorType === 'script' && r.responseStatus >= 400 && out.indexOf(r.name) < 0) out.push(r.name);
+                });
+            } catch (e) {}
+            return out.slice(0, 20);
+        }
+        // Still parsing: the last script in the document is the one the parser waits on (a hung request).
+        function blockedOn() {
+            if (document.readyState !== 'loading') return null;
+            var s = document.scripts[document.scripts.length - 1];
+            return s && s.src ? rel(s.src) : null;
+        }
+        function build() { var m = document.querySelector('meta[name="dhq-build"]'); return m ? m.content : null; }
+        function rel(u) { try { var x = new URL(u, location.href); return x.origin === location.origin ? x.pathname.replace(/^\//, '') + x.search : u; } catch (e) { return u; } }
+        function report(reason, list, attempt) {
+            if (!build()) return; // local dev: no deploy to report on
+            var sid;
+            try {
+                sid = sessionStorage.getItem('od_analytics_session_v1');
+                if (!sid) { sid = 'sess_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8); sessionStorage.setItem('od_analytics_session_v1', sid); }
+            } catch (e) { sid = 'sess_' + Date.now().toString(36); }
+            try {
+                fetch(TRACK_URL, {
+                    method: 'POST', keepalive: true,
+                    headers: { apikey: TRACK_KEY, Authorization: 'Bearer ' + TRACK_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+                    body: JSON.stringify([{
+                        event_id: 'evt_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10),
+                        username: null, league_id: null, session_id: sid, platform: 'warroom', module: 'boot', widget: null,
+                        event_name: 'client_error', event_ts: new Date().toISOString(), entity_type: 'error', entity_id: 'boot-recovery',
+                        metadata: {
+                            source: 'boot-recovery', errorName: 'ModuleLoadError', handled: true, reason: reason,
+                            failed: list.map(rel), build: build(), attempt: attempt, route: location.pathname,
+                            online: navigator.onLine, visible: document.visibilityState, secs: Math.round((Date.now() - t0) / 1000),
+                            blockedOn: blockedOn(),
+                        },
+                    }]),
+                }).catch(function () {});
+            } catch (e) {}
+        }
+        // Auto-retries in the last 10 min of this tab. Unreadable storage → treat as
+        // already retried (a reload loop is worse than one extra tap).
+        function retries() {
+            try { var r = JSON.parse(sessionStorage.getItem(KEY) || 'null'); return r && Date.now() - r.at < 600000 ? r.n : 0; } catch (e) { return 1; }
+        }
+        function markRetry(n) {
+            try { sessionStorage.setItem(KEY, JSON.stringify({ n: n, at: Date.now() })); return retries() === n; } catch (e) { return false; }
+        }
+        // Re-fetch what failed so a cached 404 / stale copy is replaced, then
+        // reload past any cached page (?lu= is tidied off by live-update.js).
+        function reload(list) {
+            var ps = list.map(function (u) { return fetch(u, { cache: 'reload', credentials: 'same-origin' }).catch(function () {}); });
+            Promise.race([Promise.all(ps), new Promise(function (r) { setTimeout(r, 8000); })]).then(function () {
+                var q = location.search.replace(/[?&]lu=[^&]*/g, '').replace(/^&/, '?');
+                location.replace(location.pathname + (q ? q + '&' : '?') + 'lu=boot' + Date.now().toString(36) + location.hash);
+            });
+        }
+        function show(retrying) {
+            var root = document.getElementById('root');
+            if (!root) return;
+            root.innerHTML = '<div style="min-height:80vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;text-align:center">' +
+                '<img src="icon-192.png" alt="" width="56" height="56" style="border-radius:var(--card-radius-lg, 14px)">' +
+                '<div style="font-size:17px;font-weight:700;color:var(--white, #fff)">' + (retrying ? 'Reloading Dynasty HQ…' : 'Dynasty HQ didn’t finish loading') + '</div>' +
+                (retrying ? '' : '<div style="font-size:13px;line-height:1.5;color:var(--silver, #aaa);max-width:320px">A new version may still be arriving, or the connection dropped. Reload to try again.</div>' +
+                    '<button type="button" id="wr-boot-reload" style="padding:10px 24px;background:var(--gold, #D4AF37);color:#0a0a0a;border:none;border-radius:var(--card-radius-sm, 8px);font-size:14px;font-weight:700;cursor:pointer">Reload</button>') +
+                '</div>';
+            var b = document.getElementById('wr-boot-reload');
+            if (b) b.onclick = function () { b.disabled = true; b.textContent = 'Reloading…'; reload(failedUrls()); };
+        }
+        // Acts after a short beat: if the pre-paint gate (or anything else) is
+        // already navigating away, this document unloads first and nothing runs.
+        function fail(reason) {
+            if (done) return;
+            done = true;
+            setTimeout(function () {
+                var list = failedUrls(), n = retries();
+                report(reason, list, n + 1);
+                if (n < 1 && navigator.onLine !== false && markRetry(n + 1)) { show(true); reload(list); return; }
+                show(false);
+            }, 1500);
+        }
+        // Splash watchdog: 25s, plus up to 20s more while the parser is still
+        // fetching scripts (a slow connection, not a failure). A hidden tab waits.
+        function watch() {
+            if (done) return;
+            if (!document.getElementById('wr-boot-splash')) { try { sessionStorage.removeItem(KEY); } catch (e) {} return; } // mounted
+            var slow = document.readyState === 'loading' && Date.now() - t0 < 45000;
+            if (document.visibilityState === 'hidden' || slow) { setTimeout(watch, 5000); return; }
+            fail('splash-timeout');
+        }
+        setTimeout(watch, 25000);
+        window.__dhqBoot = { fail: fail, failed: failedUrls };
+    })();
+    </script>
 
 <script src="vendor/supabase.min.js?v=7d46902303"></script>
 <script>window.supabase||document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.101.1/dist/umd/supabase.min.js"><\/script>')</script>
@@ -2949,7 +3154,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <script>window._sharedCanAccess = window.canAccess;</script>
 <!-- Scout-free vs Pro gate: wrIsPro() + chrome + lock card; boots loadUserTier().
      Must run after the shared tier chain above, before any tab code. -->
-<script src="js/shared/pro-gate.js?v=b9dd138f67"></script>
+<script src="js/shared/pro-gate.js?v=d304c3e6bd"></script>
 <script src="js/pro-launch.js?v=c9f18a7f5e"></script>
 <!-- Billing shim (web-only build): keeps the window.DHQBilling API surface;
      purchases route to Stripe via upgrade.html (in-app purchase is iOS-app-only). -->
@@ -2969,40 +3174,49 @@ WRShared.preloadMany(WR_SHARED_FILES);
 
 <!-- War Room modules — loaded in dependency order by Babel standalone -->
 <!-- 1. Core: tier system, React hooks, fetch helpers (everything depends on this) -->
-<script src="js/core.js?v=88b009d0ab"></script>
+<script src="js/core.js?v=2bde7f1dec"></script>
 <!-- 1a. Central data-sync manager — window.WR.Sync — stale-while-revalidate on tab return + in-season interval (plain JS) -->
 <script src="js/shared/sync-manager.js?v=e53de045e9"></script>
 <!-- 1a2. Shared viewport seam — WR.useViewport() hook + WR.viewport() snapshot (plain JS; must precede components.js and all tab files) -->
 <script src="js/shared/viewport.js?v=7629d5e214"></script>
-<script src="js/shared/update-sentinel.js?v=fbd5926e66"></script>
+<!-- 1a3. Live update — picks up a new deploy in a running page / resumed app (plain JS; replaces update-sentinel.js) -->
+<script src="js/shared/live-update.js?v=76a854447b"></script>
 <!-- 1b. Format/phase skin contract for league-type-aware modules -->
 <script src="js/league-skin.js?v=c80effc41c"></script>
 <!-- 2. Shared components: UpgradeGate, GMMessage, PlayerInlineCard -->
-<script src="js/components.js?v=9f691e0c3b"></script>
+<script src="js/components.js?v=aab6aa5c57"></script>
 <!-- 2b. Unified Player Card (SI-2) — window.WR.openPlayerCard — replaces CDN modal -->
 <!-- Shared visual primitives (WR.Card / Badge / Chip / ConfChip / DeltaLine / Kpi / InsightCard) -->
-<script src="js/components/wr-primitives.js?v=402be1b81d"></script>
-    <script src="js/components/player-card.js?v=LAB124"></script>
+<script src="js/components/wr-primitives.js?v=eca7961542"></script>
+    <script src="js/components/player-card.js?v=7fb5402d76"></script>
 <!-- 2c. Saved List Views (SI-1) — window.WR.SavedViews — shared across list surfaces -->
 <script src="js/shared/saved-views.js?v=75e7680585"></script>
 <!-- 2c-2. Saved Alex Reports — window.WR.SavedReports — local cache + ai_analysis server sync -->
 <script src="js/shared/saved-reports.js?v=c0601d4b86"></script>
 <!-- 2d. GM Mode helper (Phase 1) — window.WR.GmMode — canonical mode/preset source of truth -->
-<script src="js/shared/gm-mode.js?v=4e60342750"></script>
-<script src="js/shared/startsit-engine.js?v=35b259534b"></script>
-<script src="js/shared/weekly-proj.js?v=LAB114"></script>
+<script src="js/shared/gm-mode.js?v=930ae4274e"></script>
+<script src="js/shared/startsit-engine.js?v=a579674752"></script>
+<script src="js/shared/weekly-proj.js?v=d2a597a1e1"></script>
+<!-- One FAAB rule for every surface (budget AND, on Sleeper, waiver_type 2) — boot-loaded; before dashboard-digest.js. -->
+<script src="js/shared/faab-league.js?v=e5eb2cc3bd"></script>
 <script src="js/shared/sleeper-proj.js?v=fce29dbc33"></script>
-<script src="js/shared/dhq-proj.js?v=LAB128"></script>
-<script src="js/shared/nfl-context.js?v=LAB128"></script>
-<script src="js/shared/matchup.js?v=770ee90e33"></script>
+<script src="js/shared/dhq-proj.js?v=LAB141"></script>
+<script src="js/shared/nfl-context.js?v=LAB141"></script>
+<script src="js/shared/matchup.js?v=ede3b76a3d"></script>
+<!-- League live scores + standings engines (C2 port 2026-09-27): one shared Sleeper
+     scoreboard poller, the completed-week baseline, live standings. Plain JS,
+     loaded at boot because The Wire (league-wide) consumes them too. -->
+<script src="js/shared/league-live-scores.js?v=f6653defa9"></script>
+<script src="js/shared/league-live-standings.js?v=4dbe1e7867"></script>
+<script src="js/shared/league-live-table.js?v=eaafffa4e4"></script>
 <!-- Season Odds engines (lab port 2026-08-16): plain Node-testable scripts —
      the luck ledger feeds the playoff Monte Carlo, so luck loads first. -->
 <script src="js/shared/luck-engine.js?v=21984470ab"></script>
-<script src="js/shared/chopped.js?v=LAB126"></script>
-<script src="js/shared/chop-odds.js?v=LAB126"></script>
-<script src="js/shared/playoff-odds.js?v=LAB125"></script>
-<script src="js/shared/faab-engine.js?v=cb7b06413d"></script>
-<script src="js/utils/schedule-engine.js?v=LAB123"></script>
+<script src="js/shared/chopped.js?v=a0cc781b90"></script>
+<script src="js/shared/chop-odds.js?v=cf44609086"></script>
+<script src="js/shared/playoff-odds.js?v=9b2c46bc64"></script>
+<script src="js/shared/faab-engine.js?v=df25bae4ed"></script>
+<script src="js/utils/schedule-engine.js?v=042613eb29"></script>
 <script src="js/utils/gamelog-engine.js?v=038341a613"></script>
 <script src="js/shared/draft-gameplan.js?v=4c5de549f0"></script>
 <!-- 2e. Alex behavioral-insight settings — window.WR.AlexSettings — shared tuning for every Alex surface -->
@@ -3017,7 +3231,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
 
 <script src="js/shared/wr-ai-context.js?v=fd5d4d67e3"></script>
 <!-- Feedback hub — floating launcher, bug reports + crash capture, feature voting board -->
-<script src="js/shared/feedback-hub.js?v=06379ae9b6"></script>
+<script src="js/shared/feedback-hub.js?v=a53319b783"></script>
 <!-- NFL draft capital dataset — window.WR_DRAFT_PROFILE — static historical
      [year, round, overall, team] by Sleeper id (Sleeper's API has none).
      Regenerate with scripts/build-draft-profile.cjs. -->
@@ -3038,28 +3252,57 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <!-- Player Brief shared block — the layered summary box with composed-at stamp, mounted by the player card + My Roster (window.WR.PlayerBriefBlock). -->
 <script src="js/components/player-brief-block.js?v=1a4eda3c23"></script>
 <!-- Alex's Desk — cross-league AI digest card for the hub (window.WR.DashboardDigestCard) -->
-<script src="js/tabs/dashboard-digest.js?v=f7e1661ca5"></script>
+<script src="js/tabs/dashboard-digest.js?v=231bc59d0e"></script>
 <!-- 2i. Per-league transaction cache — window.WrTxns — cross-league activity + DNA substrate -->
 <script src="js/shared/txn-store.js?v=1976999bb6"></script>
 <!-- 3. Shared utilities: player valuation constants + projection engine -->
 <script src="js/utils/sos-engine.js?v=a988d9091c"></script>
-<script src="js/utils/player-value.js?v=LAB114"></script>
+<script src="js/utils/player-value.js?v=192d4c74f1"></script>
 <!-- 4. Feature modules (no internal dependencies between these) -->
 <!-- data-wr-defer scripts are DEFERRED: emitted INERT (type="text/wr-deferred" by
      every build/serve pipeline) so the browser does NOT parse/execute them at app
      boot. js/module-loader.js injects executable copies, in DOM order within each
      group, when the owning surface first calls wrLoadModuleGroup('<group>'). -->
-<script src="js/module-loader.js?v=b16c21d6f6"></script>
-<script src="js/settings.js?v=d5f6229eee"></script>
-<script type="text/wr-deferred" data-wr-defer="trade" src="js/trade-calc.js?v=801997c835"></script>
+<script src="js/module-loader.js?v=fa2c63b653"></script>
+<script src="js/settings.js?v=c3853b3b1b"></script>
+<script type="text/wr-deferred" data-wr-defer="trade" src="js/trade-calc.js?v=8037cf5de4"></script>
 <script src="js/lab-cutdown.js?v=cd15d7635f"></script>
 <script src="js/post-draft.js?v=61bcda3c71"></script>
-<script type="text/wr-deferred" data-wr-defer="fa" src="js/free-agency.js?v=LAB114"></script>
+<!-- FA waiver tools (C2 wave): stat catalog + stat math, market display helpers, waiver engine (fa group, before free-agency.js) -->
+<script type="text/wr-deferred" data-wr-defer="fa" src="js/shared/stat-catalog.js?v=e7821fa56c"></script>
+<script type="text/wr-deferred" data-wr-defer="fa" src="js/shared/league-stats.js?v=74bdf331a4"></script>
+<script type="text/wr-deferred" data-wr-defer="fa" src="js/shared/fa-market-data.js?v=264211d258"></script>
+<script type="text/wr-deferred" data-wr-defer="fa" src="js/shared/waiver-tools.js?v=cbc8033308"></script>
+<script type="text/wr-deferred" data-wr-defer="fa" src="js/free-agency.js?v=e6ce882bc9"></script>
 <!-- Season Odds panel loads with Game Day (owner ruling 2026-07-30) — must
      precede lineup.js in the group so window.WrSeasonOdds exists on first render. -->
-<script type="text/wr-deferred" data-wr-defer="lineup" src="js/components/season-odds-panel.js?v=LAB125"></script>
-<script src="js/components/chop-block-panel.js?v=LAB126"></script>
-<script type="text/wr-deferred" data-wr-defer="lineup" src="js/tabs/lineup.js?v=LAB126"></script>
+<script type="text/wr-deferred" data-wr-defer="lineup" src="js/components/season-odds-panel.js?v=ee14abac74"></script>
+<script src="js/components/chop-block-panel.js?v=8065ab0217"></script>
+<!-- Around the league (live scoreboard + standings) — must precede lineup.js in the group. -->
+<script type="text/wr-deferred" data-wr-defer="lineup" src="js/components/league-live-scoreboard.js?v=d7420b20bf"></script>
+<script type="text/wr-deferred" data-wr-defer="lineup" src="js/tabs/lineup.js?v=b34e292933"></script>
+<!-- The Wire — league newspaper (C2 port 2026-09-27). ONE deferred group
+     'wire', injected when the league "The Wire" tab first opens (LeagueWireTabLazy
+     in league-detail.js). Plain-JS engines ride as text/babel so every pipeline
+     keeps them inert until then. Order: styles, engines (chronicles before
+     journal), then JSX (rivalries/studio/portfolio before league-wire).
+     stat-catalog.js is ALSO in the 'fa' group with the identical src — the
+     module loader runs a src once per page, whichever group asks first. -->
+<script type="text/wr-deferred" data-wr-defer="wire" src="js/components/league-wire-styles.js?v=b2cf662c9d"></script>
+<script type="text/wr-deferred" data-wr-defer="wire" src="js/shared/stat-catalog.js?v=e7821fa56c"></script>
+<script type="text/wr-deferred" data-wr-defer="wire" src="js/shared/league-wire-chronicles.js?v=bbff5109fb"></script>
+<script type="text/wr-deferred" data-wr-defer="wire" src="js/shared/league-wire-cache.js?v=7d1d76d4b4"></script>
+<script type="text/wr-deferred" data-wr-defer="wire" src="js/shared/league-wire-reading.js?v=878fbca95c"></script>
+<script type="text/wr-deferred" data-wr-defer="wire" src="js/shared/league-wire-rivalries.js?v=90af9828bd"></script>
+<script type="text/wr-deferred" data-wr-defer="wire" src="js/shared/league-wire-graphics.js?v=41e7baaab1"></script>
+<script type="text/wr-deferred" data-wr-defer="wire" src="js/shared/league-wire-playoffs.js?v=186d5ce73c"></script>
+<script type="text/wr-deferred" data-wr-defer="wire" src="js/shared/league-wire-journal.js?v=e230722012"></script>
+<script type="text/wr-deferred" data-wr-defer="wire" src="js/shared/league-wire-portfolio.js?v=28271403ec"></script>
+<script type="text/wr-deferred" data-wr-defer="wire" src="js/shared/league-wire-nfl.js?v=627d55f7c6"></script>
+<script type="text/wr-deferred" data-wr-defer="wire" src="js/components/league-wire-rivalries.js?v=d1406032f8"></script>
+<script type="text/wr-deferred" data-wr-defer="wire" src="js/components/league-wire-studio.js?v=a0ba2aa9b9"></script>
+<script type="text/wr-deferred" data-wr-defer="wire" src="js/components/league-wire-portfolio.js?v=96d4d0acf6"></script>
+<script type="text/wr-deferred" data-wr-defer="wire" src="js/components/league-wire.js?v=67155b5678"></script>
 <!-- 4b. Draft Command Center modules — group "draft" (~28 scripts, ~1.26MB),
      loaded on first Draft-tab open. -->
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/styles.js?v=456c35bb55"></script>
@@ -3085,44 +3328,44 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/persistence.js?v=ba612d56b3"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/scenarios.js?v=8317ff1149"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/ghost-replay.js?v=867f51c3df"></script>
-<script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/live-sync.js?v=5ff4940def"></script>
+<script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/live-sync.js?v=fed4c6aef0"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/live-decision-engine.js?v=90b271dbe2"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/analyst-mock.js?v=91b4e236cd"></script>
-<script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/command-center.js?v=de229ea928"></script>
-<script type="text/wr-deferred" data-wr-defer="draft" src="js/draft-room.js?v=b70369e131"></script>
+<script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/command-center.js?v=591d2ff671"></script>
+<script type="text/wr-deferred" data-wr-defer="draft" src="js/draft-room.js?v=90ef5a660f"></script>
 <!-- 5. League detail tab components (extracted from league-detail.js) -->
 <!-- v2 widget modules (load before dashboard.js which consumes them) -->
-<script src="js/widgets/roster-pulse.js?v=c80df61d34"></script>
-<script src="js/widgets/lineup-check.js?v=LAB121"></script>
+<script src="js/widgets/roster-pulse.js?v=1185d11997"></script>
+<script src="js/widgets/lineup-check.js?v=7d5f2ca51c"></script>
 <script src="js/widgets/window-forecast.js?v=efebefe605"></script>
 <script src="js/widgets/gap-plan.js?v=cc0e7f7a06"></script>
-<script src="js/widgets/league-landscape.js?v=c4d383ee19"></script>
+<script src="js/widgets/league-landscape.js?v=2112150192"></script>
 <script src="js/widgets/txn-ticker.js?v=ba41865d65"></script>
-<script src="js/widgets/market-radar.js?v=9b9da396e1"></script>
-<script src="js/widgets/faab-command.js?v=0621874088"></script>
+<script src="js/widgets/market-radar.js?v=264c79ac8b"></script>
+<script src="js/widgets/faab-command.js?v=869856feeb"></script>
 <script src="js/widgets/draft-capital.js?v=595ac47a74"></script>
 <!-- SI-3: Tag-driven widgets (Trade Block / Cut Candidates / Waiver Targets) -->
 <script src="js/widgets/player-tags.js?v=0459e56074"></script>
 <!-- Phase 3: League intel widgets (Competitive Tiers, Power Rankings) — ex-League Map -->
-<script src="js/widgets/competitive-tiers.js?v=ab205d3f49"></script>
-<script src="js/widgets/power-rankings.js?v=59d98c558f"></script>
+<script src="js/widgets/competitive-tiers.js?v=f1a3bd5e24"></script>
+<script src="js/widgets/power-rankings.js?v=229dba9241"></script>
 <!-- Phase 9: My Trophies widget -->
 <script src="js/widgets/my-trophies.js?v=947128399d"></script>
 <!-- League Calendar widget — depends on window.WrCalendar (js/tabs/calendar.js) -->
 <script src="js/widgets/league-calendar.js?v=74e7808f06"></script>
-<script src="js/tabs/dashboard.js?v=LAB119"></script>
-<script src="js/tabs/flash-brief.js?v=b068789af9"></script>
+<script src="js/tabs/dashboard.js?v=706dcd8be6"></script>
+<script src="js/tabs/flash-brief.js?v=ff7942cb6e"></script>
 <!-- Group "analysis": analytics.js embeds LeagueMapTab, so both defer together
      (league-map.js first — DOM order is execution order within a group). -->
-<script type="text/wr-deferred" data-wr-defer="analysis" src="js/tabs/league-map.js?v=LAB101"></script>
-<script type="text/wr-deferred" data-wr-defer="myteam" src="js/tabs/my-team.js?v=LAB104"></script>
+<script type="text/wr-deferred" data-wr-defer="analysis" src="js/tabs/league-map.js?v=1fc2842dea"></script>
+<script type="text/wr-deferred" data-wr-defer="myteam" src="js/tabs/my-team.js?v=03443fe823"></script>
 <!-- Compare: extracted from My Roster's former sub-view, now a top-level ROSTER-group tab. -->
-<script type="text/wr-deferred" data-wr-defer="compare" src="js/tabs/compare.js?v=LAB127"></script>
-<script type="text/wr-deferred" data-wr-defer="analysis" src="js/tabs/analytics.js?v=ca189e3799"></script>
-<script type="text/wr-deferred" data-wr-defer="trophies" src="js/tabs/trophy-room.js?v=8006bf779f"></script>
-<script src="js/tabs/calendar.js?v=80df875303"></script>
+<script type="text/wr-deferred" data-wr-defer="compare" src="js/tabs/compare.js?v=941525c98d"></script>
+<script type="text/wr-deferred" data-wr-defer="analysis" src="js/tabs/analytics.js?v=0f3f81f618"></script>
+<script type="text/wr-deferred" data-wr-defer="trophies" src="js/tabs/trophy-room.js?v=784bd3612e"></script>
+<script src="js/tabs/calendar.js?v=275d34c7b2"></script>
 <!-- Alex Insights (Option A): top-level tab for behavioral analysis + AI settings -->
-<script type="text/wr-deferred" data-wr-defer="alex" src="js/tabs/alex-insights.js?v=03d6d1aaa6"></script>
+<script type="text/wr-deferred" data-wr-defer="alex" src="js/tabs/alex-insights.js?v=189c992fc0"></script>
 <!-- Group "empire": hub-level Empire Dashboard (Pro mode), loaded by app.js when
      Pro mode activates — also provides window.App.buildEmpireDna etc. -->
 <script type="text/wr-deferred" data-wr-defer="empire" src="js/tabs/global-view.js?v=e9b293f3d0"></script>
@@ -3130,11 +3373,11 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <!-- 6. Strategy editor: calls shared GMStrategy API, no logic duplication.
      Only consumed by alex-insights' Strategy sub-view, so it rides the same
      "alex" lazy group — inert at boot, loaded on first GM's Office / Strategy open. -->
-<script type="text/wr-deferred" data-wr-defer="alex" src="js/tabs/strategy-editor.js?v=2cf1fbab8f"></script>
+<script type="text/wr-deferred" data-wr-defer="alex" src="js/tabs/strategy-editor.js?v=8bacfb4a68"></script>
 <!-- 7. League detail: coordinator shell, depends on all above -->
-    <script src="js/league-detail.js?v=LAB104"></script>
+    <script src="js/league-detail.js?v=6f87489aa6"></script>
 <!-- 8. App: OwnerDashboard + ReactDOM.render (loads last) -->
-<script src="js/app.js?v=977b18c616"></script>
+<script src="js/app.js?v=7592248219"></script>
 
 <!-- All JSX code extracted to js/ modules. Only bootstrap remains. -->
 <script>
@@ -3142,7 +3385,8 @@ WRShared.preloadMany(WR_SHARED_FILES);
 (function() {
   window.addEventListener('DOMContentLoaded', function() {
     if (typeof OwnerDashboard !== 'undefined') return;
-    document.getElementById('root').innerHTML = '<div style="color:#E74C3C;padding:40px;text-align:center;font-family:sans-serif"><h2>Module Load Error</h2><p>Dynasty HQ modules failed to load. Try a hard refresh (Cmd+Shift+R) or check the console.</p></div>';
+    if (window.__dhqBoot) return window.__dhqBoot.fail('modules');
+    document.getElementById('root').innerHTML = '<div style="color:#E74C3C;padding:40px;text-align:center;font-family:sans-serif"><h2>Module Load Error</h2><p>Dynasty HQ modules failed to load. Reload the page to try again.</p></div>';
   });
 })();
 </script>
@@ -3202,7 +3446,7 @@ window.addEventListener('appinstalled', () => {
 <!-- Deploy tag (owner ask 2026-08-19): a tiny always-visible build code so the
      owner can read back exactly which version his device is running before
      testing — kills the stale-cache guessing game. Bump the code every deploy. -->
-<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b131 · LAB128</div>
+<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b145 · LAB141</div>
 </body>
 </html>
 <!-- build 1774212614 -->

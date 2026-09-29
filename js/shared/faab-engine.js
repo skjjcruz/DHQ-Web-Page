@@ -9,8 +9,26 @@
 //     → { coldStart, sampleSize, budget, minBid, myLeft, mySpentPct,
 //         leagueSpentPct, marketBid, medianBid,
 //         ladder: [{ bid, winPct }], rec: { bid, winPct, capped },
+//         band: { lo, hi },                                // see estimate()
 //         rivals: [{ rosterId, name, faabLeft, need, aggr, estBid, engaged }],
 //         comps:  [{ week, pid, bid, rosterId }] }        // newest first
+//
+//   estimate(opts)  — THE one bid estimate every surface shows (bidfix
+//     2026-09-27). Same inputs as analyze, plus `dhq` (the model's
+//     targetStrength is derived from it when targetStrength is absent) and
+//     optional `playerValue(pid)` on the same scale as dhq — single-slot
+//     positions (K / DEF / 1-QB) count a rival only when the target is an
+//     upgrade on his current starter there.
+//     → null when the league does not bid, or nothing legal is left to bid
+//     → { sug, lo, hi, winPct, capped, coldStart, sampleSize, minBid, myLeft,
+//         budget, estimate: true, basis: 'faab-model', analysis }
+//     sug = rec.bid (smallest bid clearing WIN_TARGET); lo / hi = the bids
+//     that first clear BAND_LO / BAND_HI on the same win curve, so the range
+//     is the model's own uncertainty band, not a second formula. Uncontested
+//     → lo = sug = hi = the league minimum.
+//     Before this, the phone hero / board rows / drawer used a value÷250
+//     formula while FAAB Command used this model, and the two disagreed for
+//     the same player on the same screen.
 //
 // The model, stated plainly (all tunables are const-hoisted):
 //  · Evidence = every FAAB bid this season, WINNING AND LOSING (failed claims
@@ -42,8 +60,17 @@
     const ENGAGE_MED = 0.5;
     const LADDER_STEPS = [0.5, 0.75, 1, 1.35, 1.75];
     const WIN_TARGET = 0.6;        // rec = smallest bid clearing this
+    const BAND_LO = 0.45;          // estimate range: first bid clearing this …
+    const BAND_HI = 0.8;           // … to the first bid clearing this
     const SPEND_CAP = 0.65;        // of my remaining, unless strength ≥ CAP_LIFT
     const CAP_LIFT = 0.8;
+    const STRENGTH_DHQ = 6000;     // dhq ≈ a league-winning add → strength 1
+
+    // League minimum bid: GM Strategy's override, else Sleeper's
+    // waiver_bid_min (other imports: waiver_budget_min), else $1.
+    function minBidOf(st, override) {
+        return override > 0 ? Math.max(1, Math.round(override)) : Math.max(1, Number(st.waiver_bid_min ?? st.waiver_budget_min) || 1);
+    }
 
     function quantile(sorted, q) {
         if (!sorted.length) return null;
@@ -70,18 +97,35 @@
     // Positional need from live rosters: healthy bodies at the position vs the
     // dedicated starting slots for it. HIGH = can't fill the slots without this
     // add (or exactly fills them — one injury from a hole), MED = one deep.
+    // SINGLE-SLOT positions (K, DEF, a 1-QB / 1-TE league): "exactly filled"
+    // is the normal state there, not a hole — nobody carries two kickers.
+    // Before this every rival read HIGH at K and a kicker was priced like a
+    // contested starter (review S4, CTB The One: "11 rivals with a K need").
+    // So a filled single slot is in the market only as an UPGRADE: MED when
+    // the target out-values that team's best healthy player there (ctx.playerValue
+    // + ctx.targetValue, both on the caller's one value scale), LOW otherwise
+    // or when no values are supplied.
     const OUT = new Set(['OUT', 'IR', 'PUP', 'SUS', 'NA', 'COV', 'DOUBTFUL']);
-    function needAt(roster, pos, league, playersData) {
+    function needAt(roster, pos, league, playersData, ctx) {
         const slots = ((league && league.roster_positions) || []).filter(s => String(s).toUpperCase() === pos).length;
         if (!slots) return 'LOW';
-        let healthy = 0;
+        let healthy = 0, bestHere = 0;
+        const playerValue = ctx && typeof ctx.playerValue === 'function' ? ctx.playerValue : null;
         const res = new Set((roster.reserve || []).concat(roster.taxi || []));
         for (const pid of (roster.players || [])) {
             if (res.has(pid)) continue;
             const p = playersData && playersData[pid];
             const ppos = (App.normPos && App.normPos(p && p.position)) || (p && p.position);
             if (String(ppos || '').toUpperCase() !== pos) continue;
-            if (!OUT.has(String((p && p.injury_status) || '').toUpperCase())) healthy++;
+            if (!OUT.has(String((p && p.injury_status) || '').toUpperCase())) {
+                healthy++;
+                if (playerValue) bestHere = Math.max(bestHere, Number(playerValue(pid)) || 0);
+            }
+        }
+        if (slots === 1) {
+            if (healthy === 0) return 'HIGH';
+            const tv = Number(ctx && ctx.targetValue) || 0;
+            return (playerValue && tv > bestHere) ? 'MED' : 'LOW';
         }
         if (healthy <= slots) return 'HIGH';
         if (healthy === slots + 1) return 'MED';
@@ -115,6 +159,10 @@
         const playersData = opts && opts.playersData;
         const pos = String((opts && opts.targetPos) || '').toUpperCase();
         const strength = Math.max(0, Math.min(1, Number(opts && opts.targetStrength) || 0.5));
+        // Upgrade read for single-slot positions (needAt): the caller's value
+        // scale for rostered players and for the target (estimate() fills
+        // targetValue from dhq).
+        const needCtx = (opts && typeof opts.playerValue === 'function') ? { playerValue: opts.playerValue, targetValue: Number(opts.targetValue) || 0 } : null;
 
         const st = league.settings || {};
         const budget = Number(st.waiver_budget) || 0;
@@ -127,7 +175,7 @@
         // owner's league floors bids at $13 there); waiver_budget_min is the
         // import naming other platforms use. Read both — the $1 floor only
         // applies when neither is set.
-        const minBid = override > 0 ? Math.max(1, Math.round(override)) : Math.max(1, Number(st.waiver_bid_min ?? st.waiver_budget_min) || 1);
+        const minBid = minBidOf(st, override);
 
         const rosters = league.rosters || [];
         const mine = rosters.find(r => String(r.roster_id) === myId);
@@ -169,7 +217,7 @@
             .filter(r => String(r.roster_id) !== myId)
             .filter(r => { const Ch = choppedOf(); return !(Ch && Ch.isEliminated(r)); })
             .map(r => {
-                const need = pos ? needAt(r, pos, league, playersData) : 'MED';
+                const need = pos ? needAt(r, pos, league, playersData, needCtx) : 'MED';
                 const faabLeft = leftOf(r);
                 const aggr = aggrOf(r.roster_id);
                 const engaged = need !== 'LOW' && faabLeft >= minBid;
@@ -219,11 +267,30 @@
         })();
         // Recommendation: smallest whole bid clearing WIN_TARGET, spend-capped.
         const cap = strength >= CAP_LIFT ? myLeft : Math.max(minBid, Math.round(myLeft * horizonCap));
-        let rec = null;
-        for (let B = minBid; B <= cap; B++) {
-            if (winPct(B) >= WIN_TARGET) { rec = { bid: B, winPct: winPct(B), capped: false }; break; }
-        }
+        // winPct is non-decreasing in B (a product of logistics), so the first
+        // bid clearing a threshold is a binary search — a $10,000-budget
+        // guillotine league would otherwise walk thousands of rungs per player.
+        const firstClearing = (target) => {
+            if (cap < minBid || winPct(cap) < target) return null;
+            let lo = minBid, hi = cap;
+            while (lo < hi) { const mid = Math.floor((lo + hi) / 2); if (winPct(mid) >= target) hi = mid; else lo = mid + 1; }
+            return lo;
+        };
+        const recBid = firstClearing(WIN_TARGET);
+        let rec = recBid != null ? { bid: recBid, winPct: winPct(recBid), capped: false } : null;
         if (!rec) rec = { bid: Math.min(cap, myLeft), winPct: winPct(Math.min(cap, myLeft)), capped: true };
+        // The estimate band on the same curve: where the odds first turn
+        // plausible (BAND_LO) to where they turn comfortable (BAND_HI). Always
+        // brackets rec.bid; a capped rec pins the top of the band to the cap.
+        const bandLo = firstClearing(BAND_LO);
+        const bandHi = firstClearing(BAND_HI);
+        const band = {
+            lo: Math.min(rec.bid, bandLo != null ? bandLo : rec.bid),
+            hi: Math.max(rec.bid, bandHi != null ? bandHi : Math.min(cap, myLeft)),
+            // 80% isn't reachable under the spend cap: the top of the band is
+            // YOUR CAP, not a bid that buys those odds — the UI labels it so.
+            hiCapped: bandHi == null,
+        };
 
         const spentPct = r => budget ? Math.round(((budget - leftOf(r)) / budget) * 100) : 0;
         // Average over LIVE teams only — a chopped team's spend is frozen, so
@@ -263,12 +330,62 @@
             mySpentPct: mine ? spentPct(mine) : 0,
             leagueSpentPct: leagueSpent,
             marketBid, medianBid: Math.max(1, Math.round((leagueMed / 100) * budget)),
-            ladder, rec, rivals,
+            ladder, rec, band, rivals,
             comps: bids.filter(b => b.won).slice(0, 8),
         };
     }
 
-    App.Faab = App.Faab || { analyze, extractBids, needAt, quantile };
+    // Strength for the market quantile: DHQ against an elite-FA benchmark.
+    // One mapping, so a $26 read here is the same $26 read everywhere.
+    function strengthOf(dhq) {
+        return Math.max(0.15, Math.min(1, (Number(dhq) || 0) / STRENGTH_DHQ));
+    }
+
+    // The one bid estimate (header comment). Pure; callers gather txns.
+    function estimate(opts) {
+        const o = opts || {};
+        const a = analyze(Object.assign({}, o, {
+            targetStrength: o.targetStrength != null ? o.targetStrength : strengthOf(o.dhq),
+            targetValue: o.targetValue != null ? o.targetValue : o.dhq,
+        }));
+        if (!a) return null;
+        if (a.myLeft < a.minBid) return null;   // FAAB exhausted — no legal bid left (limits() says so)
+        return {
+            sug: a.rec.bid, lo: a.band.lo, hi: a.band.hi, hiCapped: !!a.band.hiCapped && a.band.hi > a.band.lo,
+            winPct: a.rec.winPct, capped: a.rec.capped,
+            coldStart: a.coldStart, sampleSize: a.sampleSize,
+            minBid: a.minBid, myLeft: a.myLeft, budget: a.budget,
+            estimate: true, basis: 'faab-model',
+            analysis: a,
+        };
+    }
+
+    // Budget, legal minimum and money left — the same reads analyze() makes,
+    // for "why is there no estimate" copy (out of FAAB vs not a FAAB league).
+    // null when the league has no budget.
+    function limits(opts) {
+        const league = (opts && opts.league) || {};
+        const st = league.settings || {};
+        const budget = Number(st.waiver_budget) || 0;
+        if (!(budget > 0)) return null;
+        const override = Number(opts && opts.minBidOverride);
+        const minBid = minBidOf(st, override);
+        const myId = String(opts && opts.myRosterId != null ? opts.myRosterId : '');
+        const mine = (league.rosters || []).find(r => String(r.roster_id) === myId);
+        const myLeft = mine ? Math.max(0, budget - (Number(mine.settings && mine.settings.waiver_budget_used) || 0)) : budget;
+        return { budget, minBid, myLeft, exhausted: myLeft < minBid };
+    }
+
+    // "$26" when the band collapses (uncontested), "$18–34" otherwise, and
+    // "$18–64 (your cap)" when the top is the spend cap rather than 80% odds
+    // (opts.capLabel !== false).
+    function formatRange(est, dash, opts) {
+        if (!est) return null;
+        const s = est.lo === est.hi ? '$' + est.lo : '$' + est.lo + (dash || '–') + est.hi;
+        return (est.hiCapped && !(opts && opts.capLabel === false)) ? s + ' (your cap)' : s;
+    }
+
+    App.Faab = Object.assign(App.Faab || {}, { analyze, estimate, limits, strengthOf, formatRange, extractBids, needAt, quantile });
     /* global module */
     if (typeof module !== 'undefined' && module.exports) module.exports = App.Faab;
 })(typeof window !== 'undefined' ? window : globalThis);
