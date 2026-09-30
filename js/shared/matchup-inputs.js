@@ -67,8 +67,8 @@
         // Typical week vs average week: a player's shown projection is the
         // typical (median) week; totals and lineup calls keep the average.
         medTdWrTe: 0.75,        // WR/TE: take this share of expected TD points off
-        medTdWrTeHi: 0.25,      //   ... this share for a receiver on medTdHiTgt+ targets
-        medTdHiTgt: 8,
+        medTdWrTeHi: 0.25,      //   ... sliding to this share from medTdLoTgt to medTdHiTgt targets
+        medTdLoTgt: 7, medTdHiTgt: 9,
         medTdRb: 0.5,           // RB: TD-skew term (see median below)
         medSplashDl: 0.6,       // DL: tackles + this share of splash points
         medShiftLb: 0.4, medShiftDb: 0.35,   // LB/DB: points off the average
@@ -1161,10 +1161,10 @@
     // the typical week wins; totals and start/sit choices keep the average
     // (it is what adds up across a lineup). Audit of weeks 1-3 2026: we came
     // in over the actual 58-66% of the time at RB/WR/TE/DL.
-    //   WR/TE: three quarters of the expected TD points come off; a
-    //     quarter for a receiver projected for 8+ targets, whose scoring
-    //     is steadier (weeks 1-3: WR 255-191 vs 254-192; Adams week 4
-    //     14.7 → 17.0).
+    //   WR/TE: three quarters of the expected TD points come off up to 7
+    //     projected targets, sliding to a quarter at 9+: heavy-volume
+    //     receivers score more steadily (weeks 1-3: WR 254-192 either
+    //     way, the slide avoids a cliff at one target count).
     //   RB: the TD-skew term 0.5 x TD value x λe^-λ (λ = expected TDs)
     //     comes off. It applies to RB1s too (weeks 1-3: RB 179-101 vs
     //     174-106; Gibbs week 4 30.4 → 29.4).
@@ -1174,7 +1174,8 @@
         const sc = scoring || {};
         let med = pts;
         if (grp === 'WR' || grp === 'TE') {
-            const k = (num(L.rec_tgt) || 0) >= TUNE.medTdHiTgt ? TUNE.medTdWrTeHi : TUNE.medTdWrTe;
+            const t = Math.max(0, Math.min(1, ((num(L.rec_tgt) || 0) - TUNE.medTdLoTgt) / (TUNE.medTdHiTgt - TUNE.medTdLoTgt)));
+            const k = TUNE.medTdWrTe + t * (TUNE.medTdWrTeHi - TUNE.medTdWrTe);
             med = pts - k * (num(sc.rec_td) || 0) * (num(L.rec_td) || 0);
         } else if (grp === 'RB') {
             const rt = num(L.rush_td) || 0, ct = num(L.rec_td) || 0, lam = rt + ct;

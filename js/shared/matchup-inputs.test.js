@@ -94,10 +94,10 @@ test('a kicker with no games on record starts from the league-average kicker, no
     assert.equal(b.median, b.mean, 'kickers show the average');
 });
 
-test('receivers show the typical week: three quarters of the expected TD points come off, a quarter at 8+ targets', () => {
+test('receivers show the typical week: three quarters of the expected TD points come off, sliding to a quarter at 9+ targets', () => {
     const low = base('w1', { team: 'KC', position: 'WR' }, 'WR', { projTargets: 5, posRank: 2 });
     const high = base('w2', { team: 'KC', position: 'WR' }, 'WR', { projTargets: 10, posRank: 1 });
-    assert.ok(low.line.rec_tgt < 8 && high.line.rec_tgt >= 8, 'targets ' + low.line.rec_tgt + ' / ' + high.line.rec_tgt);
+    assert.ok(low.line.rec_tgt <= 7 && high.line.rec_tgt >= 9, 'targets ' + low.line.rec_tgt + ' / ' + high.line.rec_tgt);
     const cut = (b) => b.mean - b.median, td = (b) => b.line.rec_td * 6;
     assert.ok(Math.abs(cut(low) - 0.75 * td(low)) < 0.02, 'low cut ' + cut(low) + ' td pts ' + td(low));
     assert.ok(Math.abs(cut(high) - 0.25 * td(high)) < 0.02, 'high cut ' + cut(high) + ' td pts ' + td(high));
