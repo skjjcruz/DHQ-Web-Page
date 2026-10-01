@@ -41,7 +41,7 @@
     })();
     </script>
 
-    <meta name="dhq-build" content="b151-b98b54dbd3">
+    <meta name="dhq-build" content="b152-865b0e002b">
     <meta name="dhq-engine-v" content="09327a9b46">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, viewport-fit=cover">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://skjjcruz.github.io https://browser.sentry-cdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://sxshiqyxhhifvtfqawbq.supabase.co https://api.sleeper.app https://site.api.espn.com https://sports.core.api.espn.com https://api.myfantasyleague.com https://*.myfantasyleague.com https://lm-api-reads.fantasy.espn.com https://site.web.api.espn.com https://fantasysports.yahooapis.com https://api.fantasycalc.com https://*.sentry.io; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; object-src 'none';">
@@ -167,7 +167,7 @@
     <link rel="preload" as="script" href="vendor/supabase.min.js">
     <link rel="preload" as="script" href="vendor/react.production.min.js">
     <link rel="preload" as="script" href="vendor/react-dom.production.min.js">
-    <script src="js/shared/shared-loader.js?v=c072242079"></script>
+    <script src="js/shared/shared-loader.js?v=d1765228c8"></script>
     <!-- Season-rollover cache hygiene — must run early, before any surface reads caches. -->
     <script src="js/shared/season-guard.js?v=988bfb076d"></script>
     <!-- Native-shell external-link guard: outside links must never strand the WKWebView. -->
@@ -3232,7 +3232,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <!-- 2h. Weekly DHQ/health snapshot store — window.WrSnapshots — time-series for ▲/▼ deltas -->
 <script src="js/shared/snapshot-store.js?v=9c59b853e5"></script>
 
-<script src="js/shared/wr-ai-context.js?v=fd5d4d67e3"></script>
+<script src="js/shared/wr-ai-context.js?v=60a4e507e7"></script>
 <!-- Feedback hub — floating launcher, bug reports + crash capture, feature voting board -->
 <script src="js/shared/feedback-hub.js?v=a53319b783"></script>
 <!-- NFL draft capital dataset — window.WR_DRAFT_PROFILE — static historical
@@ -3245,7 +3245,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <script src="js/shared/rank-history.js?v=4cebaac48a"></script>
 <script src="js/shared/qb-trade-rules.js?v=12c376f03a"></script>
 <script src="js/shared/elite-skill-trade-rules.js?v=8a8943111f"></script>
-<script src="js/shared/brief-pulse.js?v=df91c0cc53"></script>
+<script src="js/shared/brief-pulse.js?v=6fce6d2654"></script>
 <!-- AI Conductor Phase 3 — the reusable "explain this screen" line (window.WR.SurfaceRead), flag-gated. -->
 <script src="js/shared/surface-read.js?v=aabd90404c"></script>
 <!-- Player Brief Phase 1 — the DHQ Composer: a written summary for EVERY player card (window.WR.PlayerBrief). -->
@@ -3268,7 +3268,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
      group, when the owning surface first calls wrLoadModuleGroup('<group>'). -->
 <script src="js/module-loader.js?v=fa2c63b653"></script>
 <script src="js/settings.js?v=c3853b3b1b"></script>
-<script type="text/wr-deferred" data-wr-defer="trade" src="js/trade-calc.js?v=af92c43b1f"></script>
+<script type="text/wr-deferred" data-wr-defer="trade" src="js/trade-calc.js?v=3e9433b6d1"></script>
 <script src="js/lab-cutdown.js?v=cd15d7635f"></script>
 <script src="js/post-draft.js?v=61bcda3c71"></script>
 <!-- FA waiver tools (C2 wave): stat catalog + stat math, market display helpers, waiver engine (fa group, before free-agency.js) -->
@@ -3338,7 +3338,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft-room.js?v=90ef5a660f"></script>
 <!-- 5. League detail tab components (extracted from league-detail.js) -->
 <!-- v2 widget modules (load before dashboard.js which consumes them) -->
-<script src="js/widgets/roster-pulse.js?v=1185d11997"></script>
+<script src="js/widgets/roster-pulse.js?v=a7b2dcb9e6"></script>
 <script src="js/widgets/lineup-check.js?v=7d5f2ca51c"></script>
 <script src="js/widgets/window-forecast.js?v=efebefe605"></script>
 <script src="js/widgets/gap-plan.js?v=cc0e7f7a06"></script>
@@ -3350,35 +3350,35 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <!-- SI-3: Tag-driven widgets (Trade Block / Cut Candidates / Waiver Targets) -->
 <script src="js/widgets/player-tags.js?v=0459e56074"></script>
 <!-- Phase 3: League intel widgets (Competitive Tiers, Power Rankings) — ex-League Map -->
-<script src="js/widgets/competitive-tiers.js?v=f1a3bd5e24"></script>
-<script src="js/widgets/power-rankings.js?v=229dba9241"></script>
+<script src="js/widgets/competitive-tiers.js?v=7a6de206d6"></script>
+<script src="js/widgets/power-rankings.js?v=c4c478b941"></script>
 <!-- Phase 9: My Trophies widget -->
 <script src="js/widgets/my-trophies.js?v=947128399d"></script>
 <!-- League Calendar widget — depends on window.WrCalendar (js/tabs/calendar.js) -->
 <script src="js/widgets/league-calendar.js?v=74e7808f06"></script>
-<script src="js/tabs/dashboard.js?v=706dcd8be6"></script>
-<script src="js/tabs/flash-brief.js?v=ff7942cb6e"></script>
+<script src="js/tabs/dashboard.js?v=08b52c7b15"></script>
+<script src="js/tabs/flash-brief.js?v=5657a14a14"></script>
 <!-- Group "analysis": analytics.js embeds LeagueMapTab, so both defer together
      (league-map.js first — DOM order is execution order within a group). -->
-<script type="text/wr-deferred" data-wr-defer="analysis" src="js/tabs/league-map.js?v=a78519f0a2"></script>
+<script type="text/wr-deferred" data-wr-defer="analysis" src="js/tabs/league-map.js?v=c546cf86c9"></script>
 <script type="text/wr-deferred" data-wr-defer="myteam" src="js/tabs/my-team.js?v=b56894116e"></script>
 <!-- Compare: extracted from My Roster's former sub-view, now a top-level ROSTER-group tab. -->
 <script type="text/wr-deferred" data-wr-defer="compare" src="js/tabs/compare.js?v=a8ed9f74e9"></script>
-<script type="text/wr-deferred" data-wr-defer="analysis" src="js/tabs/analytics.js?v=0f3f81f618"></script>
+<script type="text/wr-deferred" data-wr-defer="analysis" src="js/tabs/analytics.js?v=3dbbe51e8a"></script>
 <script type="text/wr-deferred" data-wr-defer="trophies" src="js/tabs/trophy-room.js?v=784bd3612e"></script>
 <script src="js/tabs/calendar.js?v=275d34c7b2"></script>
 <!-- Alex Insights (Option A): top-level tab for behavioral analysis + AI settings -->
 <script type="text/wr-deferred" data-wr-defer="alex" src="js/tabs/alex-insights.js?v=411a270fd0"></script>
 <!-- Group "empire": hub-level Empire Dashboard (Pro mode), loaded by app.js when
      Pro mode activates — also provides window.App.buildEmpireDna etc. -->
-<script type="text/wr-deferred" data-wr-defer="empire" src="js/tabs/global-view.js?v=e9b293f3d0"></script>
+<script type="text/wr-deferred" data-wr-defer="empire" src="js/tabs/global-view.js?v=85cf1209a9"></script>
 <script src="js/tutorial.js?v=ef60cb1d3b"></script>
 <!-- 6. Strategy editor: calls shared GMStrategy API, no logic duplication.
      Only consumed by alex-insights' Strategy sub-view, so it rides the same
      "alex" lazy group — inert at boot, loaded on first GM's Office / Strategy open. -->
-<script type="text/wr-deferred" data-wr-defer="alex" src="js/tabs/strategy-editor.js?v=8bacfb4a68"></script>
+<script type="text/wr-deferred" data-wr-defer="alex" src="js/tabs/strategy-editor.js?v=d3f9750b0c"></script>
 <!-- 7. League detail: coordinator shell, depends on all above -->
-    <script src="js/league-detail.js?v=a161b2bbc4"></script>
+    <script src="js/league-detail.js?v=1dd9444202"></script>
 <!-- 8. App: OwnerDashboard + ReactDOM.render (loads last) -->
 <script src="js/app.js?v=7592248219"></script>
 
@@ -3449,7 +3449,7 @@ window.addEventListener('appinstalled', () => {
 <!-- Deploy tag (owner ask 2026-08-19): a tiny always-visible build code so the
      owner can read back exactly which version his device is running before
      testing — kills the stale-cache guessing game. Bump the code every deploy. -->
-<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b151 · LAB149</div>
+<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b152 · LAB150</div>
 </body>
 </html>
 <!-- build 1774212614 -->
