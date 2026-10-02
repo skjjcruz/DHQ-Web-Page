@@ -1,7 +1,7 @@
 {
-  "build": "b152-865b0e002b",
-  "tag": "b152",
-  "builtAt": "2026-10-01T13:31:05.845Z",
+  "build": "b153-81d69b2405",
+  "tag": "b153",
+  "builtAt": "2026-10-02T21:30:13.566Z",
   "critical": false,
   "notes": "",
   "commit": null,
@@ -102,6 +102,7 @@
       "js/components/league-wire-studio.js?v=a0ba2aa9b9",
       "js/components/league-wire-portfolio.js?v=96d4d0acf6",
       "js/components/league-wire.js?v=67155b5678",
+      "js/hub-v2.js?v=c39a3fed35",
       "js/draft/styles.js?v=456c35bb55",
       "js/draft/scouting.js?v=43370e82ed",
       "js/draft/trade-helpers.js?v=8df2437674",
@@ -156,7 +157,7 @@
       "js/tutorial.js?v=ef60cb1d3b",
       "js/tabs/strategy-editor.js?v=d3f9750b0c",
       "js/league-detail.js?v=1dd9444202",
-      "js/app.js?v=7592248219",
+      "js/app.js?v=63841f5acd",
       "js/shared/matchup-engine.js?v=09327a9b46",
       "js/shared/dhq-baseline.js?v=09327a9b46",
       "js/shared/matchup-feeds-espn.js?v=09327a9b46",
@@ -317,6 +318,7 @@
     "js/components/league-wire-studio.js": "a0ba2aa9b9",
     "js/components/league-wire-portfolio.js": "96d4d0acf6",
     "js/components/league-wire.js": "67155b5678",
+    "js/hub-v2.js": "c39a3fed35",
     "js/draft/styles.js": "456c35bb55",
     "js/draft/scouting.js": "43370e82ed",
     "js/draft/trade-helpers.js": "8df2437674",
@@ -371,7 +373,7 @@
     "js/tutorial.js": "ef60cb1d3b",
     "js/tabs/strategy-editor.js": "d3f9750b0c",
     "js/league-detail.js": "1dd9444202",
-    "js/app.js": "7592248219",
+    "js/app.js": "63841f5acd",
     "js/shared/matchup-engine.js": "2cfedd26b1",
     "js/shared/dhq-baseline.js": "a04c34c3a4",
     "js/shared/matchup-feeds-espn.js": "5df5d22379",
@@ -421,9 +423,9 @@
     "reconai-shared/values-v2.js": "de14219501",
     "reconai-shared/weekly-proj.js": "354cdcf558",
     "reconai-shared/yahoo-api.js": "353efc2019",
-    "index.html": "bbb5364255",
-    "landing.html": "8e63262848",
-    "connect-sleeper.html": "63f1c02d52",
-    "upgrade.html": "b1e8a3730e"
+    "index.html": "98bd1bfe20",
+    "landing.html": "2782294e4c",
+    "connect-sleeper.html": "02a14d54ac",
+    "upgrade.html": "20af637970"
   }
 }
