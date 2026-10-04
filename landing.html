@@ -44,7 +44,7 @@
     })();
     </script>
 
-<meta name="dhq-build" content="b153-3e1e3d7934">
+<meta name="dhq-build" content="b153-4451570c2b">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://skjjcruz.github.io https://browser.sentry-cdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://sxshiqyxhhifvtfqawbq.supabase.co https://api.sleeper.app https://api.myfantasyleague.com https://*.myfantasyleague.com https://lm-api-reads.fantasy.espn.com https://fantasysports.yahooapis.com https://*.sentry.io; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; object-src 'none';">
 <title>Dynasty HQ — Generic advice stops here.</title>
@@ -1270,6 +1270,19 @@
       }
       // ?signin=new: a guest's "Create free account" opens on the sign-up side.
       try { openAuthSheet(q.get('signin') === 'new' ? 'signup' : 'signin'); } catch {}
+      // &via=google|apple: the app's My Profile buttons go straight to that
+      // provider, through this page's own handlers (same OAuth return, same
+      // guest-league adoption). The flag is dropped from the URL first so a
+      // back-swipe from the provider can't fire it twice.
+      const via = q.get('via');
+      if (via === 'google' || via === 'apple') {
+        try { q.delete('via'); history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q.toString() : '') + location.hash); } catch {}
+        let tries = 0;
+        (function go() {
+          if (getSbClient()) { try { (via === 'google' ? handleGoogle : handleApple)(); } catch {} return; }
+          if (++tries < 40) setTimeout(go, 150);
+        })();
+      }
       if (q.has('reauth')) { try { showAlert('success', 'Your session ended. Sign in to pick up where you left off.'); } catch {} }
     })();
 
