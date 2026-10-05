@@ -84,6 +84,10 @@
         // A tight end whose track record is at least this share of the
         // targets is not cut by the tight-end room (see roleFor)
         starTeRoom: 0.18,
+        // A returning star (see returningStar): last season's share of the
+        // targets (WR/TE) or touches (RB) he needs, and the share of it he
+        // must still hold in his healthy games this season
+        starShare: { WR: 0.2, TE: 0.2, RB: 0.3 }, starKeepsRole: 0.6,
     }, root.__DHQ_TUNE || {});
     const SLEEPER_DEPTH_POS = { QB: 'QB', RB: 'RB', FB: 'RB', WR: 'WR', LWR: 'WR', SWR: 'WR', RWR: 'WR', TE: 'TE', K: 'K',
         LDE: 'DL', RDE: 'DL', DE: 'DL', DT: 'DL', NT: 'DL', LDT: 'DL', RDT: 'DL', DL: 'DL',
@@ -116,15 +120,15 @@
     // Sleeper's injury tag → engine status code.
     function statusOf(player, ctx) {
         const raw = String(player && player.injury_status || '').toUpperCase();
-        if (staleOut(player, ctx)) return 'Q';
+        if (staleOut(player, ctx)) return '';
         return SLEEPER_STATUS[raw] || raw;
     }
     // Last week's "Out" (owner ruling 2026-10-05). Sleeper keeps the tag a
     // player wore for last Sunday's game until this week's report replaces
     // it, so on a Monday Daniels, Chase and Jefferson all read 0 for a game
     // they were expected to play. Until the final injury report (44 hours
-    // before kickoff, 28 for a Thursday game) an Out counts as Questionable
-    // when Sleeper still publishes a line for him this week; no line means
+    // before kickoff, 28 for a Thursday game) an Out counts as playing, at
+    // his normal number, when Sleeper still publishes a line for him this week; no line means
     // Sleeper's own people expect him to miss it, and he stays out. IR, PUP,
     // a suspension and the rest keep their zero for as long as they last,
     // a season-ending IR included.
@@ -594,7 +598,24 @@
     function posRankFor(player, grp, roles, ctx, opts) {
         const br = baseRank(player, grp, roles);
         if (!br) return null;
-        return qbStarterCheck(nextManUp(br, player, grp, ctx, opts), player, grp, ctx, opts);
+        return restoreRank(qbStarterCheck(nextManUp(br, player, grp, ctx, opts), player, grp, ctx, opts), player, grp, ctx, opts);
+    }
+    // A returning star gets his place back: the chart drops a man while he
+    // is out (Breece Hall read RB5 for week 5 2026). His rank is where his
+    // track record puts him among the healthy men at his position.
+    function restoreRank(br, player, grp, ctx, opts) {
+        if (!br || br.rank <= 1 || !TUNE.starShare[grp] || !ctx || !opts || !opts.playersData) return br;
+        const team = String(player.team || '').toUpperCase(), me = String(player.player_id || '');
+        if (!me || !returningStar(me, player, grp, team, ctx, opts)) return br;
+        const mine = trackRecordShare(me, grp, team, ctx, opts);
+        let above = 0;
+        for (const mid of Object.keys(opts.playersData)) {
+            const m = opts.playersData[mid];
+            if (mid === me || !m || String(m.team || '').toUpperCase() !== team || posGroup(m) !== grp || OUT_FOR_SHARE[statusOf(m, ctx)]) continue;
+            const t = trackRecordShare(mid, grp, team, ctx, opts);
+            if (t != null && t > mine) above++;
+        }
+        return above + 1 < br.rank ? Object.assign({}, br, { listed: br.listed != null ? br.listed : br.rank, rank: above + 1, restored: true }) : br;
     }
     // Starter check, QBs only (audit of weeks 1-3 2026): the depth chart
     // lags a midweek change. Week 3, Chicago: Williams out, ESPN still had
@@ -707,6 +728,58 @@
         }
         return ctx._ret[k].filter(r => r.pid !== String(pid));
     }
+    function snapOf(st) {
+        if (!st || !(num(st.gp) >= 1)) return null;
+        const mine = num(st.off_snp), all = num(st.tm_off_snp);
+        return all > 0 ? clamp((mine || 0) / all, 0, 1) : null;
+    }
+    // His usual share of the snaps: the higher of last season's and the
+    // median of his recent games.
+    function usualSnap(pid, ctx, opts) {
+        ctx._us = ctx._us || {};
+        if (ctx._us[pid] !== undefined) return ctx._us[pid];
+        const xs = (ctx.recentWeeks || []).map(wk => wk && wk.stats ? snapOf(wk.stats[pid]) : null).filter(v => v != null).sort((a, b) => a - b);
+        const med = xs.length ? xs[Math.floor((xs.length - 1) / 2)] : null;
+        const pr = opts.priorData && opts.priorData[pid];
+        const prior = pr && num(pr.gp) >= 4 ? snapOf(Object.assign({}, pr, { gp: 1 })) : null;
+        ctx._us[pid] = med == null ? prior : prior == null ? med : Math.max(med, prior);
+        return ctx._us[pid];
+    }
+    // A game he left hurt: under half his usual snaps (Jefferson, week 3
+    // 2026: 12% of the snaps, 2 targets).
+    function injuryGame(pid, st, ctx, opts) {
+        const sn = snapOf(st);
+        if (sn == null) return false;
+        const u = usualSnap(pid, ctx, opts);
+        return u != null && u >= 0.4 && sn < 0.5 * u;
+    }
+    // A returning star (owner ruling 2026-10-05: "if he's playing the
+    // number is normal, if he's out it's zero, no in-betweens"). A back,
+    // receiver or tight end with a star's share last season (TUNE.starShare)
+    // who still held most of it in his healthy games this year, healthy
+    // now, and out of, or hurt early in, one of the recent games. He keeps
+    // his rank (restoreRank), is not cut by the room (roleFor) and his
+    // trend skips the lost weeks. A man who lost his job is not one
+    // (Tracy, Marquise Brown: a test that let them in ran 66-51 worse).
+    function returningStar(pid, player, grp, team, ctx, opts) {
+        ctx._rs = ctx._rs || {};
+        if (ctx._rs[pid] !== undefined) return ctx._rs[pid];
+        ctx._rs[pid] = false;
+        if (!player || !TUNE.starShare[grp] || OUT_FOR_SHARE[statusOf(player, ctx)]) return false;
+        const tr = trackRecordShare(pid, grp, team, ctx, opts);
+        if (tr == null || tr < TUNE.starShare[grp]) return false;
+        const weeks = (ctx.recentWeeks || []).filter(wk => wk && wk.stats && wk.stats['TEAM_' + team]);
+        let m = 0, t0 = 0, lost = false;
+        for (const wk of weeks) {
+            const st = wk.stats[pid];
+            if (!(st && num(st.gp) >= 1) || injuryGame(pid, st, ctx, opts)) { lost = true; continue; }
+            const t = teamBall(ctx, wk.stats, 'wk' + wk.week, team, grp, opts.playersData);
+            if (t > 0) { m += ballOf(grp, st); t0 += t; }
+        }
+        if (!lost || (t0 > 0 && m / t0 < TUNE.starKeepsRole * tr)) return false;
+        ctx._rs[pid] = true;
+        return true;
+    }
     // Earned share: season share leaning on the last three weeks.
     function earnedShare(pid, player, grp, team, opts, ctx) {
         // A quarterback's share counts only games he started and finished
@@ -747,6 +820,7 @@
                 if (t <= 0) continue;
                 const me = wk.stats[pid];
                 if (!(me && num(me.gp) >= 1)) continue;
+                if (BALL_BASIS[grp] !== 'tackles' && injuryGame(pid, me, ctx, opts)) continue;
                 if (useBack && back.some(r => !(wk.stats[r] && num(wk.stats[r].gp) >= 1))) continue;
                 t0 += t;
                 m += ballOf(grp, me);
@@ -756,7 +830,9 @@
         let { mine, theirs } = tally(back.length > 0);
         const shared = back.length > 0 && theirs > 0;
         if (back.length && !shared) ({ mine, theirs } = tally(false));
-        const seasonShare = shared ? null : perGameShare(opts.statsData, 'season', pid, team, grp, ctx, opts);
+        // the season total carries the game he left hurt; his healthy games say it better
+        const hurtEarly = BALL_BASIS[grp] !== 'tackles' && (ctx.recentWeeks || []).some(wk => wk && wk.stats && injuryGame(pid, wk.stats[pid], ctx, opts));
+        const seasonShare = shared || (hurtEarly && theirs > 0) ? null : perGameShare(opts.statsData, 'season', pid, team, grp, ctx, opts);
         const recentShare = theirs > 0 ? mine / theirs : null;
         if (seasonShare == null && recentShare == null) return null;
         if (recentShare == null) return seasonShare;
@@ -804,16 +880,18 @@
         if (ctx._room[k] != null) return ctx._room[k];
         ctx._room[k] = 1;   // guard against re-entry while summing
         const players = opts.playersData || {};
-        let sum = 0;
+        // A returning star takes his share whole and the rest of the room
+        // shares what is left (down to 40% of their own).
+        let sum = 0, star = 0;
         for (const mid of Object.keys(players)) {
             const m = players[mid];
             if (!m || String(m.team || '').toUpperCase() !== team || posGroup(m) !== grp) continue;
             if (OUT_FOR_SHARE[statusOf(m, ctx)]) continue;
             const raw = rawShareFor(mid, m, grp, team, opts, ctx);
-            if (raw != null) sum += raw;
+            if (raw != null) { sum += raw; if (returningStar(mid, m, grp, team, ctx, opts)) star += raw; }
         }
         const cap = roomCap(team, grp, opts, ctx);
-        ctx._room[k] = sum > cap ? cap / sum : 1;
+        ctx._room[k] = sum <= cap ? 1 : star > 0 && sum > star ? Math.max(0.4, (cap - star) / (sum - star)) : cap / sum;
         return ctx._room[k];
     }
     // The room cap: the league median blended half and half with what
@@ -891,6 +969,7 @@
             // cut 36% to 4.7 targets, projected 6.6, scored 17.6 on 11).
             // Weeks 1-4: TE 195-157 to 199-156 vs Sleeper.
             if (grp === 'TE' && rawInfo.trackShare != null && rawInfo.trackShare >= TUNE.starTeRoom) out.roomScale = 1;
+            if (returningStar(pid, player, grp, team, ctx, opts)) { out.roomScale = 1; out.returningStar = true; }
             proj *= out.roomScale;
             out.share = clamp(proj, 0, 1);
             const pie = teamPie(team, grp, ctx.week, opts, ctx);
@@ -1603,10 +1682,11 @@
         const sleeperStatus = String(player.injury_status || '').toUpperCase();
         let status = SLEEPER_STATUS[sleeperStatus] || (sleeperStatus ? sleeperStatus : '');
         const stale = staleOut(player, ctx);
-        if (stale) status = 'Q';
+        if (stale) status = '';
         // PFF's tag fills in only when Sleeper has none, and never for a man
         // who has already played this week (his tags are for next week).
-        if (!status && !player.injury_status_after && depth && PFF_STATUS[String(depth.st || '').toLowerCase()]) status = PFF_STATUS[String(depth.st).toLowerCase()];
+        // (nor for last week's Out projected as playing: PFF carries the same stale tag)
+        if (!status && !stale && !player.injury_status_after && depth && PFF_STATUS[String(depth.st || '').toLowerCase()]) status = PFF_STATUS[String(depth.st).toLowerCase()];
         if (isByeWeek(team, week) || (num(player.bye_week) === week)) status = 'BYE';
         input.health = stale ? { status, staleOut: true } : { status };
 
@@ -1655,7 +1735,7 @@
         if (((App.WeeklyProj && App.WeeklyProj.recentPPG) || opts.weeklyPoints) && App.calcPPG && stats) {
             const last3 = num(opts.weeklyPoints ? recentPPGFrom(opts.weeklyPoints, pid, week, 3) : App.WeeklyProj.recentPPG(pid, week, 3));
             const seasonPPG = num(App.calcPPG(stats, opts.scoring));
-            if (last3 != null && seasonPPG != null) input.trend = { last3, season: seasonPPG };
+            if (last3 != null && seasonPPG != null && !returningStar(pid, player, grp, team, ctx, opts)) input.trend = { last3, season: seasonPPG };
         }
 
         // supporting cast (the lines are the trench factor's job)
