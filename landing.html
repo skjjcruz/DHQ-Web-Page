@@ -44,7 +44,7 @@
     })();
     </script>
 
-<meta name="dhq-build" content="b153-a955593ff4">
+<meta name="dhq-build" content="b153-c86329068f">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://skjjcruz.github.io https://browser.sentry-cdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://sxshiqyxhhifvtfqawbq.supabase.co https://api.sleeper.app https://api.myfantasyleague.com https://*.myfantasyleague.com https://lm-api-reads.fantasy.espn.com https://fantasysports.yahooapis.com https://*.sentry.io; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; object-src 'none';">
 <title>Dynasty HQ — Generic advice stops here.</title>
@@ -1369,7 +1369,9 @@
       // Also an unstamped device that remembers a league (a signed-out user
       // of an older build) — becoming a guest would clear it.
       var remembers = !!(idn && !stamp && localStorage.getItem('wr_guest_v1') !== '1' && idn.localOnboarded());
-      if (((stamp && stamp !== 'guest') || remembers) && !form.dataset.guestOk) {
+      // Lab: no detour — Go always continues as a guest (owner ruling
+      // 2026-10-05); signing in again restores an account's leagues.
+      if (((stamp && stamp !== 'guest') || remembers) && !form.dataset.guestOk && window.DHQ_LAB !== true) {
         form.dataset.guestOk = '1';
         try { openAuthSheet('signin'); } catch (err) {}
         try { showAlert('success', 'Welcome back \u2014 sign in to your account. Not you? Close this and tap Go again to look around as a guest.'); } catch (err) {}
