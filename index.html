@@ -45,7 +45,7 @@
     })();
     </script>
 
-    <meta name="dhq-build" content="b153-62c1aeabb6">
+    <meta name="dhq-build" content="b154-8e6ab5caa7">
     <meta name="dhq-engine-v" content="a18eefeda9">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, viewport-fit=cover">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://skjjcruz.github.io https://browser.sentry-cdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://sxshiqyxhhifvtfqawbq.supabase.co https://api.sleeper.app https://site.api.espn.com https://sports.core.api.espn.com https://api.myfantasyleague.com https://*.myfantasyleague.com https://lm-api-reads.fantasy.espn.com https://site.web.api.espn.com https://fantasysports.yahooapis.com https://api.fantasycalc.com https://*.sentry.io; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; object-src 'none';">
@@ -3180,7 +3180,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
 
 <!-- War Room modules — loaded in dependency order by Babel standalone -->
 <!-- 1. Core: tier system, React hooks, fetch helpers (everything depends on this) -->
-<script src="js/core.js?v=348388b38b"></script>
+<script src="js/core.js?v=7bf6eed3a5"></script>
 <!-- 1a. Central data-sync manager — window.WR.Sync — stale-while-revalidate on tab return + in-season interval (plain JS) -->
 <script src="js/shared/sync-manager.js?v=e53de045e9"></script>
 <!-- 1a2. Shared viewport seam — WR.useViewport() hook + WR.viewport() snapshot (plain JS; must precede components.js and all tab files) -->
@@ -3310,13 +3310,11 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <script type="text/wr-deferred" data-wr-defer="wire" src="js/components/league-wire-studio.js?v=a0ba2aa9b9"></script>
 <script type="text/wr-deferred" data-wr-defer="wire" src="js/components/league-wire-portfolio.js?v=96d4d0acf6"></script>
 <script type="text/wr-deferred" data-wr-defer="wire" src="js/components/league-wire.js?v=67155b5678"></script>
-<!-- Hub v2 — the C2 "Welcome back" home, LAB ONLY (2026-10-02). Deferred group
-     'hubv2': app.js asks for it only when HUB_V2 is on (window.DHQ_LAB, set by
-     lab/gate.html in the Lab; or ?hub=v2 on localhost), so the website never
-     runs it or requests it while in use (like every deferred file, it is
-     listed in version.json for live-update's pre-reload check). Its stylesheet
-     sits in an inert <template> (never fetched) that js/hub-v2.js clones in
-     when it renders. Bump both ?v=. -->
+<!-- Hub v2 — the "Welcome back" home (Lab 2026-10-02, live for everyone b154).
+     Deferred group 'hubv2': app.js requests it when the home renders (like every
+     deferred file, it is listed in version.json for live-update's pre-reload
+     check). Its stylesheet sits in an inert <template> (never fetched) that
+     js/hub-v2.js clones in when it renders. Bump both ?v=. -->
 <template id="dhq-hub-v2-css"><link rel="stylesheet" href="js/hub-v2.css?v=20261005strip1"></template>
 <script type="text/wr-deferred" data-wr-defer="hubv2" src="js/hub-v2.js?v=68c695ed7e"></script>
 <!-- 4b. Draft Command Center modules — group "draft" (~28 scripts, ~1.26MB),
@@ -3393,7 +3391,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <!-- 7. League detail: coordinator shell, depends on all above -->
     <script src="js/league-detail.js?v=1dd9444202"></script>
 <!-- 8. App: OwnerDashboard + ReactDOM.render (loads last) -->
-<script src="js/app.js?v=052f5e362d"></script>
+<script src="js/app.js?v=de49f46f3d"></script>
 
 <!-- All JSX code extracted to js/ modules. Only bootstrap remains. -->
 <script>
@@ -3462,7 +3460,7 @@ window.addEventListener('appinstalled', () => {
 <!-- Deploy tag (owner ask 2026-08-19): a tiny always-visible build code so the
      owner can read back exactly which version his device is running before
      testing — kills the stale-cache guessing game. Bump the code every deploy. -->
-<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b153 · LAB180</div>
+<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b154 · LAB181</div>
 </body>
 </html>
 <!-- build 1774212614 -->
