@@ -44,7 +44,7 @@
     })();
     </script>
 
-<meta name="dhq-build" content="b153-4464c1337e">
+<meta name="dhq-build" content="b153-ac8f4cd7cf">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://skjjcruz.github.io https://browser.sentry-cdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://sxshiqyxhhifvtfqawbq.supabase.co https://api.sleeper.app https://api.myfantasyleague.com https://*.myfantasyleague.com https://lm-api-reads.fantasy.espn.com https://fantasysports.yahooapis.com https://*.sentry.io; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; object-src 'none';">
 <title>Dynasty HQ — Generic advice stops here.</title>
@@ -54,7 +54,7 @@
   <style id="preboot-hide">html{visibility:hidden!important}</style>
   <noscript><style>html{visibility:visible!important}</style></noscript>
   <!-- Owner-stamped device identity (DHQ-Shared identity.js): sign-in reconcile + the one sign-out clear. -->
-  <script src="reconai-shared/identity.js?v=e11b51d15d"></script>
+  <script src="reconai-shared/identity.js?v=55461209d6"></script>
   <script>
     (function () {
       function reveal(){ var s=document.getElementById('preboot-hide'); if(s&&s.parentNode){ s.parentNode.removeChild(s); } }
@@ -1364,7 +1364,8 @@
       // holder gets their account back by signing in again.
       var idn = window.OD && window.OD.identity;
       try { sessionStorage.setItem('dhq_connect_prefill', JSON.stringify({ platform: platform, value: v, ts: Date.now() })); } catch (err) {}
-      try { if (idn) idn.beginGuest(); } catch (err) {}
+      // The Sleeper name goes along: the same person keeps their stuff.
+      try { if (idn) idn.beginGuest(platform === 'sleeper' ? v : undefined); } catch (err) {}
       try{localStorage.setItem('wr_guest_v1','1')}catch(e){};window.location.href='connect-sleeper.html';
     });
   })();
