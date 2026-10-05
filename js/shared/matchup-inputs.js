@@ -77,6 +77,13 @@
         roleNorm: { FS: 1.145, SS: 1.145, NB: 1.09, LCB: 0.83, RCB: 0.83, CB: 0.83, LILB: 1.23, RILB: 1.23, MLB: 1.23, ILB: 1.23, LOLB: 0.73, ROLB: 0.73, OLB: 0.73 },
         // Kickers early in the season sit near the league-average kicker
         kAlpha: 0.25, kShrinkWeeks: 6,
+        // A teammate back from a missed game, with a track record of at
+        // least this share, resets the room: the others' shares count only
+        // the games he played (see returners below)
+        returnerMin: 0.15,
+        // A tight end whose track record is at least this share of the
+        // targets is not cut by the tight-end room (see roleFor)
+        starTeRoom: 0.18,
     }, root.__DHQ_TUNE || {});
     const SLEEPER_DEPTH_POS = { QB: 'QB', RB: 'RB', FB: 'RB', WR: 'WR', LWR: 'WR', SWR: 'WR', RWR: 'WR', TE: 'TE', K: 'K',
         LDE: 'DL', RDE: 'DL', DE: 'DL', DT: 'DL', NT: 'DL', LDT: 'DL', RDT: 'DL', DL: 'DL',
@@ -652,6 +659,33 @@
         if (tgp > 0) return clamp(mine / (total / tgp), 0, 1);
         return clamp(ballOf(grp, st) / total, 0, 1);
     }
+    // Teammates back from a missed game: healthy now, a track record of
+    // TUNE.returnerMin share or more, out for one of the recent weeks and
+    // in for another. Receivers and tight ends share one list (they share
+    // the targets).
+    function returners(pid, team, grp, opts, ctx) {
+        const pass = grp === 'WR' || grp === 'TE';
+        ctx._ret = ctx._ret || {};
+        const k = team + '|' + (pass ? 'PASS' : grp);
+        if (!ctx._ret[k]) {
+            const list = [];
+            const players = opts.playersData || {};
+            const weeks = (ctx.recentWeeks || []).filter(wk => wk && wk.stats && wk.stats['TEAM_' + team]);
+            const playedIn = (wk, mid) => !!(wk.stats[mid] && num(wk.stats[mid].gp) >= 1);
+            for (const mid of Object.keys(players)) {
+                const m = players[mid];
+                if (!m || String(m.team || '').toUpperCase() !== team) continue;
+                const g = posGroup(m);
+                if (pass ? !(g === 'WR' || g === 'TE') : g !== grp) continue;
+                if (OUT_FOR_SHARE[statusOf(m)]) continue;
+                const tr = trackRecordShare(mid, g, team, ctx, opts);
+                if (tr == null || tr < TUNE.returnerMin) continue;
+                if (weeks.some(wk => !playedIn(wk, mid)) && weeks.some(wk => playedIn(wk, mid))) list.push(mid);
+            }
+            ctx._ret[k] = list;
+        }
+        return ctx._ret[k].filter(r => r !== String(pid));
+    }
     // Earned share: season share leaning on the last three weeks.
     function earnedShare(pid, player, grp, team, opts, ctx) {
         // A quarterback's share counts only games he started and finished
@@ -673,14 +707,24 @@
             }
             return t > 0 ? clamp(m / t, 0, 1) : null;
         }
-        const seasonShare = perGameShare(opts.statsData, 'season', pid, team, grp, ctx, opts);
+        // Everyone else: a week he missed is not a vote either (week 4
+        // 2026: Bowers missed weeks 1-2, took 14 targets in week 3 and was
+        // read as a part-timer). And while an established teammate was out,
+        // the man who filled in banked a starter's share he no longer gets:
+        // with such a teammate back, only the games they shared count
+        // (Mayer filled in for Bowers, Hutchinson for Collins).
+        const back = returners(pid, team, grp, opts, ctx);
+        const seasonShare = back.length ? null : perGameShare(opts.statsData, 'season', pid, team, grp, ctx, opts);
         let mine = 0, theirs = 0;
         for (const wk of ctx.recentWeeks || []) {
             if (!wk || !wk.stats) continue;
             const t = teamBall(ctx, wk.stats, 'wk' + wk.week, team, grp, opts.playersData);
             if (t <= 0) continue;
+            const me = wk.stats[pid];
+            if (!(me && num(me.gp) >= 1)) continue;
+            if (back.some(r => !(wk.stats[r] && num(wk.stats[r].gp) >= 1))) continue;
             theirs += t;
-            mine += ballOf(grp, wk.stats[pid]);
+            mine += ballOf(grp, me);
         }
         const recentShare = theirs > 0 ? mine / theirs : null;
         if (seasonShare == null && recentShare == null) return null;
@@ -811,6 +855,11 @@
             // (Daniels was cut to 69% of Washington's attempts by Mariota's
             // 2025 fill-in games).
             out.roomScale = grp === 'QB' && out.posRank === 1 ? 1 : +roomScale(team, grp, opts, ctx).toFixed(3);
+            // Nor is a star tight end: the tight-end room is a league-average
+            // 24% of the targets, and a Bowers takes that alone (week 4 2026:
+            // cut 36% to 4.7 targets, projected 6.6, scored 17.6 on 11).
+            // Weeks 1-4: TE 195-157 to 199-156 vs Sleeper.
+            if (grp === 'TE' && rawInfo.trackShare != null && rawInfo.trackShare >= TUNE.starTeRoom) out.roomScale = 1;
             proj *= out.roomScale;
             out.share = clamp(proj, 0, 1);
             const pie = teamPie(team, grp, ctx.week, opts, ctx);

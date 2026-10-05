@@ -124,3 +124,35 @@ test('a backup quarterback projects zero, average and typical week alike', () =>
     const b = base('q2', { team: 'KC', position: 'QB' }, 'QB', { projTargets: 30, posRank: 2, backupQb: true });
     assert.deepEqual([b.median, b.mean], [0, 0]);
 });
+
+// Raiders-style room: a star tight end out for weeks 1-2, back in week 3;
+// the backup filled in. 30 team targets a game.
+const roomFixture = () => {
+    const wk = (w, bow, may) => ({ week: w, stats: Object.assign({ TEAM_LV: { gp: 1, rec_tgt: 30 }, wr1: { gp: 1, rec_tgt: 10 }, may: { gp: 1, rec_tgt: may } }, bow != null ? { bow: { gp: 1, rec_tgt: bow } } : {}) });
+    const playersData = { bow: { team: 'LV', position: 'TE' }, may: { team: 'LV', position: 'TE' }, wr1: { team: 'LV', position: 'WR' } };
+    const opts = {
+        playersData,
+        statsData: { TEAM_LV: { gp: 3, rec_tgt: 90 }, bow: { gp: 1, rec_tgt: 12 }, may: { gp: 3, rec_tgt: 18 }, wr1: { gp: 3, rec_tgt: 30 } },
+        priorData: { TEAM_LV: { gp: 17, rec_tgt: 510 }, bow: { gp: 12, rec_tgt: 90 }, may: { gp: 17, rec_tgt: 34 }, wr1: { gp: 17, rec_tgt: 170 } },
+    };
+    const ctx = { week: 4, depth: null, recentWeeks: [wk(1, null, 8), wk(2, null, 8), wk(3, 12, 2)] };
+    return { opts, ctx, role: (pid) => I.roleFor(pid, playersData[pid], playersData[pid].position, 'LV', opts, ctx) };
+};
+
+test('a week he missed is not a vote on his share: 12 of 30 targets in his one game is 40%', () => {
+    const r = roomFixture().role('bow');
+    assert.ok(Math.abs(r.earnedShare - 0.4) < 0.005, 'earned ' + r.earnedShare + ' (the missed weeks as zeros made it 24%)');
+});
+
+test('the backup who filled in keeps only what he got with the starter back', () => {
+    const r = roomFixture().role('may');
+    assert.ok(Math.abs(r.earnedShare - 2 / 30) < 0.005, 'earned ' + r.earnedShare + ' (his fill-in weeks made it 20%)');
+});
+
+test('a star tight end is not cut by the tight-end room; the backup still is', () => {
+    const f = roomFixture();
+    const bow = f.role('bow'), may = f.role('may');
+    assert.ok(bow.trackShare >= 0.18, 'track ' + bow.trackShare);
+    assert.equal(bow.roomScale, 1);
+    assert.ok(may.roomScale < 1, 'backup room scale ' + may.roomScale);
+});
