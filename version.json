@@ -1,7 +1,7 @@
 {
-  "build": "b153-08a9aa8059",
+  "build": "b153-f83db3bd33",
   "tag": "b153",
-  "builtAt": "2026-10-05T14:09:09.925Z",
+  "builtAt": "2026-10-05T14:13:01.680Z",
   "critical": false,
   "notes": "",
   "commit": null,
@@ -423,9 +423,9 @@
     "reconai-shared/values-v2.js": "de14219501",
     "reconai-shared/weekly-proj.js": "354cdcf558",
     "reconai-shared/yahoo-api.js": "353efc2019",
-    "index.html": "34c6fc94a8",
-    "landing.html": "84f5430ffc",
-    "connect-sleeper.html": "a957cd38ee",
-    "upgrade.html": "c9fb67445d"
+    "index.html": "68e23f4162",
+    "landing.html": "74482dfb47",
+    "connect-sleeper.html": "9d3a3aa3c0",
+    "upgrade.html": "c994e366f9"
   }
 }
