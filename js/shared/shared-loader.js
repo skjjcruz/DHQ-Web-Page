@@ -14,7 +14,7 @@
         } catch (e) {}
         return 'https://skjjcruz.github.io/ReconAI-sandbox-dev/shared/';
     })();
-    const DEFAULT_VERSION = '555f26e558'; // fallback only — the deploy build stamps a content hash over this (scripts/build-deploy.cjs)
+    const DEFAULT_VERSION = 'ef4ec6ffc8'; // fallback only — the deploy build stamps a content hash over this (scripts/build-deploy.cjs)
     const config = {
         localBase: null,
         remoteBase: REMOTE_BASE,
