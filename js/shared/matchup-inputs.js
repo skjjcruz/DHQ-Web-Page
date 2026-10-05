@@ -114,9 +114,30 @@
     // Same normalizer the nfl-depth-charts relay keys its roles with.
     const espnName = (name) => String(name || '').toLowerCase().replace(/\b(jr|sr|ii|iii|iv|v)\.?$/g, '').replace(/[^a-z\s]/g, '').replace(/\s+/g, ' ').trim();
     // Sleeper's injury tag → engine status code.
-    function statusOf(player) {
+    function statusOf(player, ctx) {
         const raw = String(player && player.injury_status || '').toUpperCase();
+        if (staleOut(player, ctx)) return 'Q';
         return SLEEPER_STATUS[raw] || raw;
+    }
+    // Last week's "Out" (owner ruling 2026-10-05). Sleeper keeps the tag a
+    // player wore for last Sunday's game until this week's report replaces
+    // it, so on a Monday Daniels, Chase and Jefferson all read 0 for a game
+    // they were expected to play. Until the final injury report (44 hours
+    // before kickoff, 28 for a Thursday game) an Out counts as Questionable
+    // when Sleeper still publishes a line for him this week; no line means
+    // Sleeper's own people expect him to miss it, and he stays out. IR, PUP,
+    // a suspension and the rest keep their zero for as long as they last,
+    // a season-ending IR included.
+    function staleOut(player, ctx) {
+        if (!player || !ctx || ctx.week == null) return false;
+        if (SLEEPER_STATUS[String(player.injury_status || '').toUpperCase()] !== 'OUT') return false;
+        const wk = App.WeeklyProj && App.WeeklyProj._ctx && App.WeeklyProj._ctx.byTeamWeek[String(player.team || '').toUpperCase() + '|' + ctx.week];
+        const kick = wk ? Date.parse(wk.kickoff || '') : NaN;
+        if (!Number.isFinite(kick)) return false;
+        const thursday = new Date(kick - 5 * 3600e3).getUTCDay() === 4;
+        if (kick - (ctx.now != null ? ctx.now : Date.now()) <= (thursday ? 28 : 44) * 3600e3) return false;
+        const pid = player.player_id;
+        return !!(pid && App.WeeklyProj.projLine && App.WeeklyProj.projLine(pid, ctx.week));
     }
     function espn() { return App.MatchupFeeds && App.MatchupFeeds.espn; }
 
@@ -559,7 +580,7 @@
             const m = players[mid];
             if (!m || String(m.team || '').toUpperCase() !== team || posGroup(m) !== grp) continue;
             const br = baseRank(m, grp, ctx.depth);
-            if (br) list.push({ pid: mid, rank: br.rank, name: fullName(m), outW: OUT_FOR_SHARE[statusOf(m)] || 0 });
+            if (br) list.push({ pid: mid, rank: br.rank, name: fullName(m), outW: OUT_FOR_SHARE[statusOf(m, ctx)] || 0 });
         }
         list.sort((a, b) => a.rank - b.rank);
         ctx._ranked[k] = list;
@@ -677,14 +698,14 @@
                 if (!m || String(m.team || '').toUpperCase() !== team) continue;
                 const g = posGroup(m);
                 if (pass ? !(g === 'WR' || g === 'TE') : g !== grp) continue;
-                if (OUT_FOR_SHARE[statusOf(m)]) continue;
+                if (OUT_FOR_SHARE[statusOf(m, ctx)]) continue;
                 const tr = trackRecordShare(mid, g, team, ctx, opts);
                 if (tr == null || tr < TUNE.returnerMin) continue;
-                if (weeks.some(wk => !playedIn(wk, mid)) && weeks.some(wk => playedIn(wk, mid))) list.push(mid);
+                if (weeks.some(wk => !playedIn(wk, mid)) && weeks.some(wk => playedIn(wk, mid))) list.push({ pid: mid, track: tr });
             }
             ctx._ret[k] = list;
         }
-        return ctx._ret[k].filter(r => r !== String(pid));
+        return ctx._ret[k].filter(r => r.pid !== String(pid));
     }
     // Earned share: season share leaning on the last three weeks.
     function earnedShare(pid, player, grp, team, opts, ctx) {
@@ -713,19 +734,29 @@
         // the man who filled in banked a starter's share he no longer gets:
         // with such a teammate back, only the games they shared count
         // (Mayer filled in for Bowers, Hutchinson for Collins).
-        const back = returners(pid, team, grp, opts, ctx);
-        const seasonShare = back.length ? null : perGameShare(opts.statsData, 'season', pid, team, grp, ctx, opts);
-        let mine = 0, theirs = 0;
-        for (const wk of ctx.recentWeeks || []) {
-            if (!wk || !wk.stats) continue;
-            const t = teamBall(ctx, wk.stats, 'wk' + wk.week, team, grp, opts.playersData);
-            if (t <= 0) continue;
-            const me = wk.stats[pid];
-            if (!(me && num(me.gp) >= 1)) continue;
-            if (back.some(r => !(wk.stats[r] && num(wk.stats[r].gp) >= 1))) continue;
-            theirs += t;
-            mine += ballOf(grp, me);
-        }
+        // Only a man below the returner in the pecking order gives anything
+        // back (week 5 2026: McLaurin was reset by Okonkwo's return and
+        // read as a 1% receiver), and only when they shared a game.
+        const mineTrack = trackRecordShare(pid, grp, team, ctx, opts);
+        const back = returners(pid, team, grp, opts, ctx).filter(r => mineTrack == null || r.track > mineTrack).map(r => r.pid);
+        const tally = (useBack) => {
+            let m = 0, t0 = 0;
+            for (const wk of ctx.recentWeeks || []) {
+                if (!wk || !wk.stats) continue;
+                const t = teamBall(ctx, wk.stats, 'wk' + wk.week, team, grp, opts.playersData);
+                if (t <= 0) continue;
+                const me = wk.stats[pid];
+                if (!(me && num(me.gp) >= 1)) continue;
+                if (useBack && back.some(r => !(wk.stats[r] && num(wk.stats[r].gp) >= 1))) continue;
+                t0 += t;
+                m += ballOf(grp, me);
+            }
+            return { mine: m, theirs: t0 };
+        };
+        let { mine, theirs } = tally(back.length > 0);
+        const shared = back.length > 0 && theirs > 0;
+        if (back.length && !shared) ({ mine, theirs } = tally(false));
+        const seasonShare = shared ? null : perGameShare(opts.statsData, 'season', pid, team, grp, ctx, opts);
         const recentShare = theirs > 0 ? mine / theirs : null;
         if (seasonShare == null && recentShare == null) return null;
         if (recentShare == null) return seasonShare;
@@ -777,7 +808,7 @@
         for (const mid of Object.keys(players)) {
             const m = players[mid];
             if (!m || String(m.team || '').toUpperCase() !== team || posGroup(m) !== grp) continue;
-            if (OUT_FOR_SHARE[statusOf(m)]) continue;
+            if (OUT_FOR_SHARE[statusOf(m, ctx)]) continue;
             const raw = rawShareFor(mid, m, grp, team, opts, ctx);
             if (raw != null) sum += raw;
         }
@@ -991,7 +1022,7 @@
                     const m = opts.playersData[mid];
                     if (!m || String(m.team || '').toUpperCase() !== team || posGroup(m) !== grp) continue;
                     const sh = seasonTotal > 0 ? ballOf(grp, opts.statsData[mid]) / seasonTotal : 0;
-                    if (sh > 0) list.push({ pid: mid, share: sh, outW: OUT_FOR_SHARE[statusOf(m)] || 0 });
+                    if (sh > 0) list.push({ pid: mid, share: sh, outW: OUT_FOR_SHARE[statusOf(m, ctx)] || 0 });
                 }
                 list.sort((a, b) => b.share - a.share);
                 ctx._mates[mk] = list;
@@ -1001,7 +1032,7 @@
             if (idx >= 0) out.shareRank = idx + 1;
             if (grp === 'WR' || grp === 'TE' || grp === 'RB') {
                 // pass catchers: freed targets flow across WR, TE and RB
-                const extra = OUT_FOR_SHARE[statusOf(player)] ? 0 : freedTargetShare(pid, team, ctx, opts);
+                const extra = OUT_FOR_SHARE[statusOf(player, ctx)] ? 0 : freedTargetShare(pid, team, ctx, opts);
                 if (extra > 0) {
                     out.freedShare = +extra.toFixed(3);
                     if (grp === 'RB') {
@@ -1016,7 +1047,7 @@
                 // quarterbacks and defenders: freed share stays inside the position
                 let freed = 0, healthySum = 0;
                 for (const m of mates) { if (m.pid !== pid && m.outW) freed += m.share * m.outW; else healthySum += m.share; }
-                if (earned != null && freed > 0 && healthySum > 0 && !OUT_FOR_SHARE[statusOf(player)]) earned = earned * (1 + freed / healthySum);
+                if (earned != null && freed > 0 && healthySum > 0 && !OUT_FOR_SHARE[statusOf(player, ctx)]) earned = earned * (1 + freed / healthySum);
             }
         }
         // Blend with what his depth-chart slot normally earns. The earned
@@ -1311,7 +1342,7 @@
                     let incPid = null, incShare = 0;
                     for (const q of Object.keys(ur[kind])) if ((ur[kind][q].share || 0) > incShare) { incShare = ur[kind][q].share; incPid = q; }
                     const inc = incPid && opts.playersData && opts.playersData[incPid];
-                    const incGone = !inc || String(inc.team || '').toUpperCase() !== team || !!OUT_FOR_SHARE[statusOf(inc)];
+                    const incGone = !inc || String(inc.team || '').toUpperCase() !== team || !!OUT_FOR_SHARE[statusOf(inc, ctx)];
                     priShare = clamp(elsewhere * (incGone ? 0.75 : 0.25), 0, 1);
                 }
             } else priShare = priTot > 0 && mePri ? clamp((num(mePri[kind]) || 0) / priTot, 0, 1) : 0;
@@ -1387,7 +1418,7 @@
             if (!(g === 'WR' || g === 'TE' || g === 'RB')) continue;
             const tshare = targetShareOf(mid, team, ctx, opts);
             if (tshare <= 0) continue;
-            const outW = OUT_FOR_SHARE[statusOf(m)] || 0;
+            const outW = OUT_FOR_SHARE[statusOf(m, ctx)] || 0;
             if (outW) { freed += tshare * outW; if (tshare >= 0.05) hurtList.push(fullName(m)); }
             else { healthy[mid] = { grp: g, tshare }; denom += ABSORB[g] * tshare; }
         }
@@ -1452,7 +1483,7 @@
         const depth = teamDepth(team, ctx, opts);
         const players = opts.playersData || {};
         const nameOf = (id) => fullName(players[id]);
-        const hurt = (m) => (OUT_FOR_SHARE[statusOf(m)] || 0) >= 0.3 || statusOf(m) === 'Q';
+        const hurt = (m) => (OUT_FOR_SHARE[statusOf(m, ctx)] || 0) >= 0.3 || statusOf(m, ctx) === 'Q';
         if (grp === 'QB') {
             const pieces = [];
             const seen = new Set();
@@ -1463,7 +1494,7 @@
                     seen.add(slot.pid);
                     // his real weight: what he carries now, or what he was expected to
                     const share = Math.max(expectedShare(slot.pid, g, team, ctx, opts), BASE_SHARE[g] ? BASE_SHARE[g][Math.min(BASE_SHARE[g].length, slot.rank) - 1] : 0);
-                    pieces.push({ name: nameOf(slot.pid), pos: g, rank: slot.rank, share: +share.toFixed(3), status: statusOf(m) });
+                    pieces.push({ name: nameOf(slot.pid), pos: g, rank: slot.rank, share: +share.toFixed(3), status: statusOf(m, ctx) });
                 }
             };
             add('WR', 3); add('TE', 1); add('RB', 1);
@@ -1478,7 +1509,7 @@
                 const share = expectedShare(mid, g, team, ctx, opts);
                 if (share < 0.08) continue;
                 seen.add(mid);
-                pieces.push({ name: nameOf(mid), pos: g, rank: null, share: +share.toFixed(3), status: statusOf(m) });
+                pieces.push({ name: nameOf(mid), pos: g, rank: null, share: +share.toFixed(3), status: statusOf(m, ctx) });
             }
             return pieces.length ? { pieces } : null;
         }
@@ -1498,13 +1529,13 @@
             if (sh > expShare) { expShare = sh; expected = mid; }
         }
         if (!expected) expected = qbs[0].pid;
-        const starter = qbs.find(x => !((OUT_FOR_SHARE[statusOf(players[x.pid])] || 0) >= 0.8)) || qbs[0];
+        const starter = qbs.find(x => !((OUT_FOR_SHARE[statusOf(players[x.pid], ctx)] || 0) >= 0.8)) || qbs[0];
         const sM = players[starter.pid];
-        if (starter.pid !== expected && (OUT_FOR_SHARE[statusOf(players[expected])] || 0) >= 0.8) {
-            const outNames = [nameOf(expected)].concat(qbs.filter(x => x.pid !== expected && x.pid !== starter.pid && (OUT_FOR_SHARE[statusOf(players[x.pid])] || 0) >= 0.8).map(x => nameOf(x.pid)));
-            return { qb: { name: nameOf(starter.pid), status: statusOf(sM), grade: gradeOf(sM), backup: true, starterOut: outNames.join(', ') } };
+        if (starter.pid !== expected && (OUT_FOR_SHARE[statusOf(players[expected], ctx)] || 0) >= 0.8) {
+            const outNames = [nameOf(expected)].concat(qbs.filter(x => x.pid !== expected && x.pid !== starter.pid && (OUT_FOR_SHARE[statusOf(players[x.pid], ctx)] || 0) >= 0.8).map(x => nameOf(x.pid)));
+            return { qb: { name: nameOf(starter.pid), status: statusOf(sM, ctx), grade: gradeOf(sM), backup: true, starterOut: outNames.join(', ') } };
         }
-        return { qb: { name: nameOf(starter.pid), status: statusOf(sM), grade: gradeOf(sM) } };
+        return { qb: { name: nameOf(starter.pid), status: statusOf(sM, ctx), grade: gradeOf(sM) } };
     }
 
     // ── prepare: the async pieces, once per roster ────────────────────
@@ -1571,11 +1602,13 @@
         // health
         const sleeperStatus = String(player.injury_status || '').toUpperCase();
         let status = SLEEPER_STATUS[sleeperStatus] || (sleeperStatus ? sleeperStatus : '');
+        const stale = staleOut(player, ctx);
+        if (stale) status = 'Q';
         // PFF's tag fills in only when Sleeper has none, and never for a man
         // who has already played this week (his tags are for next week).
         if (!status && !player.injury_status_after && depth && PFF_STATUS[String(depth.st || '').toLowerCase()]) status = PFF_STATUS[String(depth.st).toLowerCase()];
         if (isByeWeek(team, week) || (num(player.bye_week) === week)) status = 'BYE';
-        input.health = { status };
+        input.health = stale ? { status, staleOut: true } : { status };
 
         // opponent: blended rank (points allowed, PFF unit grade, last
         // season, team quality); falls back to this season's points-allowed
@@ -1685,7 +1718,7 @@
         for (const pid of Object.keys(picked)) {
             const m = players[pid]; if (!m) continue;
             out.starters++;
-            const w = HEALTH_W[statusOf(m)] || 0;
+            const w = HEALTH_W[statusOf(m, ctx)] || 0;
             if (w) { out.lost += w; out.names.push(fullName(m) + (w >= 0.85 ? ' out' : ' questionable')); }
         }
         out.starters = Math.max(out.starters, UNIT_SIZE[unit] || 0);
@@ -1701,9 +1734,9 @@
             const qbs = rankedMates(team, 'QB', ctx, opts);
             const qb1 = qbs.find(m => m.rank <= 1) || null;
             if (qb1) {
-                const w = HEALTH_W[statusOf(opts.playersData[qb1.pid])] || 0;
+                const w = HEALTH_W[statusOf(opts.playersData[qb1.pid], ctx)] || 0;
                 out.qb = { name: qb1.name, lost: w };
-                if (w >= 0.85) { const next = qbs.find(m => m.pid !== qb1.pid && !(HEALTH_W[statusOf(opts.playersData[m.pid])] >= 0.85)); if (next) out.qb.backup = next.name; }
+                if (w >= 0.85) { const next = qbs.find(m => m.pid !== qb1.pid && !(HEALTH_W[statusOf(opts.playersData[m.pid], ctx)] >= 0.85)); if (next) out.qb.backup = next.name; }
             }
             out.ol = unitHealth(team, 'ol', ctx, opts);
             out.skill = unitHealth(team, 'skill', ctx, opts);
@@ -1747,7 +1780,7 @@
     }
 
     App.MatchupInputs = App.MatchupInputs || {
-        prepare, build, project, projectRoster, idpRankings, priorRankings, depthCharts, baselineFor, dhqBaselineFor, sleeperPoints, opponentOf, opponentFor, trenchFor, castFor, teamDepth, expectedShare, teamSlotNorm, passPool, freedTargetShare, posGroup, normName, roleFor, oppHealthFor, returnLine, recentPPGFrom,
+        prepare, build, project, projectRoster, statusOf, idpRankings, priorRankings, depthCharts, baselineFor, dhqBaselineFor, sleeperPoints, opponentOf, opponentFor, trenchFor, castFor, teamDepth, expectedShare, teamSlotNorm, passPool, freedTargetShare, posGroup, normName, roleFor, oppHealthFor, returnLine, recentPPGFrom,
     };
     /* global module */
     if (typeof module !== 'undefined' && module.exports) module.exports = App.MatchupInputs;

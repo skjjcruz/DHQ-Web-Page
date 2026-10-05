@@ -128,7 +128,7 @@ async function main() {
                 // (audit of weeks 1-3 2026 could do neither).
                 const g = (p.input && p.input.game) || {};
                 out.players[pid] = { pos: p.position, team: T, opp: p.opponentAbbr || null, grade: p.grade, verdict: p.verdict, why: why.slice(0, 320), t: now.toISOString(),
-                    inj: (players[pid] && players[pid].injury_status) || null, imp: g.impliedTotal != null ? g.impliedTotal : null, spr: g.spread != null ? g.spread : null };
+                    inj: (players[pid] && players[pid].injury_status) || null, ...(p.input && p.input.health && p.input.health.staleOut ? { stale: 1 } : {}), imp: g.impliedTotal != null ? g.impliedTotal : null, spr: g.spread != null ? g.spread : null };
                 written++;
             }
         }

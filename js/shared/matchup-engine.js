@@ -183,7 +183,7 @@
         if (status === 'D' || status === 'DOUBTFUL') return { score: -1, note: 'Doubtful, treated as out', out: true };
         let s = 0;
         const notes = [];
-        if (status === 'Q' || status === 'QUESTIONABLE') { s -= 0.35; notes.push('Questionable'); }
+        if (status === 'Q' || status === 'QUESTIONABLE') { s -= 0.35; notes.push(h.staleOut ? 'Out last week, this week\'s report not out yet (treated as Questionable)' : 'Questionable'); }
         const practice = String(h.practice || '').toUpperCase();
         if (practice === 'DNP') { s -= 0.2; notes.push('Did not practice'); }
         else if (practice === 'LP') { s -= 0.1; notes.push('Limited in practice'); }
