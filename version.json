@@ -1,7 +1,7 @@
 {
-  "build": "b153-df40d21381",
+  "build": "b153-62c1aeabb6",
   "tag": "b153",
-  "builtAt": "2026-10-05T16:53:29.165Z",
+  "builtAt": "2026-10-05T17:00:48.954Z",
   "critical": false,
   "notes": "",
   "commit": null,
@@ -24,7 +24,7 @@
       "js/theme.js?v=e827d463e4",
       "js/shared/alex-voice.js?v=ebcfc86f18",
       "js/shared/alex-answer-chip.js?v=87899cf865",
-      "js/core.js?v=742618e03e",
+      "js/core.js?v=348388b38b",
       "js/shared/sync-manager.js?v=e53de045e9",
       "js/shared/viewport.js?v=7629d5e214",
       "js/shared/live-update.js?v=76a854447b",
@@ -240,7 +240,7 @@
     "js/theme.js": "e827d463e4",
     "js/shared/alex-voice.js": "ebcfc86f18",
     "js/shared/alex-answer-chip.js": "87899cf865",
-    "js/core.js": "742618e03e",
+    "js/core.js": "348388b38b",
     "js/shared/sync-manager.js": "e53de045e9",
     "js/shared/viewport.js": "7629d5e214",
     "js/shared/live-update.js": "76a854447b",
@@ -423,9 +423,9 @@
     "reconai-shared/values-v2.js": "de14219501",
     "reconai-shared/weekly-proj.js": "354cdcf558",
     "reconai-shared/yahoo-api.js": "353efc2019",
-    "index.html": "9ec05fef43",
-    "landing.html": "b7361010e7",
-    "connect-sleeper.html": "680125e357",
-    "upgrade.html": "7ab08c04d7"
+    "index.html": "f1db3d8686",
+    "landing.html": "9a4b962e3b",
+    "connect-sleeper.html": "6ee8eed908",
+    "upgrade.html": "caf2640a9e"
   }
 }
