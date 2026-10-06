@@ -1,7 +1,7 @@
 {
-  "build": "b155-4b1ae31488",
+  "build": "b155-1053096ca2",
   "tag": "b155",
-  "builtAt": "2026-10-06T13:41:55.440Z",
+  "builtAt": "2026-10-06T14:20:28.701Z",
   "critical": false,
   "notes": "",
   "commit": null,
@@ -148,7 +148,7 @@
       "js/tabs/flash-brief.js?v=1ecab36dd1",
       "js/tabs/league-map.js?v=c546cf86c9",
       "js/tabs/my-team.js?v=e25431df82",
-      "js/tabs/compare.js?v=863c9aa2bb",
+      "js/tabs/compare.js?v=cb4cdde132",
       "js/tabs/analytics.js?v=3dbbe51e8a",
       "js/tabs/trophy-room.js?v=784bd3612e",
       "js/tabs/calendar.js?v=275d34c7b2",
@@ -364,7 +364,7 @@
     "js/tabs/flash-brief.js": "1ecab36dd1",
     "js/tabs/league-map.js": "c546cf86c9",
     "js/tabs/my-team.js": "e25431df82",
-    "js/tabs/compare.js": "863c9aa2bb",
+    "js/tabs/compare.js": "cb4cdde132",
     "js/tabs/analytics.js": "3dbbe51e8a",
     "js/tabs/trophy-room.js": "784bd3612e",
     "js/tabs/calendar.js": "275d34c7b2",
@@ -423,9 +423,9 @@
     "reconai-shared/values-v2.js": "de14219501",
     "reconai-shared/weekly-proj.js": "354cdcf558",
     "reconai-shared/yahoo-api.js": "353efc2019",
-    "index.html": "14fad1a80d",
-    "landing.html": "118d75e35f",
-    "connect-sleeper.html": "c29c5fbf5c",
-    "upgrade.html": "c1da317589"
+    "index.html": "da18e2bfcd",
+    "landing.html": "1606f6235e",
+    "connect-sleeper.html": "892a2c4885",
+    "upgrade.html": "b4ba708b7a"
   }
 }
