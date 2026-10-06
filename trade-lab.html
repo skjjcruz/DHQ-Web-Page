@@ -45,7 +45,7 @@
     })();
     </script>
 
-    <meta name="dhq-build" content="b158-c3e07c9a9e">
+    <meta name="dhq-build" content="b159-a6a1a05465">
     <meta name="dhq-engine-v" content="a18eefeda9">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, viewport-fit=cover">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://skjjcruz.github.io https://browser.sentry-cdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://sxshiqyxhhifvtfqawbq.supabase.co https://api.sleeper.app https://site.api.espn.com https://sports.core.api.espn.com https://api.myfantasyleague.com https://*.myfantasyleague.com https://lm-api-reads.fantasy.espn.com https://site.web.api.espn.com https://fantasysports.yahooapis.com https://api.fantasycalc.com https://*.sentry.io; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; object-src 'none';">
@@ -3227,7 +3227,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <!-- League live scores + standings engines (C2 port 2026-09-27): one shared Sleeper
      scoreboard poller, the completed-week baseline, live standings. Plain JS,
      loaded at boot because The Wire (league-wide) consumes them too. -->
-<script src="js/shared/league-live-scores.js?v=f6653defa9"></script>
+<script src="js/shared/league-live-scores.js?v=c72d8a7ce8"></script>
 <script src="js/shared/league-live-standings.js?v=4dbe1e7867"></script>
 <script src="js/shared/league-live-table.js?v=eaafffa4e4"></script>
 <!-- Season Odds engines (lab port 2026-08-16): plain Node-testable scripts —
@@ -3318,12 +3318,12 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <script type="text/wr-deferred" data-wr-defer="wire" src="js/shared/league-wire-graphics.js?v=41e7baaab1"></script>
 <script type="text/wr-deferred" data-wr-defer="wire" src="js/shared/league-wire-playoffs.js?v=186d5ce73c"></script>
 <script type="text/wr-deferred" data-wr-defer="wire" src="js/shared/league-wire-journal.js?v=e230722012"></script>
-<script type="text/wr-deferred" data-wr-defer="wire" src="js/shared/league-wire-portfolio.js?v=28271403ec"></script>
+<script type="text/wr-deferred" data-wr-defer="wire" src="js/shared/league-wire-portfolio.js?v=5ab2245043"></script>
 <script type="text/wr-deferred" data-wr-defer="wire" src="js/shared/league-wire-nfl.js?v=627d55f7c6"></script>
 <script type="text/wr-deferred" data-wr-defer="wire" src="js/components/league-wire-rivalries.js?v=d1406032f8"></script>
 <script type="text/wr-deferred" data-wr-defer="wire" src="js/components/league-wire-studio.js?v=a0ba2aa9b9"></script>
 <script type="text/wr-deferred" data-wr-defer="wire" src="js/components/league-wire-portfolio.js?v=96d4d0acf6"></script>
-<script type="text/wr-deferred" data-wr-defer="wire" src="js/components/league-wire.js?v=67155b5678"></script>
+<script type="text/wr-deferred" data-wr-defer="wire" src="js/components/league-wire.js?v=74cb3c0514"></script>
 <!-- Hub v2 — the "Welcome back" home (Lab 2026-10-02, live for everyone b154).
      Deferred group 'hubv2': app.js requests it when the home renders (like every
      deferred file, it is listed in version.json for live-update's pre-reload
@@ -3474,7 +3474,7 @@ window.addEventListener('appinstalled', () => {
 <!-- Deploy tag (owner ask 2026-08-19): a tiny always-visible build code so the
      owner can read back exactly which version his device is running before
      testing — kills the stale-cache guessing game. Bump the code every deploy. -->
-<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b158 · LAB190</div>
+<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b159 · LAB191</div>
 </body>
 </html>
 <!-- build 1774212614 -->
