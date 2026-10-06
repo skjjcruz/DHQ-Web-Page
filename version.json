@@ -1,7 +1,7 @@
 {
-  "build": "b159-d620b97a0b",
+  "build": "b159-ec131c0aa5",
   "tag": "b159",
-  "builtAt": "2026-10-06T19:43:00.096Z",
+  "builtAt": "2026-10-06T20:40:00.826Z",
   "critical": false,
   "notes": "",
   "commit": null,
@@ -88,7 +88,7 @@
       "js/components/chop-block-panel.js?v=8065ab0217",
       "js/components/league-live-scoreboard.js?v=d7420b20bf",
       "js/tabs/lineup.js?v=ead5fc2c76",
-      "js/components/league-wire-styles.js?v=b2cf662c9d",
+      "js/components/league-wire-styles.js?v=271d8d9a79",
       "js/shared/league-wire-chronicles.js?v=bbff5109fb",
       "js/shared/league-wire-cache.js?v=7d1d76d4b4",
       "js/shared/league-wire-reading.js?v=878fbca95c",
@@ -304,7 +304,7 @@
     "js/components/chop-block-panel.js": "8065ab0217",
     "js/components/league-live-scoreboard.js": "d7420b20bf",
     "js/tabs/lineup.js": "ead5fc2c76",
-    "js/components/league-wire-styles.js": "b2cf662c9d",
+    "js/components/league-wire-styles.js": "271d8d9a79",
     "js/shared/league-wire-chronicles.js": "bbff5109fb",
     "js/shared/league-wire-cache.js": "7d1d76d4b4",
     "js/shared/league-wire-reading.js": "878fbca95c",
@@ -423,9 +423,9 @@
     "reconai-shared/values-v2.js": "de14219501",
     "reconai-shared/weekly-proj.js": "354cdcf558",
     "reconai-shared/yahoo-api.js": "353efc2019",
-    "index.html": "a5a93a2286",
-    "landing.html": "78c763ab45",
-    "connect-sleeper.html": "9f99963aa8",
-    "upgrade.html": "2d24bcee99"
+    "index.html": "958af19e39",
+    "landing.html": "296f015a40",
+    "connect-sleeper.html": "2bbe1eb52c",
+    "upgrade.html": "d92c8bca07"
   }
 }
