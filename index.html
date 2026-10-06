@@ -45,7 +45,7 @@
     })();
     </script>
 
-    <meta name="dhq-build" content="b156-265007876c">
+    <meta name="dhq-build" content="b157-28073e1cda">
     <meta name="dhq-engine-v" content="a18eefeda9">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, viewport-fit=cover">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://skjjcruz.github.io https://browser.sentry-cdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://sxshiqyxhhifvtfqawbq.supabase.co https://api.sleeper.app https://site.api.espn.com https://sports.core.api.espn.com https://api.myfantasyleague.com https://*.myfantasyleague.com https://lm-api-reads.fantasy.espn.com https://site.web.api.espn.com https://fantasysports.yahooapis.com https://api.fantasycalc.com https://*.sentry.io; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; object-src 'none';">
@@ -1613,6 +1613,10 @@ WRShared.preloadMany(WR_SHARED_FILES);
     .tc-owner-signal-grid em, .tc-owner-panel-head em { display: block; color: var(--silver); opacity: 0.65; font-style: normal; font-size: 0.68rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .tc-owner-profile-grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.75fr); gap: 10px; margin-bottom: 10px; }
     .tc-owner-panel { border: 1px solid rgba(212,175,55,0.14); background: rgba(0,0,0,0.12); border-radius: 8px; padding: 10px; min-width: 0; }
+    /* Roster Audit is a link to that owner's roster (owner ask 2026-10-06). */
+    .tc-owner-panel-link { cursor: pointer; transition: border-color 0.12s, background 0.12s; }
+    .tc-owner-panel-link:hover, .tc-owner-panel-link:focus-visible { border-color: rgba(212,175,55,0.45); background: rgba(212,175,55,0.05); outline: none; }
+    .tc-owner-panel-go { float: right; font-weight: 700; letter-spacing: 0.04em; color: var(--gold); opacity: 0.85; }
     .tc-owner-panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 8px; padding-bottom: 7px; border-bottom: 1px solid rgba(212,175,55,0.11); }
     .tc-owner-panel-head em { text-align: right; text-transform: none; letter-spacing: 0; }
     .tc-owner-pos-table { display: flex; flex-direction: column; gap: 6px; }
@@ -3282,7 +3286,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
      group, when the owning surface first calls wrLoadModuleGroup('<group>'). -->
 <script src="js/module-loader.js?v=fa2c63b653"></script>
 <script src="js/settings.js?v=05d2c5406e"></script>
-<script type="text/wr-deferred" data-wr-defer="trade" src="js/trade-calc.js?v=147e0615f1"></script>
+<script type="text/wr-deferred" data-wr-defer="trade" src="js/trade-calc.js?v=2a695f1438"></script>
 <script src="js/lab-cutdown.js?v=cd15d7635f"></script>
 <script src="js/post-draft.js?v=61bcda3c71"></script>
 <!-- FA waiver tools (C2 wave): stat catalog + stat math, market display helpers, waiver engine (fa group, before free-agency.js) -->
@@ -3384,7 +3388,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <script type="text/wr-deferred" data-wr-defer="analysis" src="js/tabs/league-map.js?v=c546cf86c9"></script>
 <script type="text/wr-deferred" data-wr-defer="myteam" src="js/tabs/my-team.js?v=e25431df82"></script>
 <!-- Compare: extracted from My Roster's former sub-view, now a top-level ROSTER-group tab. -->
-<script type="text/wr-deferred" data-wr-defer="compare" src="js/tabs/compare.js?v=cb4cdde132"></script>
+<script type="text/wr-deferred" data-wr-defer="compare" src="js/tabs/compare.js?v=3e0f57e48c"></script>
 <script type="text/wr-deferred" data-wr-defer="analysis" src="js/tabs/analytics.js?v=3dbbe51e8a"></script>
 <script type="text/wr-deferred" data-wr-defer="trophies" src="js/tabs/trophy-room.js?v=784bd3612e"></script>
 <script src="js/tabs/calendar.js?v=275d34c7b2"></script>
@@ -3470,7 +3474,7 @@ window.addEventListener('appinstalled', () => {
 <!-- Deploy tag (owner ask 2026-08-19): a tiny always-visible build code so the
      owner can read back exactly which version his device is running before
      testing — kills the stale-cache guessing game. Bump the code every deploy. -->
-<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b156 · LAB188</div>
+<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b157 · LAB189</div>
 </body>
 </html>
 <!-- build 1774212614 -->
