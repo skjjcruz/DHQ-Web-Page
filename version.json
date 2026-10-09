@@ -1,7 +1,7 @@
 {
-  "build": "b160-e3a580c0ce",
+  "build": "b160-9d26304456",
   "tag": "b160",
-  "builtAt": "2026-10-09T19:57:56.401Z",
+  "builtAt": "2026-10-09T20:00:31.873Z",
   "critical": false,
   "notes": "",
   "commit": null,
@@ -89,7 +89,7 @@
       "js/components/season-odds-panel.js?v=ee14abac74",
       "js/components/chop-block-panel.js?v=8065ab0217",
       "js/components/league-live-scoreboard.js?v=d7420b20bf",
-      "js/tabs/lineup.js?v=7c497eb5ca",
+      "js/tabs/lineup.js?v=c5aa05a5e0",
       "js/components/league-wire-styles.js?v=271d8d9a79",
       "js/shared/league-wire-chronicles.js?v=bbff5109fb",
       "js/shared/league-wire-cache.js?v=7d1d76d4b4",
@@ -307,7 +307,7 @@
     "js/components/season-odds-panel.js": "ee14abac74",
     "js/components/chop-block-panel.js": "8065ab0217",
     "js/components/league-live-scoreboard.js": "d7420b20bf",
-    "js/tabs/lineup.js": "7c497eb5ca",
+    "js/tabs/lineup.js": "c5aa05a5e0",
     "js/components/league-wire-styles.js": "271d8d9a79",
     "js/shared/league-wire-chronicles.js": "bbff5109fb",
     "js/shared/league-wire-cache.js": "7d1d76d4b4",
@@ -427,9 +427,9 @@
     "reconai-shared/values-v2.js": "de14219501",
     "reconai-shared/weekly-proj.js": "354cdcf558",
     "reconai-shared/yahoo-api.js": "353efc2019",
-    "index.html": "1ddd5185e6",
-    "landing.html": "eafa3e734e",
-    "connect-sleeper.html": "f7b4caad83",
-    "upgrade.html": "cdfa78cdf0"
+    "index.html": "d0c53fd81e",
+    "landing.html": "234c5c0de4",
+    "connect-sleeper.html": "825a08438c",
+    "upgrade.html": "d3069d0b9e"
   }
 }
