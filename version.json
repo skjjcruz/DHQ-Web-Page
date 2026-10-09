@@ -1,7 +1,7 @@
 {
-  "build": "b160-c73e8ea262",
+  "build": "b160-d8a3139a6d",
   "tag": "b160",
-  "builtAt": "2026-10-09T21:11:50.768Z",
+  "builtAt": "2026-10-09T21:23:49.839Z",
   "critical": false,
   "notes": "",
   "commit": null,
@@ -41,7 +41,7 @@
       "js/shared/faab-league.js?v=e5eb2cc3bd",
       "js/shared/sleeper-proj.js?v=fce29dbc33",
       "js/shared/game-locks.js?v=a3365eb88e",
-      "js/shared/ask-dhq.js?v=2120d32afc",
+      "js/shared/ask-dhq.js?v=aacb6ac83b",
       "js/shared/dhq-proj.js?v=2b5e9162c6",
       "js/shared/nfl-context.js?v=f9baeb8de9",
       "js/shared/matchup.js?v=ede3b76a3d",
@@ -259,7 +259,7 @@
     "js/shared/faab-league.js": "e5eb2cc3bd",
     "js/shared/sleeper-proj.js": "fce29dbc33",
     "js/shared/game-locks.js": "a3365eb88e",
-    "js/shared/ask-dhq.js": "2120d32afc",
+    "js/shared/ask-dhq.js": "aacb6ac83b",
     "js/shared/dhq-proj.js": "2b5e9162c6",
     "js/shared/nfl-context.js": "f9baeb8de9",
     "js/shared/matchup.js": "ede3b76a3d",
@@ -427,9 +427,9 @@
     "reconai-shared/values-v2.js": "de14219501",
     "reconai-shared/weekly-proj.js": "354cdcf558",
     "reconai-shared/yahoo-api.js": "353efc2019",
-    "index.html": "e6ea7d6987",
-    "landing.html": "26767b6c59",
-    "connect-sleeper.html": "a44516b3d4",
-    "upgrade.html": "2329f79d4d"
+    "index.html": "614bf5809a",
+    "landing.html": "798430bc5b",
+    "connect-sleeper.html": "d6199e7c8d",
+    "upgrade.html": "7e81030937"
   }
 }
