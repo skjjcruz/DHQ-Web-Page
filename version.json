@@ -1,7 +1,7 @@
 {
-  "build": "b160-2b12a55084",
+  "build": "b160-baf69bf7fe",
   "tag": "b160",
-  "builtAt": "2026-10-10T18:38:33.475Z",
+  "builtAt": "2026-10-10T18:43:23.032Z",
   "critical": false,
   "notes": "",
   "commit": null,
@@ -110,7 +110,7 @@
       "js/components/league-wire-studio.js?v=a0ba2aa9b9",
       "js/components/league-wire-portfolio.js?v=96d4d0acf6",
       "js/components/league-wire.js?v=763755653e",
-      "js/hub-v2.js?v=849642ee28",
+      "js/hub-v2.js?v=b76860eebf",
       "js/draft/styles.js?v=456c35bb55",
       "js/draft/scouting.js?v=43370e82ed",
       "js/draft/trade-helpers.js?v=8df2437674",
@@ -334,7 +334,7 @@
     "js/components/league-wire-studio.js": "a0ba2aa9b9",
     "js/components/league-wire-portfolio.js": "96d4d0acf6",
     "js/components/league-wire.js": "763755653e",
-    "js/hub-v2.js": "849642ee28",
+    "js/hub-v2.js": "b76860eebf",
     "js/draft/styles.js": "456c35bb55",
     "js/draft/scouting.js": "43370e82ed",
     "js/draft/trade-helpers.js": "8df2437674",
@@ -439,9 +439,9 @@
     "reconai-shared/values-v2.js": "de14219501",
     "reconai-shared/weekly-proj.js": "354cdcf558",
     "reconai-shared/yahoo-api.js": "353efc2019",
-    "index.html": "0db778c4fc",
-    "landing.html": "32c7e78da6",
-    "connect-sleeper.html": "8148a783ac",
-    "upgrade.html": "84a76b29a6"
+    "index.html": "d75d786327",
+    "landing.html": "e1bd17732e",
+    "connect-sleeper.html": "4db2c78cf9",
+    "upgrade.html": "aaddacd869"
   }
 }
