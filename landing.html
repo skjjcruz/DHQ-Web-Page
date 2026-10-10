@@ -44,7 +44,7 @@
     })();
     </script>
 
-<meta name="dhq-build" content="b160-90ec19dfcf">
+<meta name="dhq-build" content="b160-855ba304f7">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://skjjcruz.github.io https://browser.sentry-cdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://sxshiqyxhhifvtfqawbq.supabase.co https://api.sleeper.app https://api.myfantasyleague.com https://*.myfantasyleague.com https://lm-api-reads.fantasy.espn.com https://fantasysports.yahooapis.com https://*.sentry.io; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; object-src 'none';">
 <title>Dynasty HQ — Generic advice stops here.</title>
@@ -250,6 +250,11 @@
   .announce-tag { flex: none; padding: 5px 9px; border-radius: 999px; background: var(--forge); color: #15120a; font: 700 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
   .announce-go { flex: none; color: var(--forge); font-weight: 600; }
   .announce-short { display: none; }
+  /* Owner ask 2026-10-10: top right, beside Sign in. Phones keep it above the hero. */
+  .top-right { display: flex; align-items: center; gap: 14px; min-width: 0; }
+  .announce--nav { margin: 0; }
+  .announce--hero { display: none; }
+  @media (max-width: 880px) { .announce--nav { display: none; } .announce--hero { display: flex; } }
   .eyebrow { display: inline-flex; align-items: center; gap: 8px; font: 500 12px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--forge); }
   .eyebrow::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--pos); box-shadow: 0 0 0 4px rgba(47,191,136,.15); }
   h1 {
@@ -454,13 +459,16 @@
       <img src="img/logo.png" alt="" width="36" height="36">
       <span>DYNASTY HQ</span>
     </a>
-    <button class="signin nav-btn" id="navSignin" type="button" data-open-sheet="signin">Sign in</button>
+    <div class="top-right">
+      <a class="announce announce--nav" href="#auth" data-open-sheet="signup"><span class="announce-tag">New</span><span class="announce-long">Bring your own AI: ask about your league in plain English</span><span class="announce-short">Bring your own AI to your league</span><span class="announce-go" aria-hidden="true">&rarr;</span></a>
+      <button class="signin nav-btn" id="navSignin" type="button" data-open-sheet="signin">Sign in</button>
+    </div>
   </header>
 
   <main id="top">
     <section class="hero">
       <div>
-        <a class="announce" href="#auth" data-open-sheet="signup"><span class="announce-tag">New</span><span class="announce-long">Bring your own AI: ask about your league in plain English</span><span class="announce-short">Bring your own AI to your league</span><span class="announce-go" aria-hidden="true">&rarr;</span></a>
+        <a class="announce announce--hero" href="#auth" data-open-sheet="signup"><span class="announce-tag">New</span><span class="announce-long">Bring your own AI: ask about your league in plain English</span><span class="announce-short">Bring your own AI to your league</span><span class="announce-go" aria-hidden="true">&rarr;</span></a>
         <span class="eyebrow">Built for Sleeper, MFL and ESPN leagues</span>
         <h1>Generic advice <em>stops here.</em></h1>
         <p class="lede"><strong class="kicker">Stop playing by other people's rules.</strong> <span id="ask">Type your Sleeper name.</span> DHQ reads your league and shows you who to start, which trades your leaguemates will take, and where you really stand. <span class="win">Because Winning Matters 🏆</span></p>
