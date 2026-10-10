@@ -1,7 +1,7 @@
 {
-  "build": "b160-b65b921701",
+  "build": "b160-cb6b72241f",
   "tag": "b160",
-  "builtAt": "2026-10-10T12:52:02.209Z",
+  "builtAt": "2026-10-10T12:54:57.921Z",
   "critical": false,
   "notes": "",
   "commit": null,
@@ -56,7 +56,7 @@
       "js/shared/luck-engine.js?v=21984470ab",
       "js/shared/chopped.js?v=a0cc781b90",
       "js/shared/chop-odds.js?v=cf44609086",
-      "js/shared/playoff-odds.js?v=498d2d2b65",
+      "js/shared/playoff-odds.js?v=feb67d7551",
       "js/shared/faab-engine.js?v=df25bae4ed",
       "js/utils/schedule-engine.js?v=50ade3a5d4",
       "js/utils/gamelog-engine.js?v=038341a613",
@@ -279,7 +279,7 @@
     "js/shared/luck-engine.js": "21984470ab",
     "js/shared/chopped.js": "a0cc781b90",
     "js/shared/chop-odds.js": "cf44609086",
-    "js/shared/playoff-odds.js": "498d2d2b65",
+    "js/shared/playoff-odds.js": "feb67d7551",
     "js/shared/faab-engine.js": "df25bae4ed",
     "js/utils/schedule-engine.js": "50ade3a5d4",
     "js/utils/gamelog-engine.js": "038341a613",
@@ -437,9 +437,9 @@
     "reconai-shared/values-v2.js": "de14219501",
     "reconai-shared/weekly-proj.js": "354cdcf558",
     "reconai-shared/yahoo-api.js": "353efc2019",
-    "index.html": "3341c2145e",
-    "landing.html": "26dc56aa19",
-    "connect-sleeper.html": "bbc51bc97c",
-    "upgrade.html": "a613f0e62a"
+    "index.html": "2834899cf0",
+    "landing.html": "e7360f0f72",
+    "connect-sleeper.html": "85a6a24f50",
+    "upgrade.html": "a46f7b6e07"
   }
 }
