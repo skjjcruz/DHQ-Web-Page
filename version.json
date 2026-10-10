@@ -1,7 +1,7 @@
 {
-  "build": "b160-e7c9c5a204",
+  "build": "b160-bdf6121856",
   "tag": "b160",
-  "builtAt": "2026-10-10T17:09:36.399Z",
+  "builtAt": "2026-10-10T17:12:18.612Z",
   "critical": false,
   "notes": "",
   "commit": null,
@@ -85,7 +85,7 @@
       "js/utils/player-value.js?v=192d4c74f1",
       "js/module-loader.js?v=fa2c63b653",
       "js/settings.js?v=05d2c5406e",
-      "js/trade-calc.js?v=c3565e36d5",
+      "js/trade-calc.js?v=ac1a347614",
       "js/post-draft.js?v=61bcda3c71",
       "js/shared/stat-catalog.js?v=e7821fa56c",
       "js/shared/league-stats.js?v=74bdf331a4",
@@ -309,7 +309,7 @@
     "js/utils/player-value.js": "192d4c74f1",
     "js/module-loader.js": "fa2c63b653",
     "js/settings.js": "05d2c5406e",
-    "js/trade-calc.js": "c3565e36d5",
+    "js/trade-calc.js": "ac1a347614",
     "js/post-draft.js": "61bcda3c71",
     "js/shared/stat-catalog.js": "e7821fa56c",
     "js/shared/league-stats.js": "74bdf331a4",
@@ -439,9 +439,9 @@
     "reconai-shared/values-v2.js": "de14219501",
     "reconai-shared/weekly-proj.js": "354cdcf558",
     "reconai-shared/yahoo-api.js": "353efc2019",
-    "index.html": "24dbe382b6",
-    "landing.html": "1d7bb0aca1",
-    "connect-sleeper.html": "9e388f43e5",
-    "upgrade.html": "31dd381655"
+    "index.html": "c08904f2f5",
+    "landing.html": "8af5cb94d9",
+    "connect-sleeper.html": "5a89547ebc",
+    "upgrade.html": "c59ec69b15"
   }
 }
