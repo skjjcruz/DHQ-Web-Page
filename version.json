@@ -1,7 +1,7 @@
 {
-  "build": "b160-6346d031de",
+  "build": "b160-5583234160",
   "tag": "b160",
-  "builtAt": "2026-10-10T19:18:22.453Z",
+  "builtAt": "2026-10-10T19:23:52.075Z",
   "critical": false,
   "notes": "",
   "commit": null,
@@ -45,9 +45,9 @@
       "js/shared/ask-tools.js?v=1770cd8f5a",
       "js/shared/ask-tools-league.js?v=3237d2c0aa",
       "js/shared/ask-tools-players.js?v=90797833a7",
-      "js/shared/ask-tools-roster.js?v=b65eaac192",
+      "js/shared/ask-tools-roster.js?v=2bbbbf3b20",
       "js/shared/ask-tools-moves.js?v=65f5cdd7d1",
-      "js/shared/ask-dhq.js?v=539927b4e0",
+      "js/shared/ask-dhq.js?v=806695aaba",
       "js/shared/dhq-proj.js?v=0e48a15b0d",
       "js/shared/nfl-context.js?v=f9baeb8de9",
       "js/shared/matchup.js?v=ede3b76a3d",
@@ -269,9 +269,9 @@
     "js/shared/ask-tools.js": "1770cd8f5a",
     "js/shared/ask-tools-league.js": "3237d2c0aa",
     "js/shared/ask-tools-players.js": "90797833a7",
-    "js/shared/ask-tools-roster.js": "b65eaac192",
+    "js/shared/ask-tools-roster.js": "2bbbbf3b20",
     "js/shared/ask-tools-moves.js": "65f5cdd7d1",
-    "js/shared/ask-dhq.js": "539927b4e0",
+    "js/shared/ask-dhq.js": "806695aaba",
     "js/shared/dhq-proj.js": "0e48a15b0d",
     "js/shared/nfl-context.js": "f9baeb8de9",
     "js/shared/matchup.js": "ede3b76a3d",
@@ -439,9 +439,9 @@
     "reconai-shared/values-v2.js": "de14219501",
     "reconai-shared/weekly-proj.js": "354cdcf558",
     "reconai-shared/yahoo-api.js": "353efc2019",
-    "index.html": "9dd6b1eaf2",
-    "landing.html": "5be4e40380",
-    "connect-sleeper.html": "675387193b",
-    "upgrade.html": "8537615a16"
+    "index.html": "baea3711de",
+    "landing.html": "84a52d0377",
+    "connect-sleeper.html": "7312097755",
+    "upgrade.html": "802890f474"
   }
 }
