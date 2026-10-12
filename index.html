@@ -45,7 +45,7 @@
     })();
     </script>
 
-    <meta name="dhq-build" content="b160-c0ad204fb2">
+    <meta name="dhq-build" content="b160-3917ee2104">
     <meta name="dhq-engine-v" content="a18eefeda9">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, viewport-fit=cover">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://skjjcruz.github.io https://browser.sentry-cdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://sxshiqyxhhifvtfqawbq.supabase.co https://hovnqztlbsgsywrbidbh.supabase.co https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com https://api.sleeper.app https://site.api.espn.com https://sports.core.api.espn.com https://api.myfantasyleague.com https://*.myfantasyleague.com https://lm-api-reads.fantasy.espn.com https://site.web.api.espn.com https://fantasysports.yahooapis.com https://api.fantasycalc.com https://*.sentry.io; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; object-src 'none';">
@@ -3194,7 +3194,10 @@ WRShared.preloadMany(WR_SHARED_FILES);
 
 <!-- War Room modules — loaded in dependency order by Babel standalone -->
 <!-- 1. Core: tier system, React hooks, fetch helpers (everything depends on this) -->
-<script src="js/core.js?v=b89d74dd4a"></script>
+<!-- In-app confirm / notice / text / copy boxes (the native app can't show the
+     browser's own). Plain JS, before core.js: every screen may use them. -->
+<script src="js/shared/dhq-dialogs.js?v=a903b966a1"></script>
+<script src="js/core.js?v=1a94fddcb4"></script>
 <!-- 1a. Central data-sync manager — window.WR.Sync — stale-while-revalidate on tab return + in-season interval (plain JS) -->
 <script src="js/shared/sync-manager.js?v=e53de045e9"></script>
 <!-- 1a2. Shared viewport seam — WR.useViewport() hook + WR.viewport() snapshot (plain JS; must precede components.js and all tab files) -->
@@ -3210,7 +3213,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <script src="js/components/wr-primitives.js?v=796916a9a1"></script>
     <script src="js/components/player-card.js?v=7fb5402d76"></script>
 <!-- 2c. Saved List Views (SI-1) — window.WR.SavedViews — shared across list surfaces -->
-<script src="js/shared/saved-views.js?v=75e7680585"></script>
+<script src="js/shared/saved-views.js?v=48a1747f17"></script>
 <!-- 2c-2. Saved Alex Reports — window.WR.SavedReports — local cache + ai_analysis server sync -->
 <script src="js/shared/saved-reports.js?v=c0601d4b86"></script>
 <!-- 2d. GM Mode helper (Phase 1) — window.WR.GmMode — canonical mode/preset source of truth -->
@@ -3293,7 +3296,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
      boot. js/module-loader.js injects executable copies, in DOM order within each
      group, when the owning surface first calls wrLoadModuleGroup('<group>'). -->
 <script src="js/module-loader.js?v=fa2c63b653"></script>
-<script src="js/settings.js?v=e2b379bf85"></script>
+<script src="js/settings.js?v=1f95c2358c"></script>
 <script type="text/wr-deferred" data-wr-defer="trade" src="js/trade-calc.js?v=ac1a347614"></script>
 <script src="js/lab-cutdown.js?v=cd15d7635f"></script>
 <script src="js/post-draft.js?v=61bcda3c71"></script>
@@ -3361,7 +3364,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/persona.js?v=0b4dbbc0cb"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/cpu-engine.js?v=9ea00c9c23"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/state.js?v=10910b2da5"></script>
-<script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/big-board.js?v=d9d0eaa377"></script>
+<script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/big-board.js?v=0557276615"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/draft-grid.js?v=fc375aeee4"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/opponent-intel.js?v=1eaf3176b6"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/alex-stream.js?v=f3a6770586"></script>
@@ -3369,10 +3372,10 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/alex-edge-glow.js?v=21ca67c618"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/ask-window.js?v=d7d1ee0bad"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/live-analytics.js?v=e463062302"></script>
-<script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/exports.js?v=20d7d2dcc8"></script>
+<script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/exports.js?v=5d50d18367"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/trade-simulator.js?v=00eab34082"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/trade-modal.js?v=bb1c9f3992"></script>
-<script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/trade-proposer.js?v=72d8f94c2b"></script>
+<script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/trade-proposer.js?v=030e7e90e2"></script>
 <!-- Phase 5 modules -->
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/persistence.js?v=ba612d56b3"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/scenarios.js?v=8317ff1149"></script>
@@ -3380,8 +3383,8 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/live-sync.js?v=fed4c6aef0"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/live-decision-engine.js?v=90b271dbe2"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/analyst-mock.js?v=91b4e236cd"></script>
-<script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/command-center.js?v=591d2ff671"></script>
-<script type="text/wr-deferred" data-wr-defer="draft" src="js/draft-room.js?v=90ef5a660f"></script>
+<script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/command-center.js?v=0d2b9db184"></script>
+<script type="text/wr-deferred" data-wr-defer="draft" src="js/draft-room.js?v=cb27618f42"></script>
 <!-- 5. League detail tab components (extracted from league-detail.js) -->
 <!-- v2 widget modules (load before dashboard.js which consumes them) -->
 <script src="js/widgets/roster-pulse.js?v=a7b2dcb9e6"></script>
@@ -3495,7 +3498,7 @@ window.addEventListener('appinstalled', () => {
 <!-- Deploy tag (owner ask 2026-08-19): a tiny always-visible build code so the
      owner can read back exactly which version his device is running before
      testing — kills the stale-cache guessing game. Bump the code every deploy. -->
-<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b160 · LAB270</div>
+<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b160 · LAB271</div>
 </body>
 </html>
 <!-- build 1774212614 -->
