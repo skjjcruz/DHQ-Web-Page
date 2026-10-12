@@ -119,8 +119,8 @@ async function main() {
             const T = String(p.team || '').toUpperCase();
             const prev = existing && !existing.reconstructed && existing.scorings[key] && existing.scorings[key].players[pid];
             if (prev && started[T] && existing.players[pid]) { rows[pid] = prev; if (key === 'half') { out.players[pid] = existing.players[pid]; kept++; } continue; }
-            // [typical week (graded), Sleeper, average week]
-            rows[pid] = [p.points.median, p.sleeper != null ? +p.sleeper.toFixed(2) : null, p.points.mean != null ? p.points.mean : p.points.median];
+            // [shown week (graded), Sleeper, average week, typical week]
+            rows[pid] = [p.points.median, p.sleeper != null ? +p.sleeper.toFixed(2) : null, p.points.mean != null ? p.points.mean : p.points.median, p.points.typical != null ? p.points.typical : p.points.median];
             if (key === 'half') {
                 const why = (p.baseline && p.baseline.why ? 'Baseline: ' + p.baseline.why + ' · ' : '') + (p.why || []).slice(0, 3).map(w => w.label + ' ' + (w.impactPct > 0 ? '+' : '') + w.impactPct + '%: ' + w.note).join(' · ');
                 // The injury tag and the Vegas line at lock time, so later
