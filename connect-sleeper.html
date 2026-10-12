@@ -44,7 +44,7 @@
     })();
     </script>
 
-  <meta name="dhq-build" content="b160-e5857916df">
+  <meta name="dhq-build" content="b160-ea99a2fe6b">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, viewport-fit=cover">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://skjjcruz.github.io https://browser.sentry-cdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://sxshiqyxhhifvtfqawbq.supabase.co https://api.sleeper.app https://api.myfantasyleague.com https://*.myfantasyleague.com https://lm-api-reads.fantasy.espn.com https://fantasysports.yahooapis.com https://*.sentry.io; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; object-src 'none';">
   <title>Dynasty HQ — Connect your leagues</title>
@@ -400,6 +400,15 @@
         }).catch(() => {});
       } catch (e) {}
     }
+    // The team a guest picked on connect: { espnTeamId, espnTeamName } /
+    // { mflFranchiseId, mflTeamName }. Names are clipped; nothing else rides.
+    function connectTeamMeta(platform, teamId, teamName) {
+      if (teamId == null) return {};
+      const name = String(teamName || '').trim().slice(0, 40) || null;
+      return platform === 'espn'
+        ? { espnTeamId: String(teamId), espnTeamName: name }
+        : { mflFranchiseId: String(teamId), mflTeamName: name };
+    }
     trackConnectEvent('connect_viewed', null, {
       referrerHost: (function () {
         try { return document.referrer ? new URL(document.referrer).hostname : null; } catch { return null; }
@@ -636,7 +645,10 @@
       } catch (e) {}
       document.getElementById('mflTeams').hidden = true;
       pushToAccount();
-      trackConnectEvent('mfl_connected', null, { mflLeagueId: mflPending.leagueId, teamPicked: franchiseId != null });
+      // Guest identity for Mission Control (owner ask 2026-10-12): the team
+      // the guest picked, so an MFL guest is listed like a Sleeper guest.
+      // Public league data only (franchise id + name) — never the API key.
+      trackConnectEvent('mfl_connected', null, { mflLeagueId: mflPending.leagueId, teamPicked: franchiseId != null, ...connectTeamMeta('mfl', franchiseId, teamName !== mflPending.leagueName ? teamName : null) });
       markLinked('mfl', teamName || mflPending.leagueName);
       mflPending = null;
       if (mflAutoEnter) enterApp();
@@ -763,7 +775,10 @@
       } catch (e) {}
       document.getElementById('espnTeams').hidden = true;
       pushToAccount();
-      trackConnectEvent('espn_connected', null, { espnLeagueId: espnPending.leagueId, teamPicked: teamId != null });
+      // Guest identity for Mission Control (owner ask 2026-10-12): the team
+      // the guest picked, so an ESPN guest is listed like a Sleeper guest.
+      // Public league data only (team id + name) — never espn_s2 / SWID.
+      trackConnectEvent('espn_connected', null, { espnLeagueId: espnPending.leagueId, teamPicked: teamId != null, ...connectTeamMeta('espn', teamId, teamName) });
       markLinked('espn', teamName || espnPending.leagueName);
       espnPending = null;
       if (espnAutoEnter) enterApp();
