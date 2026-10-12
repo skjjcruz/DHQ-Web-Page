@@ -45,7 +45,7 @@
     })();
     </script>
 
-    <meta name="dhq-build" content="b160-e56b078477">
+    <meta name="dhq-build" content="b160-a09fe1a65e">
     <meta name="dhq-engine-v" content="a18eefeda9">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, viewport-fit=cover">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://skjjcruz.github.io https://browser.sentry-cdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://sxshiqyxhhifvtfqawbq.supabase.co https://hovnqztlbsgsywrbidbh.supabase.co https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com https://api.sleeper.app https://site.api.espn.com https://sports.core.api.espn.com https://api.myfantasyleague.com https://*.myfantasyleague.com https://lm-api-reads.fantasy.espn.com https://site.web.api.espn.com https://fantasysports.yahooapis.com https://api.fantasycalc.com https://*.sentry.io; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; object-src 'none';">
@@ -171,7 +171,7 @@
     <link rel="preload" as="script" href="vendor/supabase.min.js">
     <link rel="preload" as="script" href="vendor/react.production.min.js">
     <link rel="preload" as="script" href="vendor/react-dom.production.min.js">
-    <script src="js/shared/shared-loader.js?v=4e024f28da"></script>
+    <script src="js/shared/shared-loader.js?v=6c11c83d2f"></script>
     <!-- Season-rollover cache hygiene — must run early, before any surface reads caches. -->
     <script src="js/shared/season-guard.js?v=988bfb076d"></script>
     <!-- Native-shell external-link guard: outside links must never strand the WKWebView. -->
@@ -3228,7 +3228,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <script src="js/shared/ask-tools-players.js?v=90797833a7"></script>
 <script src="js/shared/ask-tools-roster.js?v=2bbbbf3b20"></script>
 <script src="js/shared/ask-tools-moves.js?v=65f5cdd7d1"></script>
-<script src="js/shared/ask-dhq.js?v=a34e84ce92"></script>
+<script src="js/shared/ask-dhq.js?v=0b2a82fd29"></script>
 <script src="js/shared/dhq-proj.js?v=0e48a15b0d"></script>
 <script src="js/shared/nfl-context.js?v=f9baeb8de9"></script>
 <script src="js/shared/matchup.js?v=ede3b76a3d"></script>
@@ -3279,7 +3279,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <!-- Player Brief Phase 2 — the journalism layer: current Rotowire read via ESPN, cached + fail-safe (window.WR.PlayerWire). -->
 <script src="js/shared/player-wire.js?v=9ef88b8435"></script>
 <!-- Player Brief shared block — the layered summary box with composed-at stamp, mounted by the player card + My Roster (window.WR.PlayerBriefBlock). -->
-<script src="js/components/player-brief-block.js?v=02dfc6622b"></script>
+<script src="js/components/player-brief-block.js?v=4c6a22bdc8"></script>
 <!-- Alex's Desk — cross-league AI digest card for the hub (window.WR.DashboardDigestCard) -->
 <script src="js/tabs/dashboard-digest.js?v=231bc59d0e"></script>
 <!-- 2i. Per-league transaction cache — window.WrTxns — cross-league activity + DNA substrate -->
@@ -3293,7 +3293,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
      boot. js/module-loader.js injects executable copies, in DOM order within each
      group, when the owning surface first calls wrLoadModuleGroup('<group>'). -->
 <script src="js/module-loader.js?v=fa2c63b653"></script>
-<script src="js/settings.js?v=05d2c5406e"></script>
+<script src="js/settings.js?v=6a08accdda"></script>
 <script type="text/wr-deferred" data-wr-defer="trade" src="js/trade-calc.js?v=ac1a347614"></script>
 <script src="js/lab-cutdown.js?v=cd15d7635f"></script>
 <script src="js/post-draft.js?v=61bcda3c71"></script>
@@ -3351,7 +3351,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
      check). Its stylesheet sits in an inert <template> (never fetched) that
      js/hub-v2.js clones in when it renders. Bump both ?v=. -->
 <template id="dhq-hub-v2-css"><link rel="stylesheet" href="js/hub-v2.css?v=20261010join1"></template>
-<script type="text/wr-deferred" data-wr-defer="hubv2" src="js/hub-v2.js?v=affe77b2be"></script>
+<script type="text/wr-deferred" data-wr-defer="hubv2" src="js/hub-v2.js?v=d06bab4588"></script>
 <!-- 4b. Draft Command Center modules — group "draft" (~28 scripts, ~1.26MB),
      loaded on first Draft-tab open. -->
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/styles.js?v=456c35bb55"></script>
@@ -3424,7 +3424,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
      "alex" lazy group — inert at boot, loaded on first GM's Office / Strategy open. -->
 <script type="text/wr-deferred" data-wr-defer="alex" src="js/tabs/strategy-editor.js?v=d3f9750b0c"></script>
 <!-- 7. League detail: coordinator shell, depends on all above -->
-    <script src="js/league-detail.js?v=b87dec355b"></script>
+    <script src="js/league-detail.js?v=d0301b7c29"></script>
 <!-- 8. App: OwnerDashboard + ReactDOM.render (loads last) -->
 <script src="js/app.js?v=de49f46f3d"></script>
 
@@ -3495,7 +3495,7 @@ window.addEventListener('appinstalled', () => {
 <!-- Deploy tag (owner ask 2026-08-19): a tiny always-visible build code so the
      owner can read back exactly which version his device is running before
      testing — kills the stale-cache guessing game. Bump the code every deploy. -->
-<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b160 · LAB268</div>
+<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b160 · LAB269</div>
 </body>
 </html>
 <!-- build 1774212614 -->

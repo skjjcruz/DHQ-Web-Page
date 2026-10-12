@@ -44,7 +44,7 @@
     })();
     </script>
 
-<meta name="dhq-build" content="b160-e56b078477">
+<meta name="dhq-build" content="b160-a09fe1a65e">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://skjjcruz.github.io https://browser.sentry-cdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://sxshiqyxhhifvtfqawbq.supabase.co https://api.sleeper.app https://api.myfantasyleague.com https://*.myfantasyleague.com https://lm-api-reads.fantasy.espn.com https://fantasysports.yahooapis.com https://*.sentry.io; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; object-src 'none';">
 <title>Dynasty HQ — Generic advice stops here.</title>
@@ -424,7 +424,7 @@
   .auth-linkbtn:hover { color: var(--accent); }
 
   /* ── Lab sign-up (owner ask 2026-10-10): the league account step and the
-     guest's carried-over league. Both stay hidden unless window.DHQ_LAB. ── */
+     guest's carried-over league (live everywhere since 2026-10-12). ── */
   .auth-step { font: 500 11px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--forge); margin: 4px 0 10px; }
   .auth-step + .auth-step, .auth-league + .auth-step { margin-top: 18px; }
   .auth-platform { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; margin-bottom: 10px; background: var(--bg-inset); border: 1px solid var(--border-strong); border-radius: var(--r-sm); }
@@ -840,8 +840,8 @@
     //     same one-time note the front-page box leaves; once the account
     //     exists the connect page consumes it behind its loading screen,
     //     links it to the account and goes straight in.
-    // Website: LAB_SIGNUP is false and none of this runs.
-    const LAB_SIGNUP = window.DHQ_LAB === true;
+    // Live on the website too since 2026-10-12 (was Lab only).
+    const LAB_SIGNUP = true;
     const PREFILL_KEY = 'dhq_connect_prefill';
     const JUST_JOINED_KEY = 'dhq_just_joined_v1'; // the leagues page greets a new member once
     const LAB_COPY = {
