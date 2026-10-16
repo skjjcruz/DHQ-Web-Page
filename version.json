@@ -1,7 +1,7 @@
 {
-  "build": "b160-a08488358e",
+  "build": "b160-dff3bb3f23",
   "tag": "b160",
-  "builtAt": "2026-10-14T23:00:46.298Z",
+  "builtAt": "2026-10-16T12:48:47.246Z",
   "critical": false,
   "notes": "",
   "commit": null,
@@ -16,7 +16,7 @@
       "js/pro-launch.js?v=c9f18a7f5e",
       "js/billing.js?v=cdc5732cbc",
       "college-stats.js?v=bd4656ed45",
-      "draft-history.js?v=988b0c0171",
+      "draft-history.js?v=873cee3040",
       "charts.js?v=408aed45a4",
       "js/export.js?v=d25d2db04a",
       "vendor/react.production.min.js?v=d949f1c368",
@@ -251,7 +251,7 @@
     "js/pro-launch.js": "c9f18a7f5e",
     "js/billing.js": "cdc5732cbc",
     "college-stats.js": "bd4656ed45",
-    "draft-history.js": "988b0c0171",
+    "draft-history.js": "873cee3040",
     "charts.js": "408aed45a4",
     "js/export.js": "d25d2db04a",
     "vendor/react.production.min.js": "d949f1c368",
@@ -461,9 +461,9 @@
     "reconai-shared/values-v2.js": "de14219501",
     "reconai-shared/weekly-proj.js": "354cdcf558",
     "reconai-shared/yahoo-api.js": "353efc2019",
-    "index.html": "7e53094b6d",
-    "landing.html": "9f22d9248e",
-    "connect-sleeper.html": "d32bb313e1",
-    "upgrade.html": "d49aa8088a"
+    "index.html": "6fed8bacc3",
+    "landing.html": "0fca27893e",
+    "connect-sleeper.html": "b300731265",
+    "upgrade.html": "76fd9d8f5c"
   }
 }
