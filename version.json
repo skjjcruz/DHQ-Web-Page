@@ -1,7 +1,7 @@
 {
-  "build": "b160-062e841ff3",
+  "build": "b160-4da72c7542",
   "tag": "b160",
-  "builtAt": "2026-10-17T21:11:34.966Z",
+  "builtAt": "2026-10-17T21:31:05.380Z",
   "critical": false,
   "notes": "",
   "commit": null,
@@ -43,7 +43,7 @@
       "js/shared/sleeper-proj.js?v=3ecaa16349",
       "js/shared/game-locks.js?v=a3365eb88e",
       "js/shared/player-news.js?v=89141160fb",
-      "js/shared/server-build.js?v=675d6a6069",
+      "js/shared/server-build.js?v=a0e36f72ee",
       "js/shared/ask-tools.js?v=b0b78af237",
       "js/shared/ask-tools-league.js?v=3237d2c0aa",
       "js/shared/ask-tools-players.js?v=90797833a7",
@@ -279,7 +279,7 @@
     "js/shared/sleeper-proj.js": "3ecaa16349",
     "js/shared/game-locks.js": "a3365eb88e",
     "js/shared/player-news.js": "89141160fb",
-    "js/shared/server-build.js": "675d6a6069",
+    "js/shared/server-build.js": "a0e36f72ee",
     "js/shared/ask-tools.js": "b0b78af237",
     "js/shared/ask-tools-league.js": "3237d2c0aa",
     "js/shared/ask-tools-players.js": "90797833a7",
@@ -463,9 +463,9 @@
     "reconai-shared/values-v2.js": "de14219501",
     "reconai-shared/weekly-proj.js": "354cdcf558",
     "reconai-shared/yahoo-api.js": "353efc2019",
-    "index.html": "944bb11f35",
-    "landing.html": "0ff6167a7a",
-    "connect-sleeper.html": "e1f919d94d",
-    "upgrade.html": "6db55eb972"
+    "index.html": "f15f8c0fbd",
+    "landing.html": "7437d5f668",
+    "connect-sleeper.html": "727d62abdf",
+    "upgrade.html": "1f0fcd09d1"
   }
 }
