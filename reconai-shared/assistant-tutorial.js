@@ -1,179 +1,4 @@
-// ============================================================================
-// shared/assistant-tutorial.js
-// Shared first-launch GM briefing tutorial engine for Scout and War Room.
-// Product files provide config; this engine owns UI, state, analytics, and replay.
-// ============================================================================
-
-(function() {
-  window.App = window.App || {};
-  window.OD = window.OD || {};
-
-  const STORAGE_KEY = 'dhq_assistant_tutorial_state_v1';
-  const DEFAULT_VERSION = 'gm-brief-v1';
-  const VALID_PRODUCTS = new Set(['scout', 'warroom']);
-
-  let activeRun = null;
-  let stylesInjected = false;
-
-  function normalizeConfig(config) {
-    const out = config || {};
-    out.productKey = VALID_PRODUCTS.has(out.productKey) ? out.productKey : 'scout';
-    out.version = out.version || DEFAULT_VERSION;
-    out.steps = Array.isArray(out.steps) ? out.steps : [];
-    out.legacyKeys = Array.isArray(out.legacyKeys) ? out.legacyKeys : [];
-    out.accent = out.accent || '#D4AF37';
-    out.title = out.title || 'Welcome to the war room';
-    out.kicker = out.kicker || 'Alex Ingram / Your AI GM';
-    out.intro = out.intro || 'I will get you oriented fast. The goal is simple: know where the decisions live, where the leverage is, and where to pull me in.';
-    out.finishTitle = out.finishTitle || 'We are ready';
-    out.finishText = out.finishText || 'That is the room. Start with the highest-signal move, and bring me in before you pull any trigger.';
-    return out;
-  }
-
-  function nowIso() {
-    return new Date().toISOString();
-  }
-
-  function readJson(key, fallback) {
-    try {
-      const raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : fallback;
-    } catch {
-      return fallback;
-    }
-  }
-
-  function writeJson(key, value) {
-    try {
-      localStorage.setItem(key, JSON.stringify(value));
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  function readLocalState() {
-    const state = readJson(STORAGE_KEY, {});
-    return state && typeof state === 'object' && !Array.isArray(state) ? state : {};
-  }
-
-  function writeLocalRecord(productKey, record) {
-    const state = readLocalState();
-    state[productKey] = record;
-    writeJson(STORAGE_KEY, state);
-  }
-
-  function hasLegacyCompletion(config) {
-    return config.legacyKeys.some(key => {
-      try { return !!localStorage.getItem(key); } catch { return false; }
-    });
-  }
-
-  function readLocalRecord(config) {
-    const state = readLocalState();
-    return state[config.productKey] || null;
-  }
-
-  function isCompleted(record, config) {
-    return !!record && record.product === config.productKey && record.version === config.version && !!record.completedAt;
-  }
-
-  function sanitizeRecord(config, skipped) {
-    return {
-      product: config.productKey,
-      version: config.version,
-      completedAt: nowIso(),
-      skipped: !!skipped,
-    };
-  }
-
-  function track(eventName, config, detail) {
-    try {
-      window.OD?.track?.(eventName, {
-        platform: config.productKey === 'warroom' ? 'warroom' : 'reconai',
-        module: 'assistant_tutorial',
-        entityType: 'tutorial',
-        entityId: config.productKey,
-        metadata: {
-          product: config.productKey,
-          version: config.version,
-          ...detail,
-        },
-      });
-    } catch {}
-  }
-
-  async function loadRemoteRecord(config) {
-    if (!window.OD?.loadTutorialState) return null;
-    try {
-      const state = await window.OD.loadTutorialState(config.productKey);
-      if (!state) return null;
-      if (state.product) return state;
-      return state[config.productKey] || null;
-    } catch {
-      return null;
-    }
-  }
-
-  async function saveRemoteRecord(config, record) {
-    if (!window.OD?.saveTutorialState) return false;
-    try {
-      return !!await window.OD.saveTutorialState(config.productKey, record);
-    } catch {
-      return false;
-    }
-  }
-
-  async function shouldShow(configInput) {
-    const config = normalizeConfig(configInput);
-    if (hasLegacyCompletion(config)) return false;
-    if (isCompleted(readLocalRecord(config), config)) return false;
-    const remote = await loadRemoteRecord(config);
-    if (isCompleted(remote, config)) {
-      writeLocalRecord(config.productKey, remote);
-      return false;
-    }
-    return true;
-  }
-
-  async function complete(configInput, reason) {
-    const config = normalizeConfig(configInput);
-    const skipped = reason === 'skipped' || reason === 'escape';
-    const record = sanitizeRecord(config, skipped);
-    writeLocalRecord(config.productKey, record);
-    config.legacyKeys.forEach(key => {
-      try { localStorage.setItem(key, '1'); } catch {}
-    });
-    await saveRemoteRecord(config, record);
-    track(skipped ? 'tutorial_skipped' : 'tutorial_completed', config, { reason: reason || 'completed' });
-    window.dispatchEvent(new CustomEvent('dhq:tutorial-complete', {
-      detail: { product: config.productKey, version: config.version, reason: reason || 'completed' },
-    }));
-    return record;
-  }
-
-  function reset(productKey) {
-    const state = readLocalState();
-    if (productKey) delete state[productKey];
-    else Object.keys(state).forEach(key => delete state[key]);
-    writeJson(STORAGE_KEY, state);
-  }
-
-  function escapeHtml(value) {
-    return String(value == null ? '' : value)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-
-  function injectStyles() {
-    if (stylesInjected || document.getElementById('dhq-assistant-tutorial-styles')) return;
-    stylesInjected = true;
-    const style = document.createElement('style');
-    style.id = 'dhq-assistant-tutorial-styles';
-    style.textContent = `
+(function(){window.App=window.App||{},window.OD=window.OD||{};const f="dhq_assistant_tutorial_state_v1",I="gm-brief-v1",E=new Set(["scout","warroom"]);let a=null,y=!1;function g(t){const e=t||{};return e.productKey=E.has(e.productKey)?e.productKey:"scout",e.version=e.version||I,e.steps=Array.isArray(e.steps)?e.steps:[],e.legacyKeys=Array.isArray(e.legacyKeys)?e.legacyKeys:[],e.accent=e.accent||"#D4AF37",e.title=e.title||"Welcome to the war room",e.kicker=e.kicker||"Alex Ingram / Your AI GM",e.intro=e.intro||"I will get you oriented fast. The goal is simple: know where the decisions live, where the leverage is, and where to pull me in.",e.finishTitle=e.finishTitle||"We are ready",e.finishText=e.finishText||"That is the room. Start with the highest-signal move, and bring me in before you pull any trigger.",e}function z(){return new Date().toISOString()}function M(t,e){try{const o=localStorage.getItem(t);return o?JSON.parse(o):e}catch{return e}}function v(t,e){try{return localStorage.setItem(t,JSON.stringify(e)),!0}catch{return!1}}function p(){const t=M(f,{});return t&&typeof t=="object"&&!Array.isArray(t)?t:{}}function q(t,e){const o=p();o[t]=e,v(f,o)}function R(t){return t.legacyKeys.some(e=>{try{return!!localStorage.getItem(e)}catch{return!1}})}function O(t){return p()[t.productKey]||null}function k(t,e){return!!t&&t.product===e.productKey&&t.version===e.version&&!!t.completedAt}function _(t,e){return{product:t.productKey,version:t.version,completedAt:z(),skipped:!!e}}function h(t,e,o){try{window.OD?.track?.(t,{platform:e.productKey==="warroom"?"warroom":"reconai",module:"assistant_tutorial",entityType:"tutorial",entityId:e.productKey,metadata:{product:e.productKey,version:e.version,...o}})}catch{}}async function C(t){if(!window.OD?.loadTutorialState)return null;try{const e=await window.OD.loadTutorialState(t.productKey);return e?e.product?e:e[t.productKey]||null:null}catch{return null}}async function L(t,e){if(!window.OD?.saveTutorialState)return!1;try{return!!await window.OD.saveTutorialState(t.productKey,e)}catch{return!1}}async function A(t){const e=g(t);if(R(e)||k(O(e),e))return!1;const o=await C(e);return k(o,e)?(q(e.productKey,o),!1):!0}async function S(t,e){const o=g(t),r=e==="skipped"||e==="escape",i=_(o,r);return q(o.productKey,i),o.legacyKeys.forEach(n=>{try{localStorage.setItem(n,"1")}catch{}}),await L(o,i),h(r?"tutorial_skipped":"tutorial_completed",o,{reason:e||"completed"}),window.dispatchEvent(new CustomEvent("dhq:tutorial-complete",{detail:{product:o.productKey,version:o.version,reason:e||"completed"}})),i}function F(t){const e=p();t?delete e[t]:Object.keys(e).forEach(o=>delete e[o]),v(f,e)}function l(t){return String(t??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}function B(){if(y||document.getElementById("dhq-assistant-tutorial-styles"))return;y=!0;const t=document.createElement("style");t.id="dhq-assistant-tutorial-styles",t.textContent=`
       .dhq-tutorial-root{position:fixed;inset:0;z-index:100000;pointer-events:none;color:var(--text,#fff);font-family:inherit;overflow:hidden;max-width:100vw}
       .dhq-tutorial-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(5px);pointer-events:auto}
       .dhq-tutorial-spotlight{position:fixed;border:2px solid var(--dhq-tutorial-accent,#D4AF37);border-radius:12px;box-shadow:0 0 0 2px rgba(212,175,55,.18),0 0 42px rgba(212,175,55,.28);pointer-events:none;transition:all .22s ease}
@@ -228,305 +53,47 @@
       @media(prefers-reduced-motion:reduce){
         .dhq-tutorial-spotlight,.dhq-tutorial-fill{transition:none}
       }
-    `;
-    document.head.appendChild(style);
-  }
-
-  // 2026-07-08 single-voice ruling: the onboarding "Alex communication style"
-  // picker is gone — one canonical Alex voice for everyone. The `alexPicker`
-  // config flag both apps' tutorial configs may still pass is tolerated and
-  // ignored (renders nothing).
-
-  function alexHeaderHtml(config) {
-    if (config.alexAvatar === false) return '';
-    let faceInner = 'AI';
-    try {
-      const id = localStorage.getItem('wr_alex_avatar') || 'badge';
-      const av = (window.ALEX_AVATARS || []).find(a => a.id === id);
-      if (av && av.src) faceInner = `<img src="${escapeHtml(av.src)}" alt="Alex" style="width:100%;height:100%;object-fit:cover;border-radius:7px">`;
-    } catch {}
-    return `
+    `,document.head.appendChild(t)}function j(t){if(t.alexAvatar===!1)return"";let e="AI";try{const o=localStorage.getItem("wr_alex_avatar")||"badge",r=(window.ALEX_AVATARS||[]).find(i=>i.id===o);r&&r.src&&(e=`<img src="${l(r.src)}" alt="Alex" style="width:100%;height:100%;object-fit:cover;border-radius:7px">`)}catch{}return`
       <div class="dhq-tutorial-alex">
-        <span class="dhq-tutorial-alex-face">${faceInner}</span>
+        <span class="dhq-tutorial-alex-face">${e}</span>
         <span class="dhq-tutorial-alex-id"><b>Alex Ingram</b><small>AI General Manager</small></span>
       </div>
-    `;
-  }
-
-  function renderChoices(step) {
-    if (!Array.isArray(step.choices) || !step.choices.length) return '';
-    let current = '';
-    try { current = (step.choiceKey && localStorage.getItem(step.choiceKey)) || ''; } catch {}
-    return `
-      <div class="dhq-tutorial-choices" aria-label="${escapeHtml(step.choicePrompt || 'Choose one')}">
-        ${step.choices.map(c => `
-          <button class="dhq-tutorial-choice${c.value === current ? ' is-active' : ''}" type="button" data-tutorial-choice="${escapeHtml(c.value)}">
-            <b>${escapeHtml(c.label)}</b>${c.desc ? `<span>${escapeHtml(c.desc)}</span>` : ''}
+    `}function H(t){if(!Array.isArray(t.choices)||!t.choices.length)return"";let e="";try{e=t.choiceKey&&localStorage.getItem(t.choiceKey)||""}catch{}return`
+      <div class="dhq-tutorial-choices" aria-label="${l(t.choicePrompt||"Choose one")}">
+        ${t.choices.map(o=>`
+          <button class="dhq-tutorial-choice${o.value===e?" is-active":""}" type="button" data-tutorial-choice="${l(o.value)}">
+            <b>${l(o.label)}</b>${o.desc?`<span>${l(o.desc)}</span>`:""}
           </button>
-        `).join('')}
+        `).join("")}
       </div>
-    `;
-  }
-
-  function stepList(config) {
-    return [
-      {
-        key: 'opening',
-        title: config.title,
-        desc: config.intro,
-        kicker: config.kicker,
-        position: 'center',
-        chips: config.openingChips || ['90-second brief', 'GM room map', 'Replay anytime'],
-        board: config.openingBoard || {
-          label: 'Opening Brief',
-          title: 'Front office orientation',
-          body: 'I will show you where decisions happen, where leverage shows up, and where to pull me in.',
-        },
-      },
-      ...config.steps,
-      {
-        key: 'finish',
-        title: config.finishTitle,
-        desc: config.finishText,
-        kicker: 'Ready for kickoff',
-        position: 'center',
-        chips: config.finishChips || ['Command center ready', 'Alex on call', 'Settings has replay'],
-        board: config.finishBoard || {
-          label: 'Next Move',
-          title: 'Open the board',
-          body: 'Start with the highest-signal module, then ask Alex to pressure-test the move before you act.',
-        },
-      },
-    ];
-  }
-
-  function clearRoot() {
-    const old = document.getElementById('dhq-assistant-tutorial');
-    if (old) old.remove();
-  }
-
-  function callStepOpen(step) {
-    if (!step) return;
-    try {
-      if (typeof step.open === 'function') {
-        step.open();
-        return;
-      }
-      if (step.tabToOpen) {
-        const selector = step.tabSelector || `[data-tab="${step.tabToOpen}"]`;
-        const btn = document.querySelector(selector);
-        if (btn) btn.click();
-      }
-      if (step.mobileTab && typeof window.mobileTab === 'function') window.mobileTab(step.mobileTab);
-      else if (step.switchTab && typeof window.switchTab === 'function') window.switchTab(step.switchTab);
-    } catch {}
-  }
-
-  function targetFor(step) {
-    if (!step?.target) return null;
-    try { return document.querySelector(step.target); } catch { return null; }
-  }
-
-  function panelPosition(step, target) {
-    if (!target || step.position === 'center') return { center: true };
-    const rect = target.getBoundingClientRect();
-    const margin = 16;
-    const panelW = Math.min(window.innerWidth * 0.92, 660);
-    const panelH = 330;
-    const spaceRight = window.innerWidth - rect.right;
-    const spaceLeft = rect.left;
-    let left;
-    let top = Math.max(margin, Math.min(rect.top, window.innerHeight - panelH - margin));
-    if (spaceRight >= panelW + margin) left = rect.right + margin;
-    else if (spaceLeft >= panelW + margin) left = rect.left - panelW - margin;
-    else {
-      left = Math.max(margin, Math.min(window.innerWidth - panelW - margin, rect.left));
-      top = Math.min(window.innerHeight - panelH - margin, rect.bottom + margin);
-    }
-    return { left, top };
-  }
-
-  function renderRun() {
-    if (!activeRun) return;
-    const { config, steps } = activeRun;
-    const step = steps[activeRun.index];
-    callStepOpen(step);
-
-    window.setTimeout(() => {
-      if (!activeRun) return;
-      const currentStep = steps[activeRun.index];
-      const target = targetFor(currentStep);
-      if (target && currentStep.scroll !== false) {
-        try { target.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' }); } catch {}
-      }
-
-      window.setTimeout(() => {
-        if (!activeRun) return;
-        drawStep(currentStep, targetFor(currentStep));
-      }, currentStep.renderDelay || 140);
-    }, step.openDelay || 0);
-  }
-
-  function drawStep(step, target) {
-    const { config, steps, index } = activeRun;
-    clearRoot();
-    injectStyles();
-    const root = document.createElement('div');
-    root.id = 'dhq-assistant-tutorial';
-    root.className = 'dhq-tutorial-root';
-    root.style.setProperty('--dhq-tutorial-accent', config.accent);
-    root.setAttribute('role', 'dialog');
-    root.setAttribute('aria-modal', 'true');
-    root.setAttribute('aria-label', step.title || config.title);
-
-    const progress = Math.round(((index + 1) / steps.length) * 100);
-    const pos = panelPosition(step, target);
-    const centered = pos.center;
-    const board = step.board || null;
-    const chips = Array.isArray(step.chips) ? step.chips : [];
-
-    root.innerHTML = `
+    `}function N(t){return[{key:"opening",title:t.title,desc:t.intro,kicker:t.kicker,position:"center",chips:t.openingChips||["90-second brief","GM room map","Replay anytime"],board:t.openingBoard||{label:"Opening Brief",title:"Front office orientation",body:"I will show you where decisions happen, where leverage shows up, and where to pull me in."}},...t.steps,{key:"finish",title:t.finishTitle,desc:t.finishText,kicker:"Ready for kickoff",position:"center",chips:t.finishChips||["Command center ready","Alex on call","Settings has replay"],board:t.finishBoard||{label:"Next Move",title:"Open the board",body:"Start with the highest-signal module, then ask Alex to pressure-test the move before you act."}}]}function b(){const t=document.getElementById("dhq-assistant-tutorial");t&&t.remove()}function G(t){if(t)try{if(typeof t.open=="function"){t.open();return}if(t.tabToOpen){const e=t.tabSelector||`[data-tab="${t.tabToOpen}"]`,o=document.querySelector(e);o&&o.click()}t.mobileTab&&typeof window.mobileTab=="function"?window.mobileTab(t.mobileTab):t.switchTab&&typeof window.switchTab=="function"&&window.switchTab(t.switchTab)}catch{}}function $(t){if(!t?.target)return null;try{return document.querySelector(t.target)}catch{return null}}function P(t,e){if(!e||t.position==="center")return{center:!0};const o=e.getBoundingClientRect(),r=16,i=Math.min(window.innerWidth*.92,660),n=330,d=window.innerWidth-o.right,u=o.left;let c,s=Math.max(r,Math.min(o.top,window.innerHeight-n-r));return d>=i+r?c=o.right+r:u>=i+r?c=o.left-i-r:(c=Math.max(r,Math.min(window.innerWidth-i-r,o.left)),s=Math.min(window.innerHeight-n-r,o.bottom+r)),{left:c,top:s}}function x(){if(!a)return;const{config:t,steps:e}=a,o=e[a.index];G(o),window.setTimeout(()=>{if(!a)return;const r=e[a.index],i=$(r);if(i&&r.scroll!==!1)try{i.scrollIntoView({block:"center",inline:"center",behavior:"smooth"})}catch{}window.setTimeout(()=>{a&&W(r,$(r))},r.renderDelay||140)},o.openDelay||0)}function W(t,e){const{config:o,steps:r,index:i}=a;b(),B();const n=document.createElement("div");n.id="dhq-assistant-tutorial",n.className="dhq-tutorial-root",n.style.setProperty("--dhq-tutorial-accent",o.accent),n.setAttribute("role","dialog"),n.setAttribute("aria-modal","true"),n.setAttribute("aria-label",t.title||o.title);const d=Math.round((i+1)/r.length*100),u=P(t,e),c=u.center,s=t.board||null,K=Array.isArray(t.chips)?t.chips:[];n.innerHTML=`
       <div class="dhq-tutorial-backdrop"></div>
-      ${target ? spotlightHtml(target) : ''}
-      <section class="dhq-tutorial-panel ${centered ? 'is-center' : 'is-anchored'}" style="${centered ? '' : `left:${Math.round(pos.left)}px;top:${Math.round(pos.top)}px`}">
+      ${e?J(e):""}
+      <section class="dhq-tutorial-panel ${c?"is-center":"is-anchored"}" style="${c?"":`left:${Math.round(u.left)}px;top:${Math.round(u.top)}px`}">
         <div class="dhq-tutorial-main">
-          ${alexHeaderHtml(config)}
-          <div class="dhq-tutorial-kicker">${escapeHtml(step.kicker || `Step ${index + 1} of ${steps.length}`)}</div>
-          <h2 class="dhq-tutorial-title">${escapeHtml(step.title)}</h2>
-          <p class="dhq-tutorial-copy">${escapeHtml(step.desc)}</p>
-          ${chips.length ? `<div class="dhq-tutorial-meta">${chips.map(chip => `<span class="dhq-tutorial-chip">${escapeHtml(chip)}</span>`).join('')}</div>` : ''}
-          ${renderChoices(step)}
+          ${j(o)}
+          <div class="dhq-tutorial-kicker">${l(t.kicker||`Step ${i+1} of ${r.length}`)}</div>
+          <h2 class="dhq-tutorial-title">${l(t.title)}</h2>
+          <p class="dhq-tutorial-copy">${l(t.desc)}</p>
+          ${K.length?`<div class="dhq-tutorial-meta">${K.map(X=>`<span class="dhq-tutorial-chip">${l(X)}</span>`).join("")}</div>`:""}
+          ${H(t)}
           <div class="dhq-tutorial-progress">
-            <div class="dhq-tutorial-rail"><div class="dhq-tutorial-fill" style="width:${progress}%"></div></div>
-            <div class="dhq-tutorial-count">${index + 1}/${steps.length}</div>
+            <div class="dhq-tutorial-rail"><div class="dhq-tutorial-fill" style="width:${d}%"></div></div>
+            <div class="dhq-tutorial-count">${i+1}/${r.length}</div>
           </div>
           <div class="dhq-tutorial-actions">
-            <button class="dhq-tutorial-btn" type="button" data-tutorial-action="back" ${index === 0 ? 'disabled' : ''}>Back</button>
+            <button class="dhq-tutorial-btn" type="button" data-tutorial-action="back" ${i===0?"disabled":""}>Back</button>
             <button class="dhq-tutorial-btn" type="button" data-tutorial-action="skip">Skip</button>
-            <button class="dhq-tutorial-btn is-primary" type="button" data-tutorial-action="next">${index === steps.length - 1 ? 'Finish Briefing' : 'Next'}</button>
+            <button class="dhq-tutorial-btn is-primary" type="button" data-tutorial-action="next">${i===r.length-1?"Finish Briefing":"Next"}</button>
           </div>
         </div>
-        ${board ? `
+        ${s?`
           <aside class="dhq-tutorial-board">
-            <span>${escapeHtml(board.label || 'GM Note')}</span>
-            <strong>${escapeHtml(board.title || '')}</strong>
-            <p>${escapeHtml(board.body || '')}</p>
+            <span>${l(s.label||"GM Note")}</span>
+            <strong>${l(s.title||"")}</strong>
+            <p>${l(s.body||"")}</p>
           </aside>
-        ` : ''}
+        `:""}
       </section>
-    `;
+    `,document.body.appendChild(n),V(n),a.seen.has(i)||(a.seen.add(i),h("tutorial_step_viewed",o,{stepIndex:i+1,stepKey:t.key||null,targetFound:!!e})),U(n)}function J(t){const e=t.getBoundingClientRect(),o=6;return`<div class="dhq-tutorial-spotlight" style="left:${Math.max(4,Math.round(e.left-o))}px;top:${Math.max(4,Math.round(e.top-o))}px;width:${Math.round(e.width+o*2)}px;height:${Math.round(e.height+o*2)}px"></div>`}function V(t){t.addEventListener("click",e=>{const o=e.target?.closest?.("[data-tutorial-action]")?.dataset?.tutorialAction;o==="next"&&T(),o==="back"&&D(),o==="skip"&&m("skipped");const r=e.target?.closest?.("[data-tutorial-choice]");if(r){const i=r.dataset.tutorialChoice,n=a?.steps?.[a.index];if(n?.choiceKey)try{localStorage.setItem(n.choiceKey,i)}catch{}t.querySelectorAll(".dhq-tutorial-choice").forEach(d=>d.classList.toggle("is-active",d.dataset.tutorialChoice===i));try{window.dispatchEvent(new CustomEvent("dhq:tutorial-choice",{detail:{key:n?.choiceKey||null,group:n?.choiceGroup||null,value:i}}))}catch{}}})}function U(t){window.setTimeout(()=>{const e=t.querySelector('[data-tutorial-action="next"]');try{e?.focus?.({preventScroll:!0})}catch{}},0)}function T(){if(a){if(a.index>=a.steps.length-1){m("completed");return}a.index+=1,x()}}function D(){!a||a.index<=0||(a.index-=1,x())}async function m(t){if(!a)return;const e=a.config;b(),a=null,window.removeEventListener("keydown",w,!0),await S(e,t)}function w(t){a&&(t.key==="Escape"?(t.preventDefault(),m("escape")):t.key==="ArrowRight"||t.key==="Enter"?(t.preventDefault(),T()):t.key==="ArrowLeft"&&(t.preventDefault(),D()))}async function Y(t,e){const o=g(t),r=e||{};if(a&&(b(),window.removeEventListener("keydown",w,!0),a=null),!r.force&&!await A(o))return!1;const i=N(o);return a={config:o,steps:i,index:0,seen:new Set,forced:!!r.force},window.addEventListener("keydown",w,!0),h(r.force?"tutorial_replayed":"tutorial_started",o,{forced:!!r.force}),r.force&&h("tutorial_started",o,{forced:!0}),x(),!0}window.App.AssistantTutorial={start:Y,shouldShow:A,complete:S,reset:F,isActive:()=>!!a,_readLocalState:p}})();
 
-    document.body.appendChild(root);
-    bindRoot(root);
-    if (!activeRun.seen.has(index)) {
-      activeRun.seen.add(index);
-      track('tutorial_step_viewed', config, {
-        stepIndex: index + 1,
-        stepKey: step.key || null,
-        targetFound: !!target,
-      });
-    }
-    focusPrimary(root);
-  }
-
-  function spotlightHtml(target) {
-    const rect = target.getBoundingClientRect();
-    const pad = 6;
-    return `<div class="dhq-tutorial-spotlight" style="left:${Math.max(4, Math.round(rect.left - pad))}px;top:${Math.max(4, Math.round(rect.top - pad))}px;width:${Math.round(rect.width + pad * 2)}px;height:${Math.round(rect.height + pad * 2)}px"></div>`;
-  }
-
-  function bindRoot(root) {
-    root.addEventListener('click', evt => {
-      const action = evt.target?.closest?.('[data-tutorial-action]')?.dataset?.tutorialAction;
-      if (action === 'next') next();
-      if (action === 'back') back();
-      if (action === 'skip') close('skipped');
-      const choiceBtn = evt.target?.closest?.('[data-tutorial-choice]');
-      if (choiceBtn) {
-        const value = choiceBtn.dataset.tutorialChoice;
-        const step = activeRun?.steps?.[activeRun.index];
-        if (step?.choiceKey) { try { localStorage.setItem(step.choiceKey, value); } catch {} }
-        root.querySelectorAll('.dhq-tutorial-choice').forEach(btn => btn.classList.toggle('is-active', btn.dataset.tutorialChoice === value));
-        try {
-          window.dispatchEvent(new CustomEvent('dhq:tutorial-choice', {
-            detail: { key: step?.choiceKey || null, group: step?.choiceGroup || null, value },
-          }));
-        } catch {}
-      }
-    });
-  }
-
-  function focusPrimary(root) {
-    window.setTimeout(() => {
-      const btn = root.querySelector('[data-tutorial-action="next"]');
-      try { btn?.focus?.({ preventScroll: true }); } catch {}
-    }, 0);
-  }
-
-  function next() {
-    if (!activeRun) return;
-    if (activeRun.index >= activeRun.steps.length - 1) {
-      close('completed');
-      return;
-    }
-    activeRun.index += 1;
-    renderRun();
-  }
-
-  function back() {
-    if (!activeRun || activeRun.index <= 0) return;
-    activeRun.index -= 1;
-    renderRun();
-  }
-
-  async function close(reason) {
-    if (!activeRun) return;
-    const config = activeRun.config;
-    clearRoot();
-    activeRun = null;
-    window.removeEventListener('keydown', keyHandler, true);
-    await complete(config, reason);
-  }
-
-  function keyHandler(evt) {
-    if (!activeRun) return;
-    if (evt.key === 'Escape') {
-      evt.preventDefault();
-      close('escape');
-    } else if (evt.key === 'ArrowRight' || evt.key === 'Enter') {
-      evt.preventDefault();
-      next();
-    } else if (evt.key === 'ArrowLeft') {
-      evt.preventDefault();
-      back();
-    }
-  }
-
-  async function start(configInput, options) {
-    const config = normalizeConfig(configInput);
-    const opts = options || {};
-    if (activeRun) {
-      clearRoot();
-      window.removeEventListener('keydown', keyHandler, true);
-      activeRun = null;
-    }
-    if (!opts.force && !await shouldShow(config)) return false;
-
-    const steps = stepList(config);
-    activeRun = { config, steps, index: 0, seen: new Set(), forced: !!opts.force };
-    window.addEventListener('keydown', keyHandler, true);
-    track(opts.force ? 'tutorial_replayed' : 'tutorial_started', config, { forced: !!opts.force });
-    if (opts.force) track('tutorial_started', config, { forced: true });
-    renderRun();
-    return true;
-  }
-
-  window.App.AssistantTutorial = {
-    start,
-    shouldShow,
-    complete,
-    reset,
-    isActive: () => !!activeRun,
-    _readLocalState: readLocalState,
-  };
-})();

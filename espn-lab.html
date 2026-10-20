@@ -70,12 +70,14 @@
         } catch (e) { /* noop */ }
       })();
     </script>
-    <script src="js/shared/shared-loader.js?v=2cb70263bdsec1"></script>
+    <script src="js/shared/shared-loader.js?v=dc8a50912csec1"></script>
     <script>
 window.DYNASTY_HQ_APP = 'warroom';
 // The graft flag stays ON here on purpose: an ESPN league must ride the
 // v1 formula path EVEN WITH the flag up (the engine's own platform
 // guard) — that guard is one of the things this harness tests.
+// (values-v2.js is no longer published since 2026-10-20, so the v2 path
+// can't run here at all now; the flag still drives one-brain overlays.)
 window.__DHQ_ENGINE_V2 = true;
 WRShared.configure({ version: 'graft3-20260905' });
 const WR_SHARED_FILES = [
@@ -96,8 +98,6 @@ const WR_SHARED_FILES = [
   'intelligence-context.js',
   'points-ledger.js',
   'one-brain.js',
-  'values-v2.js',
-  'pff-snapshot.js',
   'dhq-engine.js',
   'nfl-fit.js',
   'nfl-roles.js',

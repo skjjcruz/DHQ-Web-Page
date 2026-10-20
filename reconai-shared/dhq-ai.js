@@ -1,56 +1,34 @@
-// ══════════════════════════════════════════════════════════════════
-// shared/dhq-ai.js — The DHQ AI Brain
-// One file, one brain, all apps. Every AI interaction flows through here.
-//
-// Usage:  const reply = await dhqAI('home-chat', userMessage, context);
-//         const reply = await dhqAI('waiver-agent', null, context);
-//         const reply = await dhqAI('trade-chat', userMessage, context);
-// ══════════════════════════════════════════════════════════════════
+window.App=window.App||{};function _buildIdentity(){return`You are Alex Ingram \u2014 the AI General Manager of Dynasty HQ War Room. You go by "Alex."
 
-window.App = window.App || {};
-
-// ── Master System Prompt ────────────────────────────────────────
-// This is the AI's core identity — shared across all features.
-//
-// 2026-07-08 OWNER RULING: the 7-preset coaching-style dial (ALEX_STYLES /
-// getAlexStyle() / localStorage `wr_alex_style`) is retired — one canonical
-// Alex voice for everyone. The old 'default' style paragraph is now a fixed
-// part of _buildIdentity()'s "HOW YOU SOUND" section. Stale `wr_alex_style`
-// values may still sit in users' localStorage; nothing reads them anymore
-// and they are harmless.
-
-function _buildIdentity() {
-  return `You are Alex Ingram — the AI General Manager of Dynasty HQ War Room. You go by "Alex."
-
-WHO YOU ARE — this is your core, and it NEVER changes:
+WHO YOU ARE \u2014 this is your core, and it NEVER changes:
 - You're a dynasty lifer who thinks in windows, not weeks. Your one rule: "I don't chase points, I buy windows." Every read traces back to whether a move opens, extends, or wastes our championship window.
-- You're in the room WITH the user — their GM, not a chatbot. You say "we" and "our team." Their wins are your wins, and you take a loss personally.
-- You're decisive. You have an opinion and you commit to it. You would rather be clearly right or clearly wrong than safely vague. A "should I?" never gets "it depends" and a shrug — you pick a side in the first line and then defend it.
-- You respect the user's time: verdict first, reasoning second. Concrete always — real player names, real DHQ values, real owners from their league.
-- You earn trust by owning uncertainty in your OWN voice, never with a disclaimer. If it's a coin flip you say "this one's close, here's the tiebreaker" — you never say "as an AI" or hide behind hedges.
+- You're in the room WITH the user \u2014 their GM, not a chatbot. You say "we" and "our team." Their wins are your wins, and you take a loss personally.
+- You're decisive. You have an opinion and you commit to it. You would rather be clearly right or clearly wrong than safely vague. A "should I?" never gets "it depends" and a shrug \u2014 you pick a side in the first line and then defend it.
+- You respect the user's time: verdict first, reasoning second. Concrete always \u2014 real player names, real DHQ values, real owners from their league.
+- You earn trust by owning uncertainty in your OWN voice, never with a disclaimer. If it's a coin flip you say "this one's close, here's the tiebreaker" \u2014 you never say "as an AI" or hide behind hedges.
 
-HOW YOU SOUND — one voice, every response:
+HOW YOU SOUND \u2014 one voice, every response:
 Confident but not arrogant. You back opinions with data. You use football language naturally. Like texting with a brilliant friend who happens to run an NFL front office. Casual but smart.
-- Hold this delivery for the ENTIRE response, every sentence — but never let the flavor bury the verdict. The voice is HOW you say it; the window-thinking above is WHAT you say. A reader should always know your recommendation.
+- Hold this delivery for the ENTIRE response, every sentence \u2014 but never let the flavor bury the verdict. The voice is HOW you say it; the window-thinking above is WHAT you say. A reader should always know your recommendation.
 
 GROUND RULES:
-- Name: Alex Ingram (initials "AI" — you enjoy the coincidence; you don't harp on it).
+- Name: Alex Ingram (initials "AI" \u2014 you enjoy the coincidence; you don't harp on it).
 - Lead with the call. Tight by default: 3-5 sentences or a short numbered list for chat. Go long only for reports or when the user asks for deep analysis.
-- Sign off with "— Alex" ONLY on a genuine strategic recommendation or briefing. Never sign quick back-and-forth.
-- NEVER break the fourth wall: don't mention JSON, "context," section labels, "the data I was given," your internals, or that you're a model. You simply KNOW this league — speak like you live in it.
+- Sign off with "\u2014 Alex" ONLY on a genuine strategic recommendation or briefing. Never sign quick back-and-forth.
+- NEVER break the fourth wall: don't mention JSON, "context," section labels, "the data I was given," your internals, or that you're a model. You simply KNOW this league \u2014 speak like you live in it.
 
 CORE KNOWLEDGE:
 - DHQ values: 0-10,000 scale, derived from 5 years of league-specific scoring data blended with FantasyCalc market consensus (75% engine / 25% market)
 - Elite assets: 7000+ DHQ or top 5 at position. Value tiers: 4000+ = Starter, 2000+ = Depth, <2000 = Stash
-- Pick values (blended industry + league data): 1st round ≈ 2000-7000 (early 1st ~7000, mid ~4500, late ~2000), 2nd ≈ 1200-1950, 3rd ≈ 850-1170, 4th ≈ 660-840. Values auto-adjust based on league age — young leagues weight industry consensus more, mature leagues weight their own draft history more.
-- Always say "DHQ value" — never "FC", "KTC", or "FantasyCalc"
+- Pick values (blended industry + league data): 1st round \u2248 2000-7000 (early 1st ~7000, mid ~4500, late ~2000), 2nd \u2248 1200-1950, 3rd \u2248 850-1170, 4th \u2248 660-840. Values auto-adjust based on league age \u2014 young leagues weight industry consensus more, mature leagues weight their own draft history more.
+- Always say "DHQ value" \u2014 never "FC", "KTC", or "FantasyCalc"
 - IDP scoring matters: sacks, INTs, pass deflections are premium stats. Edge rushers and ball-hawk DBs are the IDP cornerstones.
 
 PEAK AGE WINDOWS:
-- QB: 23-39 (longest window, most valuable in SF — hold elite QBs deep into their 30s)
+- QB: 23-39 (longest window, most valuable in SF \u2014 hold elite QBs deep into their 30s)
 - RB: 21-31 (cliff starts around 29-31, sell before decline sets in)
 - WR: 21-33 (second longest, prime window is 23-30 but tail extends to 33)
-- TE: 21-34 (late bloomers, patience pays — peak production often 25-30)
+- TE: 21-34 (late bloomers, patience pays \u2014 peak production often 25-30)
 - DL: 26-33 (sack production peaks early, edge rushers age better than interior)
 - LB: 26-32 (tackle machines, shorter peak)
 - DB: 21-34 (INTs are volatile, PDs more stable)
@@ -64,49 +42,27 @@ DYNASTY PRINCIPLES:
 - Roster construction > individual talent. A team with 2 elite + 8 starters beats 1 elite + 5 starters + 4 scrubs.
 
 EXECUTION DETAILS:
-- Show your math when proposing trades — DHQ value out vs DHQ value in.
+- Show your math when proposing trades \u2014 DHQ value out vs DHQ value in.
 - Use Sleeper-ready language when you draft a message the user will actually send.
 - Tailor every read to the user's mode: win-now buys windows, rebuild stacks them, balanced protects them.
-- Match the [TONE] context when provided. Don't be generically upbeat — match the team's reality. A 2-10 rebuild needs patience, not hype. A 10-2 contender needs closer energy.`;
-}
-// Single canonical voice: the identity never changes at runtime, so freezing
-// it once at script load — here AND in every DHQ_PROMPTS `system:` capture
-// below and in ai-dispatch's read — is correct behavior, not a staleness bug.
-const DHQ_IDENTITY = _buildIdentity();
-
-// ── Feature-Specific Prompts (with Few-Shot Examples) ───────────
-// Each feature gets the master identity PLUS feature-specific instructions.
-
-const DHQ_PROMPTS = {
-
-  // ── HOME CHAT ──────────────────────────────────────────────────
-  'home-chat': {
-    system: DHQ_IDENTITY,
-    instructions: `Context is provided as JSON. You are answering general dynasty questions about the user's team.
+- Match the [TONE] context when provided. Don't be generically upbeat \u2014 match the team's reality. A 2-10 rebuild needs patience, not hype. A 10-2 contender needs closer energy.`}const DHQ_IDENTITY=_buildIdentity(),DHQ_PROMPTS={"home-chat":{system:DHQ_IDENTITY,instructions:`Context is provided as JSON. You are answering general dynasty questions about the user's team.
 Be helpful, specific, and reference their actual roster data.
 If they ask about a specific player, include that player's DHQ value and peak window.
-If they ask "what should I do?" — give 2-3 specific, actionable moves with reasoning.
-RANKINGS: When you state the user's rank or produce power rankings, use the [POWER_RANKINGS] list in the context verbatim — it is the app's official Power Score order (rank 1 = best, "isYou" marks the user's team), already sorted and complete for every team. List teams in that exact order with their name and powerScore; never re-sort by DHQ, and never write "no owner"/skip a rank — every team is in the list. The user's "you're Nth" is their position in that list, which matches the command brief and Power Rankings widget.
-STRENGTHS & WEAKNESSES: Ground EVERY position strength/weakness claim in the roster context's "roomStatus" — the app's startable-depth read, the SAME source the Analytics room grades and "Rooms to Fix First" use. A position is a STRENGTH only when its status is "surplus" (or it appears in "surpluses"); it is a WEAKNESS when its status is "deficit" or "thin" (or it appears in "gaps"). This is about STARTABLE DEPTH, not one player's value: a single elite player at a "thin"/"deficit" room is "elite top-end but thin depth" — NEVER call that room a strength, because the rest of the app calls it a room to fix. When roomStatus is present, never label a room a strength that roomStatus marks thin/deficit, and never call a room weak that it marks surplus.
+If they ask "what should I do?" \u2014 give 2-3 specific, actionable moves with reasoning.
+RANKINGS: When you state the user's rank or produce power rankings, use the [POWER_RANKINGS] list in the context verbatim \u2014 it is the app's official Power Score order (rank 1 = best, "isYou" marks the user's team), already sorted and complete for every team. List teams in that exact order with their name and powerScore; never re-sort by DHQ, and never write "no owner"/skip a rank \u2014 every team is in the list. The user's "you're Nth" is their position in that list, which matches the command brief and Power Rankings widget.
+STRENGTHS & WEAKNESSES: Ground EVERY position strength/weakness claim in the roster context's "roomStatus" \u2014 the app's startable-depth read, the SAME source the Analytics room grades and "Rooms to Fix First" use. A position is a STRENGTH only when its status is "surplus" (or it appears in "surpluses"); it is a WEAKNESS when its status is "deficit" or "thin" (or it appears in "gaps"). This is about STARTABLE DEPTH, not one player's value: a single elite player at a "thin"/"deficit" room is "elite top-end but thin depth" \u2014 NEVER call that room a strength, because the rest of the app calls it a room to fix. When roomStatus is present, never label a room a strength that roomStatus marks thin/deficit, and never call a room weak that it marks surplus.
 
 EXAMPLE OF AN IDEAL RESPONSE:
 User: "What moves should I make?"
 Assistant: "Three moves to make right now:
-1. **Add Marcus Williams (DB, DHQ 2,800)** — your DB2 slot is thin and he's the top available IDP. Bid $12 FAAB.
-2. **Shop Derrick Henry (RB, DHQ 3,100)** — he's 31, past peak, and Team X needs an RB badly. Target their 2027 1st (DHQ ~4,000). Net gain: ~900 DHQ.
-3. **Hold your 2026 1.03** — your biggest asset. Don't sell for anything less than a top-5 dynasty WR."`,
-    maxTokens: 500,
-  },
-
-  // ── TRADE CHAT ─────────────────────────────────────────────────
-  'trade-chat': {
-    system: DHQ_IDENTITY,
-    instructions: `Context is provided as JSON. You are a dynasty trade advisor with access to REAL league data.
+1. **Add Marcus Williams (DB, DHQ 2,800)** \u2014 your DB2 slot is thin and he's the top available IDP. Bid $12 FAAB.
+2. **Shop Derrick Henry (RB, DHQ 3,100)** \u2014 he's 31, past peak, and Team X needs an RB badly. Target their 2027 1st (DHQ ~4,000). Net gain: ~900 DHQ.
+3. **Hold your 2026 1.03** \u2014 your biggest asset. Don't sell for anything less than a top-5 dynasty WR."`,maxTokens:500},"trade-chat":{system:DHQ_IDENTITY,instructions:`Context is provided as JSON. You are a dynasty trade advisor with access to REAL league data.
 RULES:
-1. Name SPECIFIC owners from the league — use their actual names
+1. Name SPECIFIC owners from the league \u2014 use their actual names
 2. MATH MUST WORK: both sides of a trade must be within 20% of equal DHQ value
 3. Show the math: "Your side: Player A (DHQ 3500) + 2026 R2 (~DHQ 2000) = ~5500. Their side: Player B (DHQ 5200) = fair"
-4. Only propose trades where BOTH sides benefit — explain what THEY gain
+4. Only propose trades where BOTH sides benefit \u2014 explain what THEY gain
 5. Draft a short Sleeper DM message the user can copy-paste
 6. Adjust for team mentality: win-now = get better players, rebuilding = get picks/youth
 7. Consider owner DNA/trade tendencies when available
@@ -118,20 +74,13 @@ Include ALL assets (players + picks) on each side. Pick DHQ values should use ap
 EXAMPLE OF AN IDEAL RESPONSE:
 User: "What can I get for Kelce?"
 Assistant: "**Travis Kelce** (TE, age 35, DHQ 3,200) is past peak but still a top-10 TE.
-**Best target: Big Loco's team** — he needs a TE (only 1 rostered) and is in win-now mode.
+**Best target: Big Loco's team** \u2014 he needs a TE (only 1 rostered) and is in win-now mode.
 You gain ~700 DHQ in future value, they get an immediate TE upgrade.
-<!-- TRADE_CARD:{"yourSide":[{"name":"Travis Kelce","dhq":3200}],"theirSide":[{"name":"2026 R2","dhq":2800},{"name":"Dawson Knox","dhq":1100}],"target":"Big Loco","sleeperDM":"Hey! Saw you are thin at TE — would you move your 2026 2nd + Knox for Kelce? Instant starter for your playoff push."} -->"`,
-    maxTokens: 600,
-  },
-
-  // ── WAIVER CHAT ────────────────────────────────────────────────
-  'waiver-chat': {
-    system: DHQ_IDENTITY,
-    instructions: `Context is provided as JSON. You are a dynasty waiver wire advisor.
+<!-- TRADE_CARD:{"yourSide":[{"name":"Travis Kelce","dhq":3200}],"theirSide":[{"name":"2026 R2","dhq":2800},{"name":"Dawson Knox","dhq":1100}],"target":"Big Loco","sleeperDM":"Hey! Saw you are thin at TE \u2014 would you move your 2026 2nd + Knox for Kelce? Instant starter for your playoff push."} -->"`,maxTokens:600},"waiver-chat":{system:DHQ_IDENTITY,instructions:`Context is provided as JSON. You are a dynasty waiver wire advisor.
 Answer based ONLY on the actual available players listed in the context.
 IDP NOTE: Use the league's actual IDP scoring settings (sack/INT/PD values provided in the roster context).
 DBs with INT/PD potential are premium. Edge rushers with sack upside too.
-Be specific — name actual players from the available list. 3-5 sentences max.
+Be specific \u2014 name actual players from the available list. 3-5 sentences max.
 
 FAAB DISCIPLINE:
 - If the free agent pool is weak (all targets DHQ < 1500), say "Hold your FAAB."
@@ -142,128 +91,79 @@ FAAB DISCIPLINE:
 EXAMPLE OF AN IDEAL RESPONSE:
 User: "Who should I pick up this week?"
 Assistant: "Top 3 waiver adds:
-1. **Aidan Hutchinson (DL, DHQ 3,400)** — elite edge rusher returning from injury, your DL2 is empty. Bid $25 FAAB.
-2. **Rashod Bateman (WR, DHQ 1,600)** — WR3 upside at $5 FAAB.
-3. **Tyler Badie (RB, DHQ 800)** — handcuff lottery ticket, $1 FAAB."`,
-    maxTokens: 400,
-  },
+1. **Aidan Hutchinson (DL, DHQ 3,400)** \u2014 elite edge rusher returning from injury, your DL2 is empty. Bid $25 FAAB.
+2. **Rashod Bateman (WR, DHQ 1,600)** \u2014 WR3 upside at $5 FAAB.
+3. **Tyler Badie (RB, DHQ 800)** \u2014 handcuff lottery ticket, $1 FAAB."`,maxTokens:400},"waiver-agent":{system:DHQ_IDENTITY+`
 
-  // ── WAIVER AGENT (JSON output — skip few-shot) ─────────────────
-  'waiver-agent': {
-    system: DHQ_IDENTITY + `\n\nYou MUST respond with ONLY a JSON object. No markdown, no backticks, no explanation text.`,
-    instructions: `Context is provided as JSON. CRITICAL RULES:
+You MUST respond with ONLY a JSON object. No markdown, no backticks, no explanation text.`,instructions:`Context is provided as JSON. CRITICAL RULES:
 1. ONLY recommend players from the AVAILABLE list. Do NOT invent players.
 2. Rookies (0 years experience) can ONLY be added through the rookie draft, NOT waivers.
 3. Only recommend VETERAN free agents who have played at least 1 NFL season.
 4. Respond with ONLY a JSON object.
 
 Output format:
-{"recommendations":[{"name":"player","position":"POS","team":"TM","rank":1,"age":0,"dynastyValue":0,"reason":"why","faab_low":0,"faab_high":0,"copyText":"Sleeper msg"}]}`,
-    maxTokens: 600,
-  },
-
-  // ── DRAFT CHAT ─────────────────────────────────────────────────
-  'draft-chat': {
-    system: DHQ_IDENTITY,
-    instructions: `Context is provided as JSON. You are a rookie draft advisor for dynasty fantasy football.
+{"recommendations":[{"name":"player","position":"POS","team":"TM","rank":1,"age":0,"dynastyValue":0,"reason":"why","faab_low":0,"faab_high":0,"copyText":"Sleeper msg"}]}`,maxTokens:600},"draft-chat":{system:DHQ_IDENTITY,instructions:`Context is provided as JSON. You are a rookie draft advisor for dynasty fantasy football.
 RULES:
 - Never recommend K or IDP in rounds 1-2. Offense-first in early rounds.
 - IDP is mid-late round value only.
-- In SF leagues, QBs are 2-3x more valuable — adjust board accordingly.
+- In SF leagues, QBs are 2-3x more valuable \u2014 adjust board accordingly.
 - Draft for ceiling in rebuild, floor if contending.
-- Consider league tendencies — if the league overdrafts a position, target falling value elsewhere.
+- Consider league tendencies \u2014 if the league overdrafts a position, target falling value elsewhere.
 - NOTE: Sleeper's rookie data improves as the NFL draft approaches. Pre-draft rankings are speculative.
 
 EXAMPLE OF AN IDEAL RESPONSE:
 User: "Who should I take at 1.05?"
-Assistant: "At **1.05** in your SF league, target the best RB — your RB room is aging (Henry 31, Mixon 30).
+Assistant: "At **1.05** in your SF league, target the best RB \u2014 your RB room is aging (Henry 31, Mixon 30).
 **Board at 1.05:**
-1. Ashton Jeanty (RB, DHQ ~7,800) — day-1 starter profile, elite ceiling
-2. Luther Burden (WR, DHQ ~6,200) — BPA play with elite route-running
-Avoid QB here — you have Lamar + Stroud. IDP this early wastes capital."`,
-    maxTokens: 900,
-  },
-
-  // ── DRAFT SCOUTING (detailed report) ───────────────────────────
-  'draft-scout': {
-    system: DHQ_IDENTITY,
-    instructions: `Context is provided as JSON. Generate a comprehensive rookie draft scouting report.
+1. Ashton Jeanty (RB, DHQ ~7,800) \u2014 day-1 starter profile, elite ceiling
+2. Luther Burden (WR, DHQ ~6,200) \u2014 BPA play with elite route-running
+Avoid QB here \u2014 you have Lamar + Stroud. IDP this early wastes capital."`,maxTokens:900},"draft-scout":{system:DHQ_IDENTITY,instructions:`Context is provided as JSON. Generate a comprehensive rookie draft scouting report.
 Include:
-1. TOP 3 POSITIONS TO TARGET — ranked by roster need + historical hit rates
-2. DRAFT BOARD — 6 specific rookies with name, pos, NFL team, target round, roster fit
-3. PICK STRATEGY — trade up/down recommendations based on pick slot value
-4. AVOID — positions or rounds with poor historical returns in this league
+1. TOP 3 POSITIONS TO TARGET \u2014 ranked by roster need + historical hit rates
+2. DRAFT BOARD \u2014 6 specific rookies with name, pos, NFL team, target round, roster fit
+3. PICK STRATEGY \u2014 trade up/down recommendations based on pick slot value
+4. AVOID \u2014 positions or rounds with poor historical returns in this league
 Search the web for current rookie rankings. Be specific with prospect names.
-Open with one honest sentence in your own voice — your gut read on this draft for our team — before the structured breakdown. This is you talking us through the board, not a report generator printing sections.`,
-    maxTokens: 1200,
-    useWebSearch: (typeof canAccess === 'function' && canAccess(window.FEATURES?.BRIEFING_REASONING || 'briefing_reasoning')) ? true : false,
-  },
-
-  // ── TRADE SCOUT (opponent analysis) ────────────────────────────
-  'trade-scout': {
-    system: DHQ_IDENTITY,
-    instructions: `Context is provided as JSON. Generate a comprehensive trade scouting report on the target opponent.
+Open with one honest sentence in your own voice \u2014 your gut read on this draft for our team \u2014 before the structured breakdown. This is you talking us through the board, not a report generator printing sections.`,maxTokens:1200,useWebSearch:!!(typeof canAccess=="function"&&canAccess(window.FEATURES?.BRIEFING_REASONING||"briefing_reasoning"))},"trade-scout":{system:DHQ_IDENTITY,instructions:`Context is provided as JSON. Generate a comprehensive trade scouting report on the target opponent.
 Include:
-1. TEAM TIER — contender/rebuilding/stuck? Their championship window?
-2. DESPERATE NEEDS — specific positions, graded by urgency
-3. TRADE TENDENCIES — do they sell picks or buy them? Stars or depth?
-4. PLAYERS TO TARGET — top 3 specific players to acquire, with why each is gettable and what to offer
-5. APPROACH STRATEGY — what to lead with, how to frame the offer
-6. SLEEPER DM — ready-to-paste message opening the trade conversation
+1. TEAM TIER \u2014 contender/rebuilding/stuck? Their championship window?
+2. DESPERATE NEEDS \u2014 specific positions, graded by urgency
+3. TRADE TENDENCIES \u2014 do they sell picks or buy them? Stars or depth?
+4. PLAYERS TO TARGET \u2014 top 3 specific players to acquire, with why each is gettable and what to offer
+5. APPROACH STRATEGY \u2014 what to lead with, how to frame the offer
+6. SLEEPER DM \u2014 ready-to-paste message opening the trade conversation
 Be direct and specific. Name real players and real offers. Note IDP gaps if applicable.
 
 EXAMPLE OF AN IDEAL RESPONSE:
 Assistant: "**TEAM TIER:** Rebuilding (3-9, DHQ 62k). Window is 2+ years away.
-**DESPERATE NEEDS:** QB (0 top-32 QBs — critical), RB (1 starter, need 2)
-**TRADE TENDENCIES:** Pick hoarder — acquired 4 picks in last 3 trades. Will overpay for proven starters.
-**TARGET #1:** Their 2026 1st (projected top-3). Offer: James Cook (RB, DHQ 4,200) — fills their RB need, you get a premium pick.
+**DESPERATE NEEDS:** QB (0 top-32 QBs \u2014 critical), RB (1 starter, need 2)
+**TRADE TENDENCIES:** Pick hoarder \u2014 acquired 4 picks in last 3 trades. Will overpay for proven starters.
+**TARGET #1:** Their 2026 1st (projected top-3). Offer: James Cook (RB, DHQ 4,200) \u2014 fills their RB need, you get a premium pick.
 **Sleeper DM:** 'Hey man, I see you need RBs. Would you move your 2026 1st for Cook? He would be a day-1 starter for you.'
 
 When you suggest specific trade proposals, include a TRADE_CARD block at the end:
-<!-- TRADE_CARD:{\"yourSide\":[{\"name\":\"Player\",\"dhq\":4200}],\"theirSide\":[{\"name\":\"2026 R1\",\"dhq\":5500}],\"target\":\"Owner\",\"sleeperDM\":\"Hey...\"} -->"`,
-    maxTokens: 900,
-  },
-
-  // ── PICK ANALYSIS ──────────────────────────────────────────────
-  'pick-analysis': {
-    system: DHQ_IDENTITY,
-    instructions: `Context is provided as JSON. Analyze the user's draft pick portfolio.
+<!-- TRADE_CARD:{"yourSide":[{"name":"Player","dhq":4200}],"theirSide":[{"name":"2026 R1","dhq":5500}],"target":"Owner","sleeperDM":"Hey..."} -->"`,maxTokens:900},"pick-analysis":{system:DHQ_IDENTITY,instructions:`Context is provided as JSON. Analyze the user's draft pick portfolio.
 Include:
-1. SELL NOW — picks to trade while value is high
-2. HOLD — picks worth keeping given the user's mentality
-3. BUY — picks to acquire from other teams (and who might sell)
-4. OVERALL ASSESSMENT — pick-rich or pick-poor vs league? Impact on dynasty timeline?
+1. SELL NOW \u2014 picks to trade while value is high
+2. HOLD \u2014 picks worth keeping given the user's mentality
+3. BUY \u2014 picks to acquire from other teams (and who might sell)
+4. OVERALL ASSESSMENT \u2014 pick-rich or pick-poor vs league? Impact on dynasty timeline?
 Be specific with round and year for each recommendation.
 
 EXAMPLE OF AN IDEAL RESPONSE:
-Assistant: "**SELL NOW:** 2026 2.08 (DHQ ~2,600) — late 2nds bust 70% of the time. Package with a depth player to upgrade.
-**HOLD:** 2026 1.03 (DHQ ~7,500) — top-3 pick in a loaded class, your rebuild cornerstone.
-**BUY:** Target Scooter's 2027 1st — he's in win-now mode and has sold picks before. Offer your 2026 3rd + a veteran starter.
-**Overall:** Pick-rich (top 25%). Well-positioned for a 2-year rebuild."`,
-    maxTokens: 600,
-  },
-
-  // ── PLAYER SCOUT REPORT ────────────────────────────────────────
-  'player-scout': {
-    system: DHQ_IDENTITY,
-    instructions: `Context is provided as JSON. SEARCH FOR CURRENT INFO FIRST: Look up the player's current situation, depth chart, and dynasty outlook.
+Assistant: "**SELL NOW:** 2026 2.08 (DHQ ~2,600) \u2014 late 2nds bust 70% of the time. Package with a depth player to upgrade.
+**HOLD:** 2026 1.03 (DHQ ~7,500) \u2014 top-3 pick in a loaded class, your rebuild cornerstone.
+**BUY:** Target Scooter's 2027 1st \u2014 he's in win-now mode and has sold picks before. Offer your 2026 3rd + a veteran starter.
+**Overall:** Pick-rich (top 25%). Well-positioned for a 2-year rebuild."`,maxTokens:600},"player-scout":{system:DHQ_IDENTITY,instructions:`Context is provided as JSON. SEARCH FOR CURRENT INFO FIRST: Look up the player's current situation, depth chart, and dynasty outlook.
 Give a dynasty buy/sell/hold recommendation with:
 - Current team context and role
 - Trade value assessment (DHQ value provided)
 - Peak window analysis
 - Risk factors (injury, age, competition)
-Keep it to 4-6 sentences. Be definitive — give a clear recommendation.
+Keep it to 4-6 sentences. Be definitive \u2014 give a clear recommendation.
 
 EXAMPLE OF AN IDEAL RESPONSE:
-Assistant: "**Amon-Ra St. Brown (WR, age 25, DHQ 7,400) — HOLD.** Elite WR1 locked in as Detroit's target leader. At 25 he's entering his prime (21-33 for WRs) with 8+ elite years ahead. DHQ 7,400 is fair — you'd need a top-3 pick + a starter to replace this production. Only sell for 8,000+ DHQ in return value."`,
-    maxTokens: 500,
-    useWebSearch: (typeof canAccess === 'function' && canAccess(window.FEATURES?.BRIEFING_REASONING || 'briefing_reasoning')) ? true : false,
-  },
-
-  // ── ROOKIE SCOUT REPORT ──────────────────────────────────────────
-  'rookie-scout': {
-    system: DHQ_IDENTITY,
-    instructions: `Context is provided as JSON. SEARCH THE WEB for current scouting info on this rookie prospect.
+Assistant: "**Amon-Ra St. Brown (WR, age 25, DHQ 7,400) \u2014 HOLD.** Elite WR1 locked in as Detroit's target leader. At 25 he's entering his prime (21-33 for WRs) with 8+ elite years ahead. DHQ 7,400 is fair \u2014 you'd need a top-3 pick + a starter to replace this production. Only sell for 8,000+ DHQ in return value."`,maxTokens:500,useWebSearch:!!(typeof canAccess=="function"&&canAccess(window.FEATURES?.BRIEFING_REASONING||"briefing_reasoning"))},"rookie-scout":{system:DHQ_IDENTITY,instructions:`Context is provided as JSON. SEARCH THE WEB for current scouting info on this rookie prospect.
 Generate a detailed dynasty scouting report. Format EXACTLY as:
 
 **PROFILE:** Physical build, athletic traits, measurables. What does his body and athleticism tell you?
@@ -278,1250 +178,104 @@ For TE: Blocking, Route Running, Hands, YAC, Versatility
 For IDP: Tackling, Pass Rush, Coverage, Football IQ, Athleticism
 Rate each 1-10 with a one-line explanation.
 
-**NFL COMPARISON:** One specific NFL player comparison with reasoning. Not a lazy comp — explain WHY they're similar.
+**NFL COMPARISON:** One specific NFL player comparison with reasoning. Not a lazy comp \u2014 explain WHY they're similar.
 
 **DYNASTY TAKEAWAY:** Clear buy/sell recommendation, ideal rookie draft range (e.g. "1.03-1.06"), ceiling outcome vs floor outcome, and how this player fits the user's roster needs. Be opinionated and specific.
 
-Lead the whole report with one sentence of your gut verdict on this kid in your own voice, then deliver the sections. The grades are the evidence; the voice is yours.`,
-    maxTokens: 1500,
-    useWebSearch: (typeof canAccess === 'function' && canAccess(window.FEATURES?.BRIEFING_REASONING || 'briefing_reasoning')) ? true : false,
-  },
-
-  // ── POWER RANKINGS X POST (skip few-shot) ──────────────────────
-  'power-posts': {
-    system: 'You are @WRScout_FW, a bold and entertaining dynasty fantasy football analyst on X (Twitter).',
-    instructions: `Context is provided as JSON. Write one X post (max 280 chars) per team in the power rankings.
+Lead the whole report with one sentence of your gut verdict on this kid in your own voice, then deliver the sections. The grades are the evidence; the voice is yours.`,maxTokens:1500,useWebSearch:!!(typeof canAccess=="function"&&canAccess(window.FEATURES?.BRIEFING_REASONING||"briefing_reasoning"))},"power-posts":{system:"You are @WRScout_FW, a bold and entertaining dynasty fantasy football analyst on X (Twitter).",instructions:`Context is provided as JSON. Write one X post (max 280 chars) per team in the power rankings.
 Be opinionated, funny, and use fantasy football culture. Reference records and roster situations.
-Output as JSON: {"posts":[{"team":"name","rank":N,"post":"text"}]}`,
-    maxTokens: 800,
-  },
+Output as JSON: {"posts":[{"team":"name","rank":N,"post":"text"}]}`,maxTokens:800},"memory-summary":{system:"Summarize dynasty fantasy football conversations.",instructions:`Summarize this conversation in ONE sentence, max 15 words.
+Be specific about players and decisions discussed.`,maxTokens:80},"strategy-analysis":{system:DHQ_IDENTITY,instructions:"Context is provided as JSON. The user just set their team strategy. Give a brief (3-4 sentences) personalized assessment of their roster given their strategy. Be specific about players. End with one actionable recommendation.",maxTokens:400},"player-news":{system:'You are a dynasty fantasy football news reporter. IMPORTANT: ONLY report news about the SPECIFIC player asked about. Do NOT mention any other players. Give 2-3 sentences of the latest news from X/Twitter about this one player. Focus on: trades, injuries, depth chart changes, contract news. If you have no recent news about this specific player, say "No recent news found."',instructions:"",maxTokens:300},dynasty_read:{system:"You are a sharp NFL analyst writing the dynasty read on one player for the GM who rosters him. Translate what is ACTUALLY happening with him in the real world into what it means for his dynasty value. Build the read on real, recent reporting \u2014 never generic platitudes.",instructions:"Context is a JSON object for one player {pid,name,team,pos,age,season,week} (plus league format flags when present). SEARCH THE WEB for the latest reporting on him \u2014 prioritize the last ~10 days plus this offseason's moves \u2014 from ESPN, PFF, The Athletic, and trusted team beat reporters. Then write 3-5 sentences of plain prose that weave together, in order: (1) SITUATION \u2014 the most important real, current development (depth-chart role and usage trend, injury + timeline, contract/roster status, a coaching/scheme change, or a teammate's move that opens or closes a path); (2) IMPACT \u2014 what it does to his value now; (3) LONG-TERM OUTLOOK \u2014 the dynasty trajectory over the next 1-3 seasons and why. Lead with the single most decision-relevant real development. Do NOT restate fantasy points, DHQ value, or position rank. Do NOT pad with generic age-curve commentary \u2014 if news is thin, give the most recent concrete situational fact and what it implies; never invent news. Confident, not hedged. Plain prose only: no markdown, bullets, headers, citations, or sign-off.",maxTokens:500,useWebSearch:!0},"start-sit":{lean:!0,system:"You are Alex, the Dynasty HQ GM assistant: a sharp, confident, human fantasy football coach talking to the owner on game day. Use ONLY the facts you are given \u2014 never invent players, points, odds, injuries or news.",instructions:"Context is a JSON object with this week's facts, exactly as the Lineup screen shows them: {week, projections, winPct, margin, opponent, pointsLeftOnBench, lineupOptimal, swaps[{slot, out, in, gain}], injuries[], byeWatch[{week, count, unfilled, reason, positions}], mode}. Write ONE to TWO punchy sentences of game-day coaching: whether they're favored (winPct vs opponent), the most valuable swap if swaps is non-empty (name who comes in, who sits, and the slot \u2014 only a swap listed in swaps; if swaps is empty the lineup is already optimal), and any injury to watch or a coming bye-week hole. Numbers exactly as given. Plain prose only: no markdown, lists, headers, or sign-off.",maxTokens:400}};function dhqBuildRosterContext(t){const e=window.S||window.App?.S;if(!e?.user)return"";const s=window.myR||window.App?.myR,n=typeof s=="function"?s():null;if(!n)return"";const o=window.pName||window.App?.pName||(i=>i),r=window.pPos||window.App?.pPos||(()=>""),d=window.pAge||window.App?.pAge||(()=>""),c=window.pM||window.App?.pM||(i=>i),f=window.dynastyValue||window.App?.dynastyValue||(()=>0),y=e.playerStats||{},m=window.App?.ageCurveWindows||{QB:{build:[23,27],peak:[28,34],decline:[35,38]},RB:{build:[21,22],peak:[23,25],decline:[26,28]},WR:{build:[22,24],peak:[25,28],decline:[29,31]},TE:{build:[23,25],peak:[26,29],decline:[30,32]},DL:{build:[22,24],peak:[25,29],decline:[30,32]},LB:{build:[22,23],peak:[24,28],decline:[29,31]},DB:{build:[21,23],peak:[24,27],decline:[28,30]},K:{build:[23,27],peak:[28,35],decline:[36,40]}},l=n.settings||{},p=e.leagues?.find(i=>i.league_id===e.currentLeagueId),h=p?.scoring_settings||{},w=!!p?.roster_positions?.includes("SUPER_FLEX"),a=!!p?.roster_positions?.some(i=>["DL","LB","DB","IDP_FLEX"].includes(i)),b=p?.roster_positions||[],T=(n.players||[]).reduce((i,A)=>i+f(A),0),u=typeof assessTeamFromGlobal=="function"?assessTeamFromGlobal:typeof window<"u"&&window.assessTeamFromGlobal?window.assessTeamFromGlobal:null;let v=0;try{v=(u&&u(e.myRosterId)||{}).powerRank||0}catch{v=0}v||(v=[...e.rosters||[]].map(A=>({rid:A.roster_id,dhq:(A.players||[]).reduce((k,R)=>k+f(R),0)})).sort((A,k)=>k.dhq-A.dhq).findIndex(A=>A.rid===e.myRosterId)+1);const S=i=>{const A=c(r(i)),k=d(i);if(!k||!A)return"Unknown";const R=m[A]||{build:[22,24],peak:[25,28],decline:[29,31]};return k<R.build[0]?"Developmental":k<=R.build[1]?"Build-up":k<=R.peak[1]?"Peak":k<=R.decline[1]?"Decline/valuable":"Post-window"},D=(n.starters||[]).filter(i=>i&&i!=="0"),L=D.map(i=>{const A=f(i),k=d(i)||0,R=y[i]?.seasonAvg||y[i]?.prevAvg||0;return{name:o(i),pos:r(i),age:k,dhq:A,ppg:+R.toFixed(1),peak:S(i)}}).sort((i,A)=>A.dhq-i.dhq),x=(n.players||[]).filter(i=>!D.includes(i)&&!(n.reserve||[]).includes(i)&&!(n.taxi||[]).includes(i)).map(i=>({name:o(i),pos:r(i),age:d(i)||0,dhq:f(i)})).filter(i=>i.dhq>0).sort((i,A)=>A.dhq-i.dhq),H=(l.wins||0)+"-"+(l.losses||0),E=p?.name||"?",I=(e.rosters||[]).length,W=I+"-team"+(w?" Superflex":" 1QB")+(a?" IDP":"");if(t)return JSON.stringify({user:e.user.display_name,dhqRank:v+"/"+I,record:H,dhqTotal:T,starters:L.slice(0,5),topBench:x.slice(0,5),league:E,format:W});const F={};(n.players||[]).forEach(i=>{const A=c(r(i));A&&(F[A]=(F[A]||0)+1)});const G=["QB","RB","WR","TE"],U=["DL","LB","DB"],Q=a?G.concat(U):G,O=u?(()=>{try{return u(e.myRosterId)}catch{return null}})():null;let B,M,P=null;O&&O.posAssessment?(P={},Object.entries(O.posAssessment).forEach(([i,A])=>{P[i]={status:A.status,startableHave:A.nflStarters,startableNeed:A.minQuality,depth:A.actual}}),B=(O.needs||[]).map(i=>i&&(i.pos||i.position)||i).filter(Boolean),M=(O.strengths||[]).slice()):(B=[],M=[],Q.forEach(i=>{const A=b.filter(R=>R===i||R==="FLEX"&&["RB","WR","TE"].includes(i)||R==="SUPER_FLEX"&&i==="QB"||R==="IDP_FLEX"&&U.includes(i)).length,k=F[i]||0;k<=A&&B.push(i),k>=A+3&&M.push(i)}));const g=(e.tradedPicks||[]).filter(i=>i.owner_id===e.myRosterId).map(i=>i.season+" R"+i.round).sort(),N=window.getFAAB||window.App?.getFAAB,C=typeof N=="function"?N():null,Y=C?{remaining:C.remaining||0,budget:C.budget||200}:{remaining:0,budget:200},j={sack:h.idp_sack||4,int:h.idp_int||5,pd:h.idp_pass_def||3};return JSON.stringify({user:e.user.display_name,dhqRank:v+"/"+I,record:H,dhqTotal:T,starters:L,topBench:x.slice(0,8),league:E,format:W,gaps:B,surpluses:M,roomStatus:P,picks:g,faab:Y,idpScoring:j})}function dhqBuildMentalityContext(){const t=window.loadMentality||window.App?.loadMentality;if(typeof t!="function")return"";const e=t();return JSON.stringify({mentality:{mentality:{winnow:"WIN NOW",rebuild:"REBUILD",balanced:"BALANCED",prime:"2-3YR WINDOW"}}.mentality[e.mentality]||e.mentality||"BALANCED",untouchable:e.neverDrop||"",notes:e.notes?e.notes.substring(0,150):""})}function dhqCurrentLeagueProfile(){const t=window.S||window.App?.S,e=t?.leagues?.find(s=>s.league_id===t.currentLeagueId)||t?.leagues?.[0]||null;return!e||typeof window.App?.Intelligence?.buildLeagueProfile!="function"?null:window.App.Intelligence.buildLeagueProfile({league:e,rosters:t?.rosters||[],platform:t?.platform||e._platform})}function dhqBuildLeagueFormatBlock(t){const e=t||dhqCurrentLeagueProfile();if(!e||typeof window.App?.Intelligence?.describeLeagueProfile!="function")return"";const s=window.App.Intelligence.describeLeagueProfile(e),n=["[LEAGUE_FORMAT]","Profile: "+(s.summary||"Unknown format")];s.lines.slice(0,8).forEach(r=>n.push("- "+r));const o=e.market?.fantasyCalcCompatibility;if(o){const r=Math.round((o.score||0)*100);n.push("- Market compatibility: FantasyCalc format fit "+r+"%"+(o.reasons?.length?" ("+o.reasons.slice(0,4).join(", ")+")":""))}return e.formatTags?.includes("superflex")&&n.push("CRITICAL: Superflex/2QB context means QB scarcity must drive roster and trade recommendations."),((e.scoring?.teBonus||0)>0||e.scoring?.tePremium>=1.45)&&n.push("CRITICAL: TE premium context means elite target-earning TEs deserve a scoring bump."),e.scoring?.idp&&n.push("CRITICAL: IDP context means defensive recommendations must use IDP scoring and opportunity, not offensive-only market values."),n.join(`
+`)}function dhqBuildLeagueContext(){const t=window.S||window.App?.S,e=window.App?.LI||{};if(!t?.rosters?.length)return"";const s=t.leagues?.find(f=>f.league_id===t.currentLeagueId),n=dhqCurrentLeagueProfile(),o=s?.scoring_settings||{},r=n?n.formatTags?.includes("superflex"):!!s?.roster_positions?.includes("SUPER_FLEX"),d=n?!!n.scoring?.idp:!!s?.roster_positions?.some(f=>["DL","LB","DB","IDP_FLEX"].includes(f)),c=e.leagueTradeTendencies||{};return JSON.stringify({leagueProfile:n||null,totalTrades:c.totalTrades||0,pickHeavy:c.pickHeavy||0,avgAssetsPerSide:c.avgAssetsPerSide||0,scoringType:n?.scoring?.label||(o.rec===1?"full-ppr":o.rec===.5?"half-ppr":o.rec===0?"standard":"custom"),isSF:r,isIDP:d,formatTags:n?.formatTags||[],marketCompatibility:n?.market?.fantasyCalcCompatibility||null})}function dhqBuildOwnerProfiles(){const t=window.S||window.App?.S,e=window.App?.LI||{};if(!t?.rosters?.length||!e.ownerProfiles)return"";const s=window.pM||(u=>u),n=window.pPos||(()=>""),o=window.pNameShort||(u=>u),r=window.dynastyValue||(()=>0),c=t.leagues?.find(u=>u.league_id===t.currentLeagueId)?.roster_positions||[],f=t.rosters.map(u=>(u.players||[]).reduce((v,S)=>v+r(S),0)),y=f.length?f.reduce((u,v)=>u+v,0)/f.length:8e4,m=window.App?.LI?.championships||{},l=window.App?.LI?.leagueUsersHistory||{},p={},h={};Object.values(m).forEach(u=>{u.champion&&(p[u.champion]=(p[u.champion]||0)+1),u.runnerUp&&(h[u.runnerUp]=(h[u.runnerUp]||0)+1)});const w={};Object.values(l).forEach(u=>{(u||[]).forEach(v=>{w[v.user_id]||(w[v.user_id]=0),w[v.user_id]++})});const a=window.App?.detectRivalries,b=a?a(t.myRosterId):[],T=t.rosters.filter(u=>u.roster_id!==t.myRosterId).map(u=>{const v=t.leagueUsers.find(g=>g.user_id===u.owner_id)?.display_name||"Team",S=u.settings||{},D=(S.wins||0)+"-"+(S.losses||0),L=(u.players||[]).reduce((g,N)=>g+r(N),0),_={};(u.players||[]).forEach(g=>{const N=s(n(g));N&&(_[N]=(_[N]||0)+1)});const x=["QB","RB","WR","TE"].filter(g=>{const N=c.filter(C=>C===g||C==="FLEX"&&["RB","WR","TE"].includes(g)||C==="SUPER_FLEX"&&g==="QB").length;return(_[g]||0)<=N}),H=(u.players||[]).map(g=>({pid:g,val:r(g)})).sort((g,N)=>N.val-g.val).slice(0,2).map(g=>({name:o(g.pid),pos:n(g.pid),dhq:g.val})),E=e.ownerProfiles?.[u.roster_id],I=L>y*1.1?"contender":L<y*.85?"rebuilder":"mid-tier";let W=0,F=0,G="";try{const g=typeof assessTeamFromGlobal=="function"?assessTeamFromGlobal(u.roster_id):typeof window<"u"&&window.assessTeamFromGlobal?window.assessTeamFromGlobal(u.roster_id):null;g&&(W=g.powerScore||0,F=g.powerRank||0,g.tier&&(G=g.tier+(g.tierRank&&g.tierOf?" (#"+g.tierRank+" of "+g.tierOf+")":"")))}catch{}const U=p[u.roster_id]||0,Q=h[u.roster_id]||0,O=w[u.owner_id]||1,B=O<=1,M=B?"NEW OWNER":O>=4?O+"yr veteran":"",P=b.find(g=>g.rosterId===u.roster_id);return{name:v,record:D,tier:G||I,dynastyValueTier:I,dhqTotal:L,powerScore:W,powerRank:F,championships:U,runnerUps:Q,playoffAppearances:0,tenure:O,isNewOwner:B,tenureNote:M,rivalry:P?{wins:P.wins,losses:P.losses}:null,needs:x,stars:H,dna:E?.trades>0?E.dna:"",tradesWon:E?.tradesWon||0,tradesLost:E?.tradesLost||0}}).slice(0,12);return JSON.stringify(T)}function dhqEnrichWithNews(t){if(!t)return"";const e=window.S||window.App?.S,s=window.pName||window.App?.pName||(l=>l),n=t.match(/[A-Z][a-z]+(?:\s+[A-Z][a-z'.()-]+)+/g)||[],o=[];if(e?.players){const l=new Set(n.map(p=>p.toLowerCase()));for(const p of Object.keys(e.players)){const h=e.players[p],w=((h.first_name||"")+" "+(h.last_name||"")).trim();w&&l.has(w.toLowerCase())&&o.push({id:p,name:w})}}if(n.forEach(l=>{o.find(p=>p.name.toLowerCase()===l.toLowerCase())||o.push({id:null,name:l})}),!o.length)return"";const r=[],d=window._newsCache||{};o.forEach(function(l){const p=Object.keys(d).find(function(w){return w.toLowerCase().includes(l.name.toLowerCase())||l.name.toLowerCase().includes(w.toLowerCase())});if(p&&d[p]){var h=typeof d[p]=="string"?d[p]:d[p].headline||d[p].text||"";h&&r.push(l.name+": "+h.substring(0,120))}});try{var c=localStorage.getItem("dhq_news_cache");if(c){var f=JSON.parse(c),y=f.items||f.headlines||[];Array.isArray(y)&&o.forEach(function(l){var p=l.name.toLowerCase(),h=y.find(function(w){var a=(w.title||w.headline||"").toLowerCase();return a.includes(p)||p.split(" ").every(function(b){return a.includes(b)})});h&&!r.find(function(w){return w.startsWith(l.name+":")})&&r.push(l.name+": "+(h.title||h.headline).substring(0,120))})}}catch{}var m=window.callGrokNews||window.App?.callGrokNews;return typeof m=="function"&&o.forEach(function(l){try{m(l.name)}catch{}}),r.length?`[PLAYER_NEWS]
+`+r.join(`
+`)+`
+`:""}function extractPlayerNames(t){for(var e=new Set,s=/\*\*([A-Z][a-z]+(?:\s+[A-Z][a-z'.()-]+)+)/g,n;(n=s.exec(t))!==null;){var o=n[1].replace(/\s*\(.*$/,"").trim();o.split(" ").length>=2&&e.add(o)}for(var r=/([A-Z][a-z]+(?:\s+[A-Z][a-z'.()-]+)+)\s*\((QB|RB|WR|TE|DL|LB|DB|K|DEF)/g;(n=r.exec(t))!==null;){var d=n[1].trim();d.split(" ").length>=2&&e.add(d)}return Array.from(e)}function findPlayerId(t){var e=window.S||window.App?.S;if(!e?.players)return null;var s=t.toLowerCase().trim();for(var n of Object.keys(e.players)){var o=e.players[n],r=((o.first_name||"")+" "+(o.last_name||"")).toLowerCase().trim();if(r===s)return n}var d=s.split(" "),c=d[d.length-1];for(var f of Object.keys(e.players)){var y=e.players[f];if((y.last_name||"").toLowerCase()===c&&(y.first_name||"").toLowerCase().startsWith(d[0]))return f}return null}function extractResponseNames(t){const e=[];return[/\*\*([A-Z][a-z]+ [A-Z][a-z']+)\*\*/g,/([A-Z][a-z]+ [A-Z][a-z']+)\s*\(/g].forEach(n=>{let o;for(;o=n.exec(t);)e.push(o[1])}),[...new Set(e)]}function isRostered(t){const e=window.S||window.App?.S;return e?.rosters?e.rosters.some(s=>(s.players||[]).includes(t)):!1}function isOnMyRoster(t){const e=window.S||window.App?.S;if(!e?.rosters||!e.myRosterId)return!1;const s=e.rosters.find(n=>n.roster_id===e.myRosterId);return s?(s.players||[]).includes(t):!1}function checkTradeMath(t){const e=/(?:DHQ\s*~?|~)\s*([\d,]+)/gi,s=[];let n;for(;n=e.exec(t);)s.push(parseInt(n[1].replace(/,/g,""),10));if(s.length<2)return null;const o=Math.floor(s.length/2),r=s.slice(0,o).reduce((f,y)=>f+y,0),d=s.slice(o).reduce((f,y)=>f+y,0);if(r===0||d===0)return null;const c=Math.abs(r-d)/Math.max(r,d);return c>.2?{sideA:r,sideB:d,ratio:Math.round(c*100)}:null}const VALIDATION_TYPES=["home-chat","trade-chat","waiver-chat","waiver-agent","draft-chat"];function validateAIResponse(t,e,s){if(!VALIDATION_TYPES.includes(t))return{text:e,issues:[]};const n=typeof e=="string"?e:JSON.stringify(e),o=[],r=extractResponseNames(n),d=t==="waiver-chat"||t==="waiver-agent",c=t==="trade-chat";for(const l of r){const p=findPlayerId(l);if(!p){o.push(`[${l}] could not be verified in your league's player database`);continue}if(d&&isRostered(p)&&o.push(`[${l}] appears to already be rostered \u2014 this recommendation may need adjustment`),c&&isOnMyRoster(p)){const h=n.indexOf(l),w=n.substring(Math.max(0,h-80),h).toLowerCase();/target|acquire|get|their side/.test(w)&&o.push(`[${l}] is already on your roster \u2014 this recommendation may need adjustment`)}}if(c){const l=checkTradeMath(n);l&&o.push(`Trade values appear imbalanced (${l.sideA.toLocaleString()} vs ${l.sideB.toLocaleString()}, ${l.ratio}% gap)`)}if(!o.length)return{text:e,issues:[]};const y=`
+
+\u2014 `+(o.length===1?"One flag before you run with this":"A couple flags before you run with this")+": "+o.join("; ")+". Confirm it on the board before you pull the trigger. \u2014 Alex";return{text:typeof e=="string"?e+y:e,issues:o}}async function dhqAI(t,e,s,n){const o=DHQ_PROMPTS[t];if(!o)throw new Error(`Unknown DHQ AI type: ${t}`);const r=o.system,d=4e3,c=!!o.lean,f=(o.maxTokens||500)+(c?0:d),y=o.useWebSearch||!1,m=["home-chat","trade-chat","player-scout","draft-chat"];let l="";if(m.includes(t)&&(l=dhqEnrichWithNews(e)),["home-chat","trade-chat","waiver-chat","draft-chat"].includes(t)&&e)try{typeof captureUserPreferences=="function"&&captureUserPreferences(e)}catch{}let h="";if(o.instructions&&(h+=o.instructions+`
+
+`),l&&(h+=l+`
+`),s&&(h+=s+`
+
+`),["home-chat","trade-chat","waiver-chat","draft-chat","trade-scout","player-scout"].includes(t))try{const E=await buildMemoryContext(window.S?.currentLeagueId);E&&(h+=E+`
+
+`)}catch{}let a;n?.messages?a=n.messages.map((E,I)=>E.role==="user"&&I===n.messages.length-1?{role:"user",content:h+E.content}:E.role==="assistant"&&E.content.length>400?{role:"assistant",content:E.content.substring(0,400)+"..."}:E):a=[{role:"user",content:h+(e||"")}];const b=window.callClaude||window.App?.callClaude;if(typeof b!="function")throw new Error("No AI engine available");const T=c?a:a.map((E,I)=>I===0&&E.role==="user"?{role:"user",content:"[System: "+r+`]
+
+`+E.content}:E),u=typeof canAccess=="function"&&canAccess(window.FEATURES?.BRIEFING_REASONING||"briefing_reasoning"),v=(n?.messages||[]).filter(E=>E.role==="user").slice(-1)[0]?.content||e||"",S=/\b(injur|news|update|latest|rumor|contract|sign(ed|ing)|cut|release|suspend|arrest|trade rumor|depth chart|status|headline|report)\b/i.test(v),D=c?!1:t==="dynasty_read"?!0:u&&(y||S),L=t==="pick-analysis"?0:2,_=c||typeof n?.onDelta=="function"?{lean:c,system:c?r:void 0,onDelta:typeof n?.onDelta=="function"?n.onDelta:void 0}:void 0,x=await b(T,D,L,f,t,_);return validateAIResponse(t,x,{myRosterId:window.S?.myRosterId,rosters:window.S?.rosters}).text}function dhqBuildToneContext(){const t=window.S||window.App?.S;if(!t?.rosters?.length)return"";const e=window.myR||window.App?.myR,s=typeof e=="function"?e():null;if(!s)return"";const n=s.settings||{},o=n.wins||0,r=n.losses||0,d=o+r+(n.ties||0),f=[...t.rosters].sort((b,T)=>(T.settings?.wins||0)-(b.settings?.wins||0)).findIndex(b=>b.roster_id===t.myRosterId)+1,y=t.rosters.length,m=f<=Math.ceil(y/2),l=t.nflState||{},p=l.week||0,h=l.season_type==="off"||p===0?"offseason":p<=4?"early":p<=10?"midseason":p<=14?"late":"playoffs";let w="compete";try{if(window.WR?.GmMode?.getMode)w=window.WR.GmMode.getMode(t.currentLeagueId);else{const b=window._wrGmStrategy;w={contend:"win_now",balanced:"compete",retool:"compete",balanced_rebuild:"rebuild"}[b?.mode]||b?.mode||"compete"}}catch{}const a=[];return w==="win_now"||w==="compete"&&m?d>0&&o/d>=.65?a.push(`Team is winning and contending. Be confident and aggressive. Use language like "let's close this out", "championship-caliber move", "we're in the driver's seat".`):d>0&&o/d>=.45?a.push('Team is competitive but not dominant. Be strategic and focused. Use language like "we need to be smart here", "one move away", "this is where good GMs separate".'):a.push('Team is contending but struggling. Be honest but motivating. Use language like "we need to make a move", "the window is still open but narrowing".'):w==="rebuild"?a.push(`Team is rebuilding. Be patient and future-focused. Use language like "investing in the future", "building blocks", "this is a process \u2014 trust it", "we're stacking assets".`):a.push('Team is at a crossroads. Be analytical and decisive. Use language like "this decision defines our direction", "we need to pick a lane", "the data says...".'),h==="offseason"?a.push(`It's the offseason \u2014 be proactive and forward-planning. "Offseason is where championships are built."`):h==="late"?a.push("Late season \u2014 urgency matters. Every move counts for playoff positioning."):h==="playoffs"&&a.push("Playoff time \u2014 maximum intensity. Win-now moves only, no long-term thinking."),a.join(" ")}function dhqBuildRecommendationContext(){try{const t=window.App?.Intelligence;if(typeof t?.buildAlexRecommendationDigest!="function")return"";const e=t.buildAlexRecommendationDigest({limit:8});return!Array.isArray(e)||!e.length?"":`[TOP_RECOMMENDATIONS]
+These are deterministic recommendation objects already shown or prepared by War Room cards. Treat them as the source of truth; explain, prioritize, or compare them instead of inventing a conflicting list.
+`+JSON.stringify(e,null,2)}catch{return""}}function dhqBuildBehaviorContext(){try{const t=window.App?.Intelligence;if(typeof t?.buildLeagueBehaviorBaselines!="function"||typeof t?.buildOwnerBehaviorProfiles!="function")return"";const e=window.S||window.App?.S||{},s=window.App?.LI||{},n=e.rosters||s.rosters||[],o=s.tradeHistory||[],r=s.ownerProfiles||{};if(!o.length&&!Object.keys(r).length)return"";const d=s.leagueBehaviorBaselines||t.buildLeagueBehaviorBaselines({league:e.currentLeague||e.leagues?.find(l=>l.league_id===e.currentLeagueId)||e.leagues?.[0],rosters:n,ownerProfiles:r,tradeHistory:o,draftOutcomes:s.draftOutcomes||[]}),c=s.ownerBehaviorProfiles||t.buildOwnerBehaviorProfiles({rosters:n,ownerProfiles:r,tradeHistory:o,draftOutcomes:s.draftOutcomes||[],baselines:d}),f=e.leagueUsers||e.users||e.currentLeague?.users||[],y=l=>{const p=n.find(w=>String(w.roster_id)===String(l)),h=f.find(w=>w.user_id===p?.owner_id);return h?.metadata?.team_name||h?.display_name||h?.username||c[String(l)]?.ownerName||`Roster ${l}`},m=Object.values(c||{}).filter(l=>l?.sample?.trades>0).sort((l,p)=>(p.sample?.trades||0)-(l.sample?.trades||0)).slice(0,8).map(l=>({rosterId:l.rosterId,owner:y(l.rosterId),confidence:l.confidence,observed:(l.observedFacts||[]).slice(0,4).map(p=>p.detail),inferredTags:l.inferences||[],offerFrame:l.strategy?.offerFrame||""}));return m.length?`[BEHAVIORAL_CONTEXT]
+Observed owner behavior and league baselines. Treat observed facts as stronger than inferred tags, and call out low confidence when sample sizes are thin.
+`+JSON.stringify({baselines:d,ownerReads:m},null,2):""}catch{return""}}function dhqTeamModeBlock(t,e){let s=`[TEAM_MODE]
+`;return t==="REBUILDING"||e==="REBUILDING"?(s+=`Mode: REBUILD
+`,s+=`Rules:
+`,s+=`- ONLY recommend youth (age 25 or younger) and draft picks
+`,s+=`- Sell aging veterans (27+ with declining production) for picks/youth
+`,s+=`- FAAB: only bid on young upside or emergency injury replacements
+`,s+=`- Never recommend "depth" pickups of veterans
+`,s+=`- Patience is a strategy \u2014 don't make moves just to make moves
+`):t==="ELITE"||t==="CONTENDER"||e==="CONTENDING"?(s+=`Mode: CONTEND (win now)
+`,s+=`Rules:
+`,s+=`- Recommend proven starters who produce THIS season
+`,s+=`- Trade future picks for upgrades at weak spots
+`,s+=`- FAAB: bid aggressively on difference-makers who would start
+`,s+=`- Don't recommend speculative youth projects that won't help now
+`):(s+=`Mode: CROSSROADS (must commit to a direction)
+`,s+=`Rules:
+`,s+=`- Team must pick: push for contention or begin rebuild
+`,s+=`- No half-measures \u2014 don't recommend generic "add depth"
+`,s+=`- Analyze which direction makes more sense given age profile and picks
+`),s}function dhqQualityRulesBlock(){return`[QUALITY_RULES]
+- NEVER recommend players with DHQ below 500 \u2014 not worth a roster spot
+- NEVER recommend players averaging below 5.0 PPG with 6+ games \u2014 below replacement
+- NEVER recommend "depth for depth's sake" \u2014 a bad player wastes a roster spot
+- If no quality free agents exist, say "HOLD YOUR FAAB \u2014 no impactful targets available"
+- Remaining FAAB is a weapon for mid-season breakouts and injuries \u2014 preserve it
+`}function dhqBuildPowerRankings(){const t=window.S||window.App?.S||{},e=t.rosters||[];if(!e.length)return"";const s=typeof assessTeamFromGlobal=="function"?assessTeamFromGlobal:typeof window<"u"&&window.assessTeamFromGlobal?window.assessTeamFromGlobal:null;if(!s)return"";const n=e.map(o=>{let r={};try{r=s(o.roster_id)||{}}catch{r={}}const d=(t.leagueUsers||[]).find(c=>c.user_id===o.owner_id)?.display_name||"Team "+o.roster_id;return{rank:r.powerRank||0,team:d,isYou:o.roster_id===t.myRosterId,powerScore:r.powerScore||0,tier:r.tier||"",tierRank:r.tierRank&&r.tierOf?r.tierRank+" of "+r.tierOf:"",rosterHealth:r.healthScore||0}}).filter(o=>o.rank>0).sort((o,r)=>o.rank-r.rank);return n.length?JSON.stringify(n):""}function dhqContext(t){const e=[],s=dhqBuildRosterContext(!1);s&&e.push(`[ROSTER_CONTEXT]
+`+s);const n=dhqBuildMentalityContext();n&&e.push(`[MENTALITY]
+`+n);const o=dhqBuildLeagueContext();o&&e.push(`[LEAGUE]
+`+o);const r=dhqBuildPowerRankings();if(r&&e.push(`[POWER_RANKINGS]
+The app's official league power ranking, already sorted (rank 1 = best, "isYou" marks the user). When asked for power rankings or the user's rank, use THIS exact order, these exact team names, and powerScore \u2014 do not re-sort by DHQ or invent/skip any team:
+`+r),t){const a=dhqBuildOwnerProfiles();a&&e.push(`[OWNERS]
+`+a)}const d=dhqBuildToneContext();d&&e.push(`[TONE]
+`+d);try{const a=(window.S||window.App?.S)?.currentLeagueId,b="wr_chat_"+a,T=a?localStorage.getItem(b):null;if(T){const v=JSON.parse(T).filter(S=>S.role==="assistant"&&S.content.length>50).slice(-2);if(v.length){const S=v.map(D=>D.content.substring(0,150)+(D.content.length>150?"...":""));e.push(`[RECENT_CONVERSATIONS]
+Your recent advice to this user (reference naturally if relevant):
+`+S.join(`
+---
+`))}}}catch{}let c=null;try{c=window.WR?.GmMode?.promptData?.((window.S||window.App?.S)?.currentLeagueId)||null}catch{}if(c)e.push(`[GM_STRATEGY]
+The owner has committed to this strategy. IMPORTANT: honor it in every recommendation.
+`+window.WR.GmMode.promptBlock(null,c));else{const a=window._wrGmStrategy;if(a&&(a.mode!=="balanced"||a.riskTolerance!=="moderate"||a.untouchable?.length||a.targets?.length||a.notes)){const b=[`Mode: ${a.mode}`,`Risk: ${a.riskTolerance}`];if(a.untouchable?.length){const u=window.S||{},v=a.untouchable.map(S=>u.players?.[S]?.full_name||S).join(", ");b.push(`Untouchable players: ${v}`)}a.targets?.length&&b.push(`Targeting in trades: ${a.targets.join(", ")}`);const T=Object.entries(a.positionalNeeds||{}).filter(([,u])=>u>=7).map(([u,v])=>`${u}(${v}/10)`);T.length&&b.push(`High priority positions: ${T.join(", ")}`),a.notes&&b.push(`Owner notes: "${a.notes}"`),e.push(`[GM_STRATEGY]
+The owner has set the following strategic preferences. IMPORTANT: Honor these when making recommendations.
+`+b.join(`
+`))}}window._leagueDocsContext&&e.push(`[LEAGUE_DOCUMENTS]
+The commissioner has uploaded these league-specific documents. Use them to answer league rule questions, reference awards history, and understand league customs:
+`+window._leagueDocsContext);const f=window.S||window.App?.S||{},y=dhqBuildLeagueFormatBlock();y&&e.push(y);const m=dhqBuildBehaviorContext();m&&e.push(m);const l=dhqBuildRecommendationContext();l&&e.push(l);const p=typeof assessTeamFromGlobal=="function"?assessTeamFromGlobal(f.myRosterId):null,h=p?.tier||"",w=p?.window||"";if(c){let a=`[TEAM_MODE]
+`;c.mode==="rebuild"?(a+=`Mode: REBUILD (GM-committed strategy)
+`,a+=`Rules:
+`,a+=`- ONLY recommend youth (age 25 or younger) and draft picks
+`,a+=`- Sell aging veterans (27+ with declining production) for picks/youth
+`,a+=`- FAAB: only bid on young upside or emergency injury replacements
+`,a+=`- Never recommend "depth" pickups of veterans
+`,a+=`- Patience is a strategy \u2014 don't make moves just to make moves
+`):c.mode==="win_now"?(a+=`Mode: WIN NOW (GM-committed strategy)
+`,a+=`Rules:
+`,a+=`- Recommend proven starters who produce THIS season
+`,a+=`- Trade future picks for upgrades at weak spots
+`,a+=`- FAAB: bid aggressively on difference-makers who would start
+`,a+=`- Don't recommend speculative youth projects that won't help now
+`):c.mode==="compete"?(a+=`Mode: COMPETE (GM-committed strategy)
+`,a+=`Rules:
+`,a+=`- Balance present and future \u2014 favor players aged 24-27 with 3+ peak years left
+`,a+=`- Trade aging assets only at peak value; no fire sales
+`,a+=`- FAAB: moderate bids on players who upgrade a starting spot
+`,a+=`- Never mortgage multiple future firsts for a rental
+`):(a+=`Mode: CUSTOM (GM-committed strategy)
+`,a+=`Rules:
+`,a+=`- Follow the [GM_STRATEGY] block exactly \u2014 aggression, postures, positions, and sell rules as configured
+`);const b=h==="REBUILDING"||w==="REBUILDING"?"rebuild":h==="ELITE"||h==="CONTENDER"||w==="CONTENDING"?"win_now":"";b&&b!==c.mode&&(a+="Reality check: roster grades "+(h||w)+" while the GM has committed to "+String(c.modeLabel||c.mode).toUpperCase()+` \u2014 acknowledge the tension, follow the GM's direction.
+`),e.push(a)}else e.push(dhqTeamModeBlock(h,w));return e.push(dhqQualityRulesBlock()),e.join(`
+
+`)}function dhqCompactContext(){const t=[],e=dhqBuildRosterContext(!0);e&&t.push(`[ROSTER_CONTEXT]
+`+e);const s=dhqBuildMentalityContext();s&&t.push(`[MENTALITY]
+`+s);const n=dhqBuildLeagueFormatBlock();n&&t.push(n);const o=dhqBuildBehaviorContext();o&&t.push(o);const r=dhqBuildRecommendationContext();return r&&t.push(r),t.join(`
+
+`)}const _dynReadCache=new Map;function _dynReadFormat(){try{const t=window.S,e=t&&t.leagues&&t.currentLeagueId?t.leagues.find(function(m){return m.league_id===t.currentLeagueId}):null;if(!e)return null;const s=e.roster_positions||[],n=e.scoring_settings||{};if(!s.length&&!Object.keys(n).length)return null;const o=Number(n.rec)||0,r=o>=1?"ppr":o>=.5?"half_ppr":"std",d=s.filter(function(m){return m==="QB"}).length,c=s.indexOf("SUPER_FLEX")!==-1||d>=2,f=(Number(n.bonus_rec_te)||Number(n.rec_te)||0)>0,y=s.some(function(m){return["IDP_FLEX","DL","LB","DB","DE","CB","S"].indexOf(m)!==-1});return{scoringType:r,superflex:c,tep:f,idp:y}}catch{return null}}async function fetchDynastyRead(t,e){e=e||{};const s=e.fallback||"";try{if(!t||!t.pid||typeof canAccess=="function"&&!canAccess("dynasty_read_ai"))return s;const n=_dynReadFormat(),o=n?n.scoringType+(n.superflex?"-sf":"")+(n.tep?"-tep":"")+(n.idp?"-idp":""):"na",r=t.week==null||t.week===""?"off":t.week,d="dynread:"+t.pid+":"+(t.season||"")+":"+r+":"+o;if(_dynReadCache.has(d))return _dynReadCache.get(d);const c={pid:String(t.pid),name:t.name||"",team:t.team||"",pos:t.pos||"",age:t.age||null,season:t.season||"",week:t.week==null?0:t.week};n&&(c.scoringType=n.scoringType,c.superflex=n.superflex,c.tep=n.tep,c.idp=n.idp);const f=window.AlexVoice&&window.AlexVoice.sanitize?window.AlexVoice.sanitize:function(m){return String(m||"").replace(/\s+/g," ").trim()};let y="";if(typeof window.hasServerAI=="function"&&window.hasServerAI()&&window.OD&&typeof window.OD.callAI=="function")try{const m=await window.OD.callAI({type:"dynasty_read",context:JSON.stringify(c)});y=f(m&&(m.analysis||m.text||m.response)||"")}catch{}if(!y&&window.S&&window.S.apiKey&&typeof dhqAI=="function")try{const m=await dhqAI("dynasty_read","",JSON.stringify(c));y=f(typeof m=="string"?m:m&&(m.text||m.analysis||m.response)||"")}catch{}return y?(_dynReadCache.set(d,y),y):s}catch{return s}}Object.assign(window.App,{DHQ_IDENTITY,DHQ_PROMPTS,dhqAI,fetchDynastyRead,dhqContext,dhqCompactContext,dhqBuildRosterContext,dhqBuildMentalityContext,dhqBuildLeagueContext,dhqBuildLeagueFormatBlock,dhqTeamModeBlock,dhqQualityRulesBlock,dhqCurrentLeagueProfile,dhqBuildOwnerProfiles,dhqBuildToneContext,dhqBuildBehaviorContext,dhqBuildRecommendationContext,dhqEnrichWithNews,extractPlayerNames,findPlayerId,validateAIResponse}),Object.assign(window,{DHQ_IDENTITY,DHQ_PROMPTS,dhqAI,fetchDynastyRead,dhqContext,dhqCompactContext,dhqBuildRosterContext,dhqBuildMentalityContext,dhqBuildLeagueContext,dhqBuildLeagueFormatBlock,dhqTeamModeBlock,dhqQualityRulesBlock,dhqCurrentLeagueProfile,dhqBuildOwnerProfiles,dhqBuildToneContext,dhqBuildBehaviorContext,dhqBuildRecommendationContext,dhqEnrichWithNews,extractPlayerNames,findPlayerId,validateAIResponse}),window.isRostered=isRostered,window.isOnMyRoster=isOnMyRoster,window.checkTradeMath=checkTradeMath,window.extractResponseNames=extractResponseNames;
 
-  // ── MEMORY SUMMARIZER (skip few-shot) ──────────────────────────
-  'memory-summary': {
-    system: 'Summarize dynasty fantasy football conversations.',
-    instructions: `Summarize this conversation in ONE sentence, max 15 words.
-Be specific about players and decisions discussed.`,
-    maxTokens: 80,
-  },
-
-  // ── STRATEGY WALKTHROUGH ───────────────────────────────────────
-  'strategy-analysis': {
-    system: DHQ_IDENTITY,
-    instructions: `Context is provided as JSON. The user just set their team strategy. Give a brief (3-4 sentences) personalized assessment of their roster given their strategy. Be specific about players. End with one actionable recommendation.`,
-    maxTokens: 400,
-  },
-
-  // ── NEWS (Grok-specific) ───────────────────────────────────────
-  'player-news': {
-    system: `You are a dynasty fantasy football news reporter. IMPORTANT: ONLY report news about the SPECIFIC player asked about. Do NOT mention any other players. Give 2-3 sentences of the latest news from X/Twitter about this one player. Focus on: trades, injuries, depth chart changes, contract news. If you have no recent news about this specific player, say "No recent news found."`,
-    instructions: '',
-    maxTokens: 300,
-  },
-
-  // ── DYNASTY READ (player-card news synthesis) ──────────────────
-  // Server path is canonical (shared weekly cache in ai-analyze); this entry is
-  // the BYO-API-key fallback so dhqAI() doesn't throw on the type and BYOK users
-  // still get a live read (their own tokens, in-memory cache only).
-  'dynasty_read': {
-    system: 'You are a sharp NFL analyst writing the dynasty read on one player for the GM who rosters him. Translate what is ACTUALLY happening with him in the real world into what it means for his dynasty value. Build the read on real, recent reporting — never generic platitudes.',
-    instructions: `Context is a JSON object for one player {pid,name,team,pos,age,season,week} (plus league format flags when present). SEARCH THE WEB for the latest reporting on him — prioritize the last ~10 days plus this offseason's moves — from ESPN, PFF, The Athletic, and trusted team beat reporters. Then write 3-5 sentences of plain prose that weave together, in order: (1) SITUATION — the most important real, current development (depth-chart role and usage trend, injury + timeline, contract/roster status, a coaching/scheme change, or a teammate's move that opens or closes a path); (2) IMPACT — what it does to his value now; (3) LONG-TERM OUTLOOK — the dynasty trajectory over the next 1-3 seasons and why. Lead with the single most decision-relevant real development. Do NOT restate fantasy points, DHQ value, or position rank. Do NOT pad with generic age-curve commentary — if news is thin, give the most recent concrete situational fact and what it implies; never invent news. Confident, not hedged. Plain prose only: no markdown, bullets, headers, citations, or sign-off.`,
-    maxTokens: 500,
-    useWebSearch: true,
-  },
-
-  // ── START/SIT (Game Day Central coaching note) ─────────────────
-  // Powers Alex's 1-2 sentence game-day briefing at the top of Game Day
-  // Central. Facts (win%, points left on the bench, top upgrade, injuries) are
-  // computed deterministically by the start/sit engine and passed in — the model
-  // only narrates them, never invents numbers. Falls back to a seeded template
-  // client-side when AI is unavailable, so this is purely an upgrade.
-  //
-  // LEAN (2026-09-29): this note is on the server's fast lane, and the whole
-  // DHQ identity (~1.5k tokens, sent twice: as system AND as a [System:]
-  // prefix) made it the slowest two sentences in the app. A lean call sends a
-  // short voice line once, only the week's facts, and no thinking headroom.
-  'start-sit': {
-    lean: true,
-    system: 'You are Alex, the Dynasty HQ GM assistant: a sharp, confident, human fantasy football coach talking to the owner on game day. Use ONLY the facts you are given — never invent players, points, odds, injuries or news.',
-    instructions: `Context is a JSON object with this week's facts, exactly as the Lineup screen shows them: {week, projections, winPct, margin, opponent, pointsLeftOnBench, lineupOptimal, swaps[{slot, out, in, gain}], injuries[], byeWatch[{week, count, unfilled, reason, positions}], mode}. Write ONE to TWO punchy sentences of game-day coaching: whether they're favored (winPct vs opponent), the most valuable swap if swaps is non-empty (name who comes in, who sits, and the slot — only a swap listed in swaps; if swaps is empty the lineup is already optimal), and any injury to watch or a coming bye-week hole. Numbers exactly as given. Plain prose only: no markdown, lists, headers, or sign-off.`,
-    // Room for a short answer plus the fast model's brief reasoning pass;
-    // the server's fast lane caps it again.
-    maxTokens: 400,
-  },
-};
-
-// ── Context Builders (Structured JSON — Improvement A) ──────────
-// All builders return JSON strings. Convenience functions wrap them
-// with section markers like [ROSTER_CONTEXT], [MENTALITY], etc.
-
-function dhqBuildRosterContext(compact) {
-  const S = window.S || window.App?.S;
-  if (!S?.user) return '';
-  const myR = window.myR || window.App?.myR;
-  const my = typeof myR === 'function' ? myR() : null;
-  if (!my) return '';
-  const pName = window.pName || window.App?.pName || (id => id);
-  const pPos = window.pPos || window.App?.pPos || (() => '');
-  const pAge = window.pAge || window.App?.pAge || (() => '');
-  const pM = window.pM || window.App?.pM || (p => p);
-  const dynastyValue = window.dynastyValue || window.App?.dynastyValue || (() => 0);
-  const playerStats = S.playerStats || {};
-  const ageCurveWindows = window.App?.ageCurveWindows || {
-    QB: { build: [23, 27], peak: [28, 34], decline: [35, 38] },
-    RB: { build: [21, 22], peak: [23, 25], decline: [26, 28] },
-    WR: { build: [22, 24], peak: [25, 28], decline: [29, 31] },
-    TE: { build: [23, 25], peak: [26, 29], decline: [30, 32] },
-    DL: { build: [22, 24], peak: [25, 29], decline: [30, 32] },
-    LB: { build: [22, 23], peak: [24, 28], decline: [29, 31] },
-    DB: { build: [21, 23], peak: [24, 27], decline: [28, 30] },
-    K: { build: [23, 27], peak: [28, 35], decline: [36, 40] },
-  };
-  const s = my.settings || {};
-  const league = S.leagues?.find(l => l.league_id === S.currentLeagueId);
-  const sc = league?.scoring_settings || {};
-  const isSF = !!(league?.roster_positions?.includes('SUPER_FLEX'));
-  const isIDP = !!(league?.roster_positions?.some(p => ['DL', 'LB', 'DB', 'IDP_FLEX'].includes(p)));
-  const rp = league?.roster_positions || [];
-  const totalVal = (my.players || []).reduce((sum, p) => sum + dynastyValue(p), 0);
-  // Rank by the blended Power Score — the SAME single source the command brief,
-  // Power Rankings widget, and elites badge use — so Alex's "you're Nth" always
-  // matches what the app shows. Falls back to DHQ-portfolio rank only if the
-  // assessment engine isn't loaded.
-  const _assessFn = (typeof assessTeamFromGlobal === 'function') ? assessTeamFromGlobal
-    : (typeof window !== 'undefined' && window.assessTeamFromGlobal) ? window.assessTeamFromGlobal : null;
-  let rank = 0;
-  try { rank = (_assessFn && _assessFn(S.myRosterId) || {}).powerRank || 0; } catch (e) { rank = 0; }
-  if (!rank) {
-    const sortedByDHQ = [...(S.rosters || [])].map(r => ({
-      rid: r.roster_id,
-      dhq: (r.players || []).reduce((s, p) => s + dynastyValue(p), 0),
-    })).sort((a, b) => b.dhq - a.dhq);
-    rank = sortedByDHQ.findIndex(r => r.rid === S.myRosterId) + 1;
-  }
-
-  const peakLabel = (pid) => {
-    const pos = pM(pPos(pid));
-    const age = pAge(pid);
-    if (!age || !pos) return 'Unknown';
-    const curve = ageCurveWindows[pos] || { build: [22, 24], peak: [25, 28], decline: [29, 31] };
-    if (age < curve.build[0]) return 'Developmental';
-    if (age <= curve.build[1]) return 'Build-up';
-    if (age <= curve.peak[1]) return 'Peak';
-    if (age <= curve.decline[1]) return 'Decline/valuable';
-    return 'Post-window';
-  };
-
-  const starterPids = (my.starters || []).filter(p => p && p !== '0');
-  const starterObjs = starterPids
-    .map(pid => {
-      const val = dynastyValue(pid);
-      const age = pAge(pid) || 0;
-      const ppg = playerStats[pid]?.seasonAvg || playerStats[pid]?.prevAvg || 0;
-      return { name: pName(pid), pos: pPos(pid), age, dhq: val, ppg: +ppg.toFixed(1), peak: peakLabel(pid) };
-    })
-    .sort((a, b) => b.dhq - a.dhq);
-
-  const benchPids = (my.players || []).filter(p => !starterPids.includes(p) && !(my.reserve || []).includes(p) && !(my.taxi || []).includes(p));
-  const benchObjs = benchPids
-    .map(pid => ({ name: pName(pid), pos: pPos(pid), age: pAge(pid) || 0, dhq: dynastyValue(pid) }))
-    .filter(x => x.dhq > 0)
-    .sort((a, b) => b.dhq - a.dhq);
-
-  const record = (s.wins || 0) + '-' + (s.losses || 0);
-  const leagueName = league?.name || '?';
-  const teams = (S.rosters || []).length;
-  const formatStr = teams + '-team' + (isSF ? ' Superflex' : ' 1QB') + (isIDP ? ' IDP' : '');
-
-  if (compact) {
-    return JSON.stringify({
-      user: S.user.display_name,
-      dhqRank: rank + '/' + teams,
-      record: record,
-      dhqTotal: totalVal,
-      starters: starterObjs.slice(0, 5),
-      topBench: benchObjs.slice(0, 5),
-      league: leagueName,
-      format: formatStr,
-    });
-  }
-
-  // Full context — includes gaps, surpluses, picks, FAAB, IDP scoring
-  const posCounts = {};
-  (my.players || []).forEach(pid => { const pos = pM(pPos(pid)); if (pos) posCounts[pos] = (posCounts[pos] || 0) + 1; });
-
-  const offPositions = ['QB', 'RB', 'WR', 'TE'];
-  const idpPositions = ['DL', 'LB', 'DB'];
-  const allPositions = isIDP ? offPositions.concat(idpPositions) : offPositions;
-
-  // Position strength/need is read from the ONE assessment engine (posAssessment)
-  // — the SAME startable-depth read that powers the widgets, "Rooms to Fix First",
-  // and the A–F room grades. A room is a strength only when it has enough
-  // STARTABLE-quality bodies (nflStarters >= minQuality); one elite player on an
-  // otherwise-thin room is depth risk, NOT a strength. This is the fix for Alex
-  // calling DL a strength while every widget said "Upgrade DL room": both now read
-  // the same source. Fall back to a raw headcount only if the engine isn't loaded.
-  const myAssess = _assessFn ? (() => { try { return _assessFn(S.myRosterId); } catch (e) { return null; } })() : null;
-  let gaps, surpluses, roomStatus = null;
-  if (myAssess && myAssess.posAssessment) {
-    roomStatus = {};
-    Object.entries(myAssess.posAssessment).forEach(([pos, v]) => {
-      roomStatus[pos] = { status: v.status, startableHave: v.nflStarters, startableNeed: v.minQuality, depth: v.actual };
-    });
-    gaps = (myAssess.needs || []).map(n => (n && (n.pos || n.position)) || n).filter(Boolean);
-    surpluses = (myAssess.strengths || []).slice();
-  } else {
-    gaps = [];
-    surpluses = [];
-    allPositions.forEach(pos => {
-      const need = rp.filter(sl => sl === pos || (sl === 'FLEX' && ['RB', 'WR', 'TE'].includes(pos)) || (sl === 'SUPER_FLEX' && pos === 'QB') || (sl === 'IDP_FLEX' && idpPositions.includes(pos))).length;
-      const have = posCounts[pos] || 0;
-      if (have <= need) gaps.push(pos);
-      if (have >= need + 3) surpluses.push(pos);
-    });
-  }
-
-  const picks = (S.tradedPicks || [])
-    .filter(p => p.owner_id === S.myRosterId)
-    .map(p => p.season + ' R' + p.round)
-    .sort();
-
-  const getFAAB = window.getFAAB || window.App?.getFAAB;
-  const faabData = typeof getFAAB === 'function' ? getFAAB() : null;
-  const faab = faabData ? { remaining: faabData.remaining || 0, budget: faabData.budget || 200 } : { remaining: 0, budget: 200 };
-
-  const idpScoring = {
-    sack: sc.idp_sack || 4,
-    int: sc.idp_int || 5,
-    pd: sc.idp_pass_def || 3,
-  };
-
-  return JSON.stringify({
-    user: S.user.display_name,
-    dhqRank: rank + '/' + teams,
-    record: record,
-    dhqTotal: totalVal,
-    starters: starterObjs,
-    topBench: benchObjs.slice(0, 8),
-    league: leagueName,
-    format: formatStr,
-    gaps: gaps,
-    surpluses: surpluses,
-    roomStatus: roomStatus,
-    picks: picks,
-    faab: faab,
-    idpScoring: idpScoring,
-  });
-}
-
-function dhqBuildMentalityContext() {
-  const loadMentality = window.loadMentality || window.App?.loadMentality;
-  if (typeof loadMentality !== 'function') return '';
-  const m = loadMentality();
-  const labels = {
-    mentality: { winnow: 'WIN NOW', rebuild: 'REBUILD', balanced: 'BALANCED', prime: '2-3YR WINDOW' },
-  };
-  return JSON.stringify({
-    mentality: labels.mentality[m.mentality] || m.mentality || 'BALANCED',
-    untouchable: m.neverDrop || '',
-    notes: m.notes ? m.notes.substring(0, 150) : '',
-  });
-}
-
-function dhqCurrentLeagueProfile() {
-  const S = window.S || window.App?.S;
-  const league = S?.leagues?.find(l => l.league_id === S.currentLeagueId) || S?.leagues?.[0] || null;
-  if (!league || typeof window.App?.Intelligence?.buildLeagueProfile !== 'function') return null;
-  return window.App.Intelligence.buildLeagueProfile({
-    league,
-    rosters: S?.rosters || [],
-    platform: S?.platform || league._platform,
-  });
-}
-
-function dhqBuildLeagueFormatBlock(profile) {
-  const p = profile || dhqCurrentLeagueProfile();
-  if (!p || typeof window.App?.Intelligence?.describeLeagueProfile !== 'function') return '';
-  const desc = window.App.Intelligence.describeLeagueProfile(p);
-  const lines = ['[LEAGUE_FORMAT]', 'Profile: ' + (desc.summary || 'Unknown format')];
-  desc.lines.slice(0, 8).forEach(line => lines.push('- ' + line));
-  const compat = p.market?.fantasyCalcCompatibility;
-  if (compat) {
-    const pct = Math.round((compat.score || 0) * 100);
-    lines.push('- Market compatibility: FantasyCalc format fit ' + pct + '%'
-      + (compat.reasons?.length ? ' (' + compat.reasons.slice(0, 4).join(', ') + ')' : ''));
-  }
-  if (p.formatTags?.includes('superflex')) lines.push('CRITICAL: Superflex/2QB context means QB scarcity must drive roster and trade recommendations.');
-  if ((p.scoring?.teBonus || 0) > 0 || p.scoring?.tePremium >= 1.45) lines.push('CRITICAL: TE premium context means elite target-earning TEs deserve a scoring bump.');
-  if (p.scoring?.idp) lines.push('CRITICAL: IDP context means defensive recommendations must use IDP scoring and opportunity, not offensive-only market values.');
-  return lines.join('\n');
-}
-
-function dhqBuildLeagueContext() {
-  const S = window.S || window.App?.S;
-  const LI = window.App?.LI || {};
-  if (!S?.rosters?.length) return '';
-  const league = S.leagues?.find(l => l.league_id === S.currentLeagueId);
-  const profile = dhqCurrentLeagueProfile();
-  const sc = league?.scoring_settings || {};
-  const isSF = profile ? profile.formatTags?.includes('superflex') : !!(league?.roster_positions?.includes('SUPER_FLEX'));
-  const isIDP = profile ? !!profile.scoring?.idp : !!(league?.roster_positions?.some(p => ['DL', 'LB', 'DB', 'IDP_FLEX'].includes(p)));
-  const lt = LI.leagueTradeTendencies || {};
-  return JSON.stringify({
-    leagueProfile: profile || null,
-    totalTrades: lt.totalTrades || 0,
-    pickHeavy: lt.pickHeavy || 0,
-    avgAssetsPerSide: lt.avgAssetsPerSide || 0,
-    scoringType: profile?.scoring?.label || ((sc.rec === 1) ? 'full-ppr' : (sc.rec === 0.5) ? 'half-ppr' : (sc.rec === 0) ? 'standard' : 'custom'),
-    isSF: isSF,
-    isIDP: isIDP,
-    formatTags: profile?.formatTags || [],
-    marketCompatibility: profile?.market?.fantasyCalcCompatibility || null,
-  });
-}
-
-function dhqBuildOwnerProfiles() {
-  const S = window.S || window.App?.S;
-  const LI = window.App?.LI || {};
-  if (!S?.rosters?.length || !LI.ownerProfiles) return '';
-  const pM = window.pM || (p => p);
-  const pPos = window.pPos || (() => '');
-  const pNameShort = window.pNameShort || (id => id);
-  const dynastyValue = window.dynastyValue || (() => 0);
-  const league = S.leagues?.find(l => l.league_id === S.currentLeagueId);
-  const rp = league?.roster_positions || [];
-  const allTotals = S.rosters.map(r => (r.players || []).reduce((sum, pid) => sum + dynastyValue(pid), 0));
-  const avgTotal = allTotals.length ? allTotals.reduce((a, b) => a + b, 0) / allTotals.length : 80000;
-
-  // Championship data
-  const championships = window.App?.LI?.championships || {};
-  const leagueUsersHistory = window.App?.LI?.leagueUsersHistory || {};
-
-  // Count championships per roster
-  const champCounts = {};
-  const runnerUpCounts = {};
-  Object.values(championships).forEach(c => {
-    if (c.champion) champCounts[c.champion] = (champCounts[c.champion] || 0) + 1;
-    if (c.runnerUp) runnerUpCounts[c.runnerUp] = (runnerUpCounts[c.runnerUp] || 0) + 1;
-  });
-
-  // Count tenure per user
-  const tenureByUser = {};
-  Object.values(leagueUsersHistory).forEach(users => {
-    (users || []).forEach(u => {
-      if (!tenureByUser[u.user_id]) tenureByUser[u.user_id] = 0;
-      tenureByUser[u.user_id]++;
-    });
-  });
-
-  // Detect rivalries for the current user
-  const detectRivalries = window.App?.detectRivalries;
-  const rivalries = detectRivalries ? detectRivalries(S.myRosterId) : [];
-
-  const profiles = S.rosters.filter(r => r.roster_id !== S.myRosterId).map(r => {
-    const name = S.leagueUsers.find(u => u.user_id === r.owner_id)?.display_name || 'Team';
-    const st = r.settings || {};
-    const record = (st.wins || 0) + '-' + (st.losses || 0);
-    const totalVal = (r.players || []).reduce((sum, pid) => sum + dynastyValue(pid), 0);
-    const posCounts = {};
-    (r.players || []).forEach(pid => { const pos = pM(pPos(pid)); if (pos) posCounts[pos] = (posCounts[pos] || 0) + 1; });
-    const weakPositions = ['QB', 'RB', 'WR', 'TE'].filter(pos => {
-      const need = rp.filter(s2 => s2 === pos || (s2 === 'FLEX' && ['RB', 'WR', 'TE'].includes(pos)) || (s2 === 'SUPER_FLEX' && pos === 'QB')).length;
-      return (posCounts[pos] || 0) <= need;
-    });
-    const topPlayers = (r.players || []).map(pid => ({ pid, val: dynastyValue(pid) })).sort((a, b) => b.val - a.val).slice(0, 2)
-      .map(x => ({ name: pNameShort(x.pid), pos: pPos(x.pid), dhq: x.val }));
-    const dna = LI.ownerProfiles?.[r.roster_id];
-    const contending = totalVal > avgTotal * 1.1 ? 'contender' : totalVal < avgTotal * 0.85 ? 'rebuilder' : 'mid-tier';
-    // The app's official blended Power Score/rank for this team, so any ranking
-    // Alex produces matches the brief and widget instead of re-sorting by DHQ.
-    let _oPowerScore = 0, _oPowerRank = 0, _oTier = '';
-    try {
-      const _oa = (typeof assessTeamFromGlobal === 'function') ? assessTeamFromGlobal(r.roster_id)
-        : (typeof window !== 'undefined' && window.assessTeamFromGlobal) ? window.assessTeamFromGlobal(r.roster_id) : null;
-      if (_oa) {
-        _oPowerScore = _oa.powerScore || 0; _oPowerRank = _oa.powerRank || 0;
-        // The engine's league-relative tier (Health + standings rank) — the
-        // same tier every surface shows. Dynasty value stays a separate read.
-        if (_oa.tier) _oTier = _oa.tier + (_oa.tierRank && _oa.tierOf ? ' (#' + _oa.tierRank + ' of ' + _oa.tierOf + ')' : '');
-      }
-    } catch (e) { /* assessment optional */ }
-
-    // Championship + tenure data
-    const champs = champCounts[r.roster_id] || 0;
-    const runners = runnerUpCounts[r.roster_id] || 0;
-    const tenure = tenureByUser[r.owner_id] || 1;
-    const isNew = tenure <= 1;
-    const tenureNote = isNew ? 'NEW OWNER' : tenure >= 4 ? tenure + 'yr veteran' : '';
-
-    // Rivalry detection
-    const isRival = rivalries.find(rv => rv.rosterId === r.roster_id);
-
-    return {
-      name: name,
-      record: record,
-      tier: _oTier || contending,
-      dynastyValueTier: contending,
-      dhqTotal: totalVal,
-      powerScore: _oPowerScore,
-      powerRank: _oPowerRank,
-      championships: champs,
-      runnerUps: runners,
-      playoffAppearances: 0, // populated when bracket data is richer
-      tenure: tenure,
-      isNewOwner: isNew,
-      tenureNote: tenureNote,
-      rivalry: isRival ? { wins: isRival.wins, losses: isRival.losses } : null,
-      needs: weakPositions,
-      stars: topPlayers,
-      dna: dna?.trades > 0 ? dna.dna : '',
-      tradesWon: dna?.tradesWon || 0,
-      tradesLost: dna?.tradesLost || 0,
-    };
-  }).slice(0, 12);
-
-  return JSON.stringify(profiles);
-}
-
-// ── News Enrichment — Improvement D ─────────────────────────────
-// Extracts player names from user message, checks caches, fires
-// non-blocking news fetch to warm cache for next request.
-
-function dhqEnrichWithNews(message) {
-  if (!message) return '';
-  const S = window.S || window.App?.S;
-  const pName = window.pName || window.App?.pName || (id => id);
-
-  // Extract possible player names — 2+ word capitalized sequences
-  const namePatterns = message.match(/[A-Z][a-z]+(?:\s+[A-Z][a-z'.()-]+)+/g) || [];
-
-  // Match against S.players to confirm real players
-  const playerNames = [];
-  if (S?.players) {
-    const rawLower = new Set(namePatterns.map(n => n.toLowerCase()));
-    for (const pid of Object.keys(S.players)) {
-      const p = S.players[pid];
-      const fullName = ((p.first_name || '') + ' ' + (p.last_name || '')).trim();
-      if (fullName && rawLower.has(fullName.toLowerCase())) {
-        playerNames.push({ id: pid, name: fullName });
-      }
-    }
-  }
-  // Keep unmatched raw patterns too (user might reference players not in S.players)
-  namePatterns.forEach(n => {
-    if (!playerNames.find(p => p.name.toLowerCase() === n.toLowerCase())) {
-      playerNames.push({ id: null, name: n });
-    }
-  });
-
-  if (!playerNames.length) return '';
-
-  const newsLines = [];
-
-  // 1. Check window._newsCache (populated by callGrokNews)
-  const grokCache = window._newsCache || {};
-  playerNames.forEach(function(entry) {
-    const key = Object.keys(grokCache).find(function(k) {
-      return k.toLowerCase().includes(entry.name.toLowerCase()) || entry.name.toLowerCase().includes(k.toLowerCase());
-    });
-    if (key && grokCache[key]) {
-      var headline = typeof grokCache[key] === 'string' ? grokCache[key] : (grokCache[key].headline || grokCache[key].text || '');
-      if (headline) newsLines.push(entry.name + ': ' + headline.substring(0, 120));
-    }
-  });
-
-  // 2. Check localStorage dhq_news_cache (ESPN RSS)
-  try {
-    var espnRaw = localStorage.getItem('dhq_news_cache');
-    if (espnRaw) {
-      var espnCache = JSON.parse(espnRaw);
-      var espnItems = espnCache.items || espnCache.headlines || [];
-      if (Array.isArray(espnItems)) {
-        playerNames.forEach(function(entry) {
-          var nameLower = entry.name.toLowerCase();
-          var match = espnItems.find(function(item) {
-            var text = (item.title || item.headline || '').toLowerCase();
-            return text.includes(nameLower) || nameLower.split(' ').every(function(w) { return text.includes(w); });
-          });
-          if (match && !newsLines.find(function(l) { return l.startsWith(entry.name + ':'); })) {
-            newsLines.push(entry.name + ': ' + (match.title || match.headline).substring(0, 120));
-          }
-        });
-      }
-    }
-  } catch (e) { /* localStorage unavailable or parse error */ }
-
-  // 3. Fire non-blocking callGrokNews to populate cache for next time
-  var callGrokNews = window.callGrokNews || window.App?.callGrokNews;
-  if (typeof callGrokNews === 'function') {
-    playerNames.forEach(function(entry) {
-      try { callGrokNews(entry.name); } catch (e) { /* non-blocking */ }
-    });
-  }
-
-  if (!newsLines.length) return '';
-  return '[PLAYER_NEWS]\n' + newsLines.join('\n') + '\n';
-}
-
-// ── Response Validation — Improvement C ─────────────────────────
-// Scans AI responses for player names and validates them against
-// the league's actual player database.
-
-function extractPlayerNames(text) {
-  var names = new Set();
-  // Match **Name** patterns (bold markdown)
-  var boldPattern = /\*\*([A-Z][a-z]+(?:\s+[A-Z][a-z'.()-]+)+)/g;
-  var match;
-  while ((match = boldPattern.exec(text)) !== null) {
-    var name = match[1].replace(/\s*\(.*$/, '').trim();
-    if (name.split(' ').length >= 2) names.add(name);
-  }
-  // Match Name (POS patterns without bold
-  var posPattern = /([A-Z][a-z]+(?:\s+[A-Z][a-z'.()-]+)+)\s*\((QB|RB|WR|TE|DL|LB|DB|K|DEF)/g;
-  while ((match = posPattern.exec(text)) !== null) {
-    var name2 = match[1].trim();
-    if (name2.split(' ').length >= 2) names.add(name2);
-  }
-  return Array.from(names);
-}
-
-function findPlayerId(name) {
-  var S = window.S || window.App?.S;
-  if (!S?.players) return null;
-  var nameLower = name.toLowerCase().trim();
-  for (var pid of Object.keys(S.players)) {
-    var p = S.players[pid];
-    var fullName = ((p.first_name || '') + ' ' + (p.last_name || '')).toLowerCase().trim();
-    if (fullName === nameLower) return pid;
-  }
-  // Fuzzy fallback: match last name + first initial
-  var parts = nameLower.split(' ');
-  var lastName = parts[parts.length - 1];
-  for (var pid2 of Object.keys(S.players)) {
-    var p2 = S.players[pid2];
-    if ((p2.last_name || '').toLowerCase() === lastName && (p2.first_name || '').toLowerCase().startsWith(parts[0])) {
-      return pid2;
-    }
-  }
-  return null;
-}
-
-// Response name extraction — uses regex patterns to find player names in AI output
-function extractResponseNames(text) {
-  const names = [];
-  const patterns = [
-    /\*\*([A-Z][a-z]+ [A-Z][a-z']+)\*\*/g,   // **First Last**
-    /([A-Z][a-z]+ [A-Z][a-z']+)\s*\(/g,       // First Last (
-  ];
-  patterns.forEach(p => { let m; while ((m = p.exec(text))) names.push(m[1]); });
-  return [...new Set(names)];
-}
-
-function isRostered(pid) {
-  const S = window.S || window.App?.S;
-  if (!S?.rosters) return false;
-  return S.rosters.some(r => (r.players || []).includes(pid));
-}
-
-function isOnMyRoster(pid) {
-  const S = window.S || window.App?.S;
-  if (!S?.rosters || !S.myRosterId) return false;
-  const my = S.rosters.find(r => r.roster_id === S.myRosterId);
-  return my ? (my.players || []).includes(pid) : false;
-}
-
-function checkTradeMath(text) {
-  const valPattern = /(?:DHQ\s*~?|~)\s*([\d,]+)/gi;
-  const vals = [];
-  let m;
-  while ((m = valPattern.exec(text))) vals.push(parseInt(m[1].replace(/,/g, ''), 10));
-  if (vals.length < 2) return null;
-  const mid = Math.floor(vals.length / 2);
-  const sideA = vals.slice(0, mid).reduce((a, b) => a + b, 0);
-  const sideB = vals.slice(mid).reduce((a, b) => a + b, 0);
-  if (sideA === 0 || sideB === 0) return null;
-  const ratio = Math.abs(sideA - sideB) / Math.max(sideA, sideB);
-  return ratio > 0.20 ? { sideA, sideB, ratio: Math.round(ratio * 100) } : null;
-}
-
-const VALIDATION_TYPES = ['home-chat', 'trade-chat', 'waiver-chat', 'waiver-agent', 'draft-chat'];
-
-function validateAIResponse(type, response, ctx) {
-  if (!VALIDATION_TYPES.includes(type)) return { text: response, issues: [] };
-  const text = typeof response === 'string' ? response : JSON.stringify(response);
-  const issues = [];
-  const names = extractResponseNames(text);
-  const isWaiver = type === 'waiver-chat' || type === 'waiver-agent';
-  const isTrade = type === 'trade-chat';
-
-  for (const name of names) {
-    const pid = findPlayerId(name);
-    // Check 1: Player existence — flag possible hallucinations
-    if (!pid) {
-      issues.push(`[${name}] could not be verified in your league's player database`);
-      continue;
-    }
-    // Check 2: Waiver recs — player should NOT already be rostered
-    if (isWaiver && isRostered(pid)) {
-      issues.push(`[${name}] appears to already be rostered \u2014 this recommendation may need adjustment`);
-    }
-    // Check 3: Trade recs — don't suggest acquiring your own player
-    if (isTrade && isOnMyRoster(pid)) {
-      const nameIdx = text.indexOf(name);
-      const preceding = text.substring(Math.max(0, nameIdx - 80), nameIdx).toLowerCase();
-      if (/target|acquire|get|their side/.test(preceding)) {
-        issues.push(`[${name}] is already on your roster \u2014 this recommendation may need adjustment`);
-      }
-    }
-  }
-
-  // Check 4: Trade math — verify both sides within 20%
-  if (isTrade) {
-    const imbalance = checkTradeMath(text);
-    if (imbalance) {
-      issues.push(`Trade values appear imbalanced (${imbalance.sideA.toLocaleString()} vs ${imbalance.sideB.toLocaleString()}, ${imbalance.ratio}% gap)`);
-    }
-  }
-
-  if (!issues.length) return { text: response, issues: [] };
-  // Voice the caveats in Alex's register rather than stapling on a robotic system
-  // warning \u2014 a real GM owns his uncertainty instead of breaking character for it.
-  const lead = issues.length === 1 ? 'One flag before you run with this' : 'A couple flags before you run with this';
-  const notes = '\n\n\u2014 ' + lead + ': ' + issues.join('; ') + '. Confirm it on the board before you pull the trigger. \u2014 Alex';
-  const validated = typeof response === 'string' ? response + notes : response;
-  return { text: validated, issues };
-}
-
-// ── Main Entry Point ────────────────────────────────────────────
-// type:    one of the keys in DHQ_PROMPTS
-// message: the user's message (optional for agent-type prompts)
-// context: additional context string to inject (optional)
-// options: { messages: [] } for multi-turn conversations
-
-async function dhqAI(type, message, context, options) {
-  const config = DHQ_PROMPTS[type];
-  if (!config) throw new Error(`Unknown DHQ AI type: ${type}`);
-
-  const system = config.system;
-  // Reasoning models on the 'standard'/'fast' tiers (e.g. gemini-2.5-flash)
-  // spend hidden "thinking" tokens out of the SAME output budget as the reply.
-  // With the old flat caps (home-chat 500), thinking consumed almost all of it
-  // and the visible answer was cut off mid-sentence. A small fixed headroom
-  // (1500) still wasn't enough — thinking on a roster question can run longer.
-  // So request a large budget and let the SERVER clamp it to the plan's real
-  // output cap (Pro 4200), which gives thinking + the answer the most room the
-  // plan allows. It's a ceiling, not a target: non-thinking models (Claude)
-  // ignore the extra room and every model stops when the answer is done, so it
-  // never pads a reply — it only stops the thinking pass from eating it.
-  const THINKING_HEADROOM = 4000;
-  // Lean types ride the server's fast lane, which keeps thinking minimal and
-  // caps output itself: no headroom, so a two-sentence note stays two.
-  const lean = !!config.lean;
-  const maxTokens = (config.maxTokens || 500) + (lean ? 0 : THINKING_HEADROOM);
-  const useWebSearch = config.useWebSearch || false;
-
-  // Improvement D: Inject real-time news for applicable types
-  const newsTypes = ['home-chat', 'trade-chat', 'player-scout', 'draft-chat'];
-  let newsContext = '';
-  if (newsTypes.includes(type)) {
-    newsContext = dhqEnrichWithNews(message);
-  }
-
-  // Capture user preferences for chat types
-  const chatTypes = ['home-chat','trade-chat','waiver-chat','draft-chat'];
-  if (chatTypes.includes(type) && message) {
-    try { if (typeof captureUserPreferences === 'function') captureUserPreferences(message); } catch (e) {}
-  }
-
-  // Build the full prompt
-  let fullContext = '';
-  if (config.instructions) fullContext += config.instructions + '\n\n';
-  if (newsContext) fullContext += newsContext + '\n';
-  if (context) fullContext += context + '\n\n';
-
-  // Inject league memory for context-rich types.
-  // NOTE: 'pick-analysis' is intentionally excluded — it fires on every qualifying
-  // draft pick and is a 1-2 sentence reaction that needs no league-memory continuity.
-  // Skipping it removes a Supabase memory READ per pick (less network noise, snappier).
-  const memoryTypes = ['home-chat','trade-chat','waiver-chat','draft-chat','trade-scout','player-scout'];
-  if (memoryTypes.includes(type)) {
-    try {
-      const memCtx = await buildMemoryContext(window.S?.currentLeagueId);
-      if (memCtx) fullContext += memCtx + '\n\n';
-    } catch (e) {}
-  }
-
-  // Construct messages array
-  let messages;
-  if (options?.messages) {
-    // Multi-turn: inject context into the last user message
-    messages = options.messages.map((m, i) => {
-      if (m.role === 'user' && i === options.messages.length - 1) {
-        return { role: 'user', content: fullContext + m.content };
-      }
-      if (m.role === 'assistant' && m.content.length > 400) {
-        return { role: 'assistant', content: m.content.substring(0, 400) + '...' };
-      }
-      return m;
-    });
-  } else {
-    messages = [{ role: 'user', content: fullContext + (message || '') }];
-  }
-
-  // Route through callClaude (which handles server-side vs client-side)
-  const callClaude = window.callClaude || window.App?.callClaude;
-  if (typeof callClaude !== 'function') throw new Error('No AI engine available');
-
-  // We prepend system to the first user message (the server also receives it
-  // as the system prompt — lean types skip the duplicate).
-  const systemPrefixed = lean ? messages : messages.map((m, i) => {
-    if (i === 0 && m.role === 'user') {
-      return { role: 'user', content: '[System: ' + system + ']\n\n' + m.content };
-    }
-    return m;
-  });
-
-  // Auto-enable web search for real-time intent (injuries, news, rumors)
-  // Tier-gated: only trial or paid users get web search (via canAccess)
-  const canUseWebSearch = typeof canAccess === 'function' && canAccess(window.FEATURES?.BRIEFING_REASONING || 'briefing_reasoning');
-  const lastUserContent = (options?.messages || []).filter(m => m.role === 'user').slice(-1)[0]?.content || message || '';
-  const realTimeIntent = /\b(injur|news|update|latest|rumor|contract|sign(ed|ing)|cut|release|suspend|arrest|trade rumor|depth chart|status|headline|report)\b/i.test(lastUserContent);
-  // dynasty_read is intrinsically a web-search feature (player news synthesis), so
-  // it always searches on the BYO-key path — the user is spending their own tokens
-  // and a newsless read defeats the feature. Other types stay tier-gated.
-  // Lean (fast-lane) notes narrate facts already on screen: never a search —
-  // their instructions mention "injuries", which tripped realTimeIntent.
-  const finalWebSearch = lean ? false : (type === 'dynasty_read') ? true : (canUseWebSearch && (useWebSearch || realTimeIntent));
-
-  // Per-pick draft stream reactions are low-stakes and high-frequency. The client
-  // (BYOK) transport retries 429/529 up to twice with a 10s backoff — which under the
-  // proxy's post-generation rate limits can bill (and surface) a DUPLICATE generation,
-  // and at best lands a stale bubble after the draft has moved on. Fail fast with no
-  // retry so each pick fires exactly one LLM call; the rule-based pick line already
-  // populated the stream, so a dropped reaction degrades gracefully.
-  const retries = (type === 'pick-analysis') ? 0 : 2;
-  // options.onDelta(chunk, soFar): stream the answer as it is written (server
-  // path only; a server or BYO path that can't stream just returns at the end).
-  const callOpts = (lean || typeof options?.onDelta === 'function')
-    ? { lean, system: lean ? system : undefined, onDelta: typeof options?.onDelta === 'function' ? options.onDelta : undefined }
-    : undefined;
-  const reply = await callClaude(systemPrefixed, finalWebSearch, retries, maxTokens, type, callOpts);
-
-  // Validate response — fast, non-blocking, appends notes if issues found
-  const validated = validateAIResponse(type, reply, {
-    myRosterId: window.S?.myRosterId,
-    rosters: window.S?.rosters,
-  });
-
-  return validated.text;
-}
-
-// ── Convenience Functions ───────────────────────────────────────
-
-// Situational tone — adapts Alex's personality to the user's reality
-function dhqBuildToneContext() {
-  const S = window.S || window.App?.S;
-  if (!S?.rosters?.length) return '';
-  const my = (window.myR || window.App?.myR);
-  const roster = typeof my === 'function' ? my() : null;
-  if (!roster) return '';
-  const s = roster.settings || {};
-  const wins = s.wins || 0;
-  const losses = s.losses || 0;
-  const gp = wins + losses + (s.ties || 0);
-  const sorted = [...S.rosters].sort((a, b) => (b.settings?.wins || 0) - (a.settings?.wins || 0));
-  const rank = sorted.findIndex(r => r.roster_id === S.myRosterId) + 1;
-  const teams = S.rosters.length;
-  const topHalf = rank <= Math.ceil(teams / 2);
-
-  // Season phase
-  const nfl = S.nflState || {};
-  const week = nfl.week || 0;
-  const phase = nfl.season_type === 'off' || week === 0 ? 'offseason'
-    : week <= 4 ? 'early' : week <= 10 ? 'midseason' : week <= 14 ? 'late' : 'playoffs';
-
-  // GM Strategy mode — normalized to the canonical rebuild/compete/win_now
-  // ids (legacy 'contend'/'balanced' included). Before this, canonical
-  // compete/win_now strings fell through to the crossroads voice.
-  let mode = 'compete';
-  try {
-    if (window.WR?.GmMode?.getMode) {
-      mode = window.WR.GmMode.getMode(S.currentLeagueId);
-    } else {
-      const gmStrat = window._wrGmStrategy;
-      const legacy = { contend: 'win_now', balanced: 'compete', retool: 'compete', balanced_rebuild: 'rebuild' };
-      mode = legacy[gmStrat?.mode] || gmStrat?.mode || 'compete';
-    }
-  } catch { /* keep default */ }
-
-  // Build tone guidance
-  const lines = [];
-  if (mode === 'win_now' || (mode === 'compete' && topHalf)) {
-    if (gp > 0 && wins / gp >= 0.65) {
-      lines.push('Team is winning and contending. Be confident and aggressive. Use language like "let\'s close this out", "championship-caliber move", "we\'re in the driver\'s seat".');
-    } else if (gp > 0 && wins / gp >= 0.45) {
-      lines.push('Team is competitive but not dominant. Be strategic and focused. Use language like "we need to be smart here", "one move away", "this is where good GMs separate".');
-    } else {
-      lines.push('Team is contending but struggling. Be honest but motivating. Use language like "we need to make a move", "the window is still open but narrowing".');
-    }
-  } else if (mode === 'rebuild') {
-    lines.push('Team is rebuilding. Be patient and future-focused. Use language like "investing in the future", "building blocks", "this is a process — trust it", "we\'re stacking assets".');
-  } else {
-    lines.push('Team is at a crossroads. Be analytical and decisive. Use language like "this decision defines our direction", "we need to pick a lane", "the data says...".');
-  }
-
-  if (phase === 'offseason') lines.push('It\'s the offseason — be proactive and forward-planning. "Offseason is where championships are built."');
-  else if (phase === 'late') lines.push('Late season — urgency matters. Every move counts for playoff positioning.');
-  else if (phase === 'playoffs') lines.push('Playoff time — maximum intensity. Win-now moves only, no long-term thinking.');
-
-  return lines.join(' ');
-}
-
-function dhqBuildRecommendationContext() {
-  try {
-    const intel = window.App?.Intelligence;
-    if (typeof intel?.buildAlexRecommendationDigest !== 'function') return '';
-    const digest = intel.buildAlexRecommendationDigest({ limit: 8 });
-    if (!Array.isArray(digest) || !digest.length) return '';
-
-    return '[TOP_RECOMMENDATIONS]\n'
-      + 'These are deterministic recommendation objects already shown or prepared by War Room cards. Treat them as the source of truth; explain, prioritize, or compare them instead of inventing a conflicting list.\n'
-      + JSON.stringify(digest, null, 2);
-  } catch {
-    return '';
-  }
-}
-
-function dhqBuildBehaviorContext() {
-  try {
-    const intel = window.App?.Intelligence;
-    if (typeof intel?.buildLeagueBehaviorBaselines !== 'function' || typeof intel?.buildOwnerBehaviorProfiles !== 'function') return '';
-    const S = window.S || window.App?.S || {};
-    const LI = window.App?.LI || {};
-    const rosters = S.rosters || LI.rosters || [];
-    const tradeHistory = LI.tradeHistory || [];
-    const ownerProfiles = LI.ownerProfiles || {};
-    if (!tradeHistory.length && !Object.keys(ownerProfiles).length) return '';
-    const baselines = LI.leagueBehaviorBaselines || intel.buildLeagueBehaviorBaselines({
-      league: S.currentLeague || S.leagues?.find(l => l.league_id === S.currentLeagueId) || S.leagues?.[0],
-      rosters,
-      ownerProfiles,
-      tradeHistory,
-      draftOutcomes: LI.draftOutcomes || [],
-    });
-    const profiles = LI.ownerBehaviorProfiles || intel.buildOwnerBehaviorProfiles({
-      rosters,
-      ownerProfiles,
-      tradeHistory,
-      draftOutcomes: LI.draftOutcomes || [],
-      baselines,
-    });
-    const users = S.leagueUsers || S.users || S.currentLeague?.users || [];
-    const nameForRoster = rid => {
-      const roster = rosters.find(r => String(r.roster_id) === String(rid));
-      const user = users.find(u => u.user_id === roster?.owner_id);
-      return user?.metadata?.team_name || user?.display_name || user?.username || profiles[String(rid)]?.ownerName || `Roster ${rid}`;
-    };
-    const ownerReads = Object.values(profiles || {})
-      .filter(profile => profile?.sample?.trades > 0)
-      .sort((a, b) => (b.sample?.trades || 0) - (a.sample?.trades || 0))
-      .slice(0, 8)
-      .map(profile => ({
-        rosterId: profile.rosterId,
-        owner: nameForRoster(profile.rosterId),
-        confidence: profile.confidence,
-        observed: (profile.observedFacts || []).slice(0, 4).map(f => f.detail),
-        inferredTags: profile.inferences || [],
-        offerFrame: profile.strategy?.offerFrame || '',
-      }));
-    if (!ownerReads.length) return '';
-    return '[BEHAVIORAL_CONTEXT]\n'
-      + 'Observed owner behavior and league baselines. Treat observed facts as stronger than inferred tags, and call out low confidence when sample sizes are thin.\n'
-      + JSON.stringify({ baselines, ownerReads }, null, 2);
-  } catch {
-    return '';
-  }
-}
-
-// Full context builder — assembles labeled JSON sections for detailed prompts
-// ── Pure rule-text generators (no window/DOM/App access) ─────────
-// These mirror the server's buildTeamModeBlock / buildQualityThresholdBlock
-// (supabase/functions/ai-analyze) so the chat path and the structured
-// ai-analyze path emit the SAME discipline. Kept free of window/App access so
-// they can be unit-tested directly and later shared with the Deno runtime.
-function dhqTeamModeBlock(tier, teamWindow) {
-  let modeBlock = '[TEAM_MODE]\n';
-  if (tier === 'REBUILDING' || teamWindow === 'REBUILDING') {
-    modeBlock += 'Mode: REBUILD\n';
-    modeBlock += 'Rules:\n';
-    modeBlock += '- ONLY recommend youth (age 25 or younger) and draft picks\n';
-    modeBlock += '- Sell aging veterans (27+ with declining production) for picks/youth\n';
-    modeBlock += '- FAAB: only bid on young upside or emergency injury replacements\n';
-    modeBlock += '- Never recommend "depth" pickups of veterans\n';
-    modeBlock += '- Patience is a strategy — don\'t make moves just to make moves\n';
-  } else if (tier === 'ELITE' || tier === 'CONTENDER' || teamWindow === 'CONTENDING') {
-    modeBlock += 'Mode: CONTEND (win now)\n';
-    modeBlock += 'Rules:\n';
-    modeBlock += '- Recommend proven starters who produce THIS season\n';
-    modeBlock += '- Trade future picks for upgrades at weak spots\n';
-    modeBlock += '- FAAB: bid aggressively on difference-makers who would start\n';
-    modeBlock += '- Don\'t recommend speculative youth projects that won\'t help now\n';
-  } else {
-    modeBlock += 'Mode: CROSSROADS (must commit to a direction)\n';
-    modeBlock += 'Rules:\n';
-    modeBlock += '- Team must pick: push for contention or begin rebuild\n';
-    modeBlock += '- No half-measures — don\'t recommend generic "add depth"\n';
-    modeBlock += '- Analyze which direction makes more sense given age profile and picks\n';
-  }
-  return modeBlock;
-}
-
-function dhqQualityRulesBlock() {
-  return '[QUALITY_RULES]\n'
-    + '- NEVER recommend players with DHQ below 500 — not worth a roster spot\n'
-    + '- NEVER recommend players averaging below 5.0 PPG with 6+ games — below replacement\n'
-    + '- NEVER recommend "depth for depth\'s sake" — a bad player wastes a roster spot\n'
-    + '- If no quality free agents exist, say "HOLD YOUR FAAB — no impactful targets available"\n'
-    + '- Remaining FAAB is a weapon for mid-season breakouts and injuries — preserve it\n';
-}
-
-// Complete, pre-sorted league power ranking (ALL teams including the user), so
-// Alex answers "power rankings" from ONE authoritative list instead of stitching
-// his own team (in ROSTER_CONTEXT) together with the opponents (in OWNERS) — which
-// left gaps like "2. (No owner provided for this rank)".
-function dhqBuildPowerRankings() {
-  const S = window.S || window.App?.S || {};
-  const rosters = S.rosters || [];
-  if (!rosters.length) return '';
-  const assessFn = (typeof assessTeamFromGlobal === 'function') ? assessTeamFromGlobal
-    : (typeof window !== 'undefined' && window.assessTeamFromGlobal) ? window.assessTeamFromGlobal : null;
-  if (!assessFn) return '';
-  const rows = rosters.map(r => {
-    let a = {};
-    try { a = assessFn(r.roster_id) || {}; } catch (e) { a = {}; }
-    const name = (S.leagueUsers || []).find(u => u.user_id === r.owner_id)?.display_name || ('Team ' + r.roster_id);
-    // rank = Power rank (60% Roster Health + 40% dynasty value). tier is the
-    // league-relative win-now tier; tierRank is the team's place on THAT list.
-    return { rank: a.powerRank || 0, team: name, isYou: r.roster_id === S.myRosterId, powerScore: a.powerScore || 0, tier: a.tier || '', tierRank: a.tierRank && a.tierOf ? a.tierRank + ' of ' + a.tierOf : '', rosterHealth: a.healthScore || 0 };
-  }).filter(x => x.rank > 0).sort((a, b) => a.rank - b.rank);
-  return rows.length ? JSON.stringify(rows) : '';
-}
-
-function dhqContext(includeOwners) {
-  const parts = [];
-  const roster = dhqBuildRosterContext(false);
-  if (roster) parts.push('[ROSTER_CONTEXT]\n' + roster);
-  const mentality = dhqBuildMentalityContext();
-  if (mentality) parts.push('[MENTALITY]\n' + mentality);
-  const league = dhqBuildLeagueContext();
-  if (league) parts.push('[LEAGUE]\n' + league);
-  // The complete, authoritative power ranking — every team, already in order.
-  const power = dhqBuildPowerRankings();
-  if (power) parts.push('[POWER_RANKINGS]\nThe app\'s official league power ranking, already sorted (rank 1 = best, "isYou" marks the user). When asked for power rankings or the user\'s rank, use THIS exact order, these exact team names, and powerScore — do not re-sort by DHQ or invent/skip any team:\n' + power);
-  if (includeOwners) {
-    const owners = dhqBuildOwnerProfiles();
-    if (owners) parts.push('[OWNERS]\n' + owners);
-  }
-  // Inject situational tone
-  const tone = dhqBuildToneContext();
-  if (tone) parts.push('[TONE]\n' + tone);
-
-  // Inject recent chat summary for continuity
-  try {
-    const leagueId = (window.S || window.App?.S)?.currentLeagueId;
-    const chatKey = 'wr_chat_' + leagueId;
-    const saved = leagueId ? localStorage.getItem(chatKey) : null;
-    if (saved) {
-      const msgs = JSON.parse(saved);
-      const recent = msgs.filter(m => m.role === 'assistant' && m.content.length > 50).slice(-2);
-      if (recent.length) {
-        const summaries = recent.map(m => m.content.substring(0, 150) + (m.content.length > 150 ? '...' : ''));
-        parts.push('[RECENT_CONVERSATIONS]\nYour recent advice to this user (reference naturally if relevant):\n' + summaries.join('\n---\n'));
-      }
-    }
-  } catch {}
-
-  // Inject user's GM Strategy if set — the canonical serializer
-  // (WR.GmMode.promptData/promptBlock) renders the FULL strategy: mode
-  // directive, timeline, aggression + acceptance floor, market posture,
-  // draft style, target/sell positions, sell rules, untouchable NAMES.
-  // The legacy riskTolerance/targets/positionalNeeds path is kept only for
-  // embeds where gm-mode.js isn't loaded.
-  let gmPd = null;
-  try {
-    gmPd = window.WR?.GmMode?.promptData?.((window.S || window.App?.S)?.currentLeagueId) || null;
-  } catch { /* gm-mode optional */ }
-  if (gmPd) {
-    parts.push('[GM_STRATEGY]\nThe owner has committed to this strategy. IMPORTANT: honor it in every recommendation.\n'
-      + window.WR.GmMode.promptBlock(null, gmPd));
-  } else {
-    const gmStrat = window._wrGmStrategy;
-    if (gmStrat && (gmStrat.mode !== 'balanced' || gmStrat.riskTolerance !== 'moderate' || gmStrat.untouchable?.length || gmStrat.targets?.length || gmStrat.notes)) {
-      const stratParts = [`Mode: ${gmStrat.mode}`, `Risk: ${gmStrat.riskTolerance}`];
-      if (gmStrat.untouchable?.length) {
-        const S2 = window.S || {};
-        const names = gmStrat.untouchable.map(pid => S2.players?.[pid]?.full_name || pid).join(', ');
-        stratParts.push(`Untouchable players: ${names}`);
-      }
-      if (gmStrat.targets?.length) stratParts.push(`Targeting in trades: ${gmStrat.targets.join(', ')}`);
-      const posNeeds = Object.entries(gmStrat.positionalNeeds || {}).filter(([,v]) => v >= 7).map(([pos,v]) => `${pos}(${v}/10)`);
-      if (posNeeds.length) stratParts.push(`High priority positions: ${posNeeds.join(', ')}`);
-      if (gmStrat.notes) stratParts.push(`Owner notes: "${gmStrat.notes}"`);
-      parts.push('[GM_STRATEGY]\nThe owner has set the following strategic preferences. IMPORTANT: Honor these when making recommendations.\n' + stratParts.join('\n'));
-    }
-  }
-
-  // ── Commissioner league docs (bylaws, awards, custom rules) ──
-  // Loaded async and cached in window for this session
-  if (window._leagueDocsContext) {
-    parts.push('[LEAGUE_DOCUMENTS]\nThe commissioner has uploaded these league-specific documents. Use them to answer league rule questions, reference awards history, and understand league customs:\n' + window._leagueDocsContext);
-  }
-
-  // ── League format detection ──────────────────────────────────
-  const _S = window.S || window.App?.S || {};
-  const formatBlock = dhqBuildLeagueFormatBlock();
-  if (formatBlock) parts.push(formatBlock);
-
-  const behaviorBlock = dhqBuildBehaviorContext();
-  if (behaviorBlock) parts.push(behaviorBlock);
-
-  const recommendationBlock = dhqBuildRecommendationContext();
-  if (recommendationBlock) parts.push(recommendationBlock);
-
-  // ── Team mode context ────────────────────────────────────────
-  const myAssess = typeof assessTeamFromGlobal === 'function' ? assessTeamFromGlobal(_S.myRosterId) : null;
-  const tier = myAssess?.tier || '';
-  const teamWindow = myAssess?.window || '';
-
-  if (gmPd) {
-    let modeBlock = '[TEAM_MODE]\n';
-    // A committed GM Strategy OWNS the mode: rules derive from the CHOSEN
-    // plan so this block can never contradict [GM_STRATEGY]. The roster
-    // assessment demotes to a one-line reality check when it disagrees.
-    if (gmPd.mode === 'rebuild') {
-      modeBlock += 'Mode: REBUILD (GM-committed strategy)\n';
-      modeBlock += 'Rules:\n';
-      modeBlock += '- ONLY recommend youth (age 25 or younger) and draft picks\n';
-      modeBlock += '- Sell aging veterans (27+ with declining production) for picks/youth\n';
-      modeBlock += '- FAAB: only bid on young upside or emergency injury replacements\n';
-      modeBlock += '- Never recommend "depth" pickups of veterans\n';
-      modeBlock += '- Patience is a strategy — don\'t make moves just to make moves\n';
-    } else if (gmPd.mode === 'win_now') {
-      modeBlock += 'Mode: WIN NOW (GM-committed strategy)\n';
-      modeBlock += 'Rules:\n';
-      modeBlock += '- Recommend proven starters who produce THIS season\n';
-      modeBlock += '- Trade future picks for upgrades at weak spots\n';
-      modeBlock += '- FAAB: bid aggressively on difference-makers who would start\n';
-      modeBlock += '- Don\'t recommend speculative youth projects that won\'t help now\n';
-    } else if (gmPd.mode === 'compete') {
-      modeBlock += 'Mode: COMPETE (GM-committed strategy)\n';
-      modeBlock += 'Rules:\n';
-      modeBlock += '- Balance present and future — favor players aged 24-27 with 3+ peak years left\n';
-      modeBlock += '- Trade aging assets only at peak value; no fire sales\n';
-      modeBlock += '- FAAB: moderate bids on players who upgrade a starting spot\n';
-      modeBlock += '- Never mortgage multiple future firsts for a rental\n';
-    } else {
-      modeBlock += 'Mode: CUSTOM (GM-committed strategy)\n';
-      modeBlock += 'Rules:\n';
-      modeBlock += '- Follow the [GM_STRATEGY] block exactly — aggression, postures, positions, and sell rules as configured\n';
-    }
-    const assessedMode = (tier === 'REBUILDING' || teamWindow === 'REBUILDING') ? 'rebuild'
-      : (tier === 'ELITE' || tier === 'CONTENDER' || teamWindow === 'CONTENDING') ? 'win_now'
-      : '';
-    if (assessedMode && assessedMode !== gmPd.mode) {
-      modeBlock += 'Reality check: roster grades ' + (tier || teamWindow) + ' while the GM has committed to '
-        + String(gmPd.modeLabel || gmPd.mode).toUpperCase()
-        + ' — acknowledge the tension, follow the GM\'s direction.\n';
-    }
-    parts.push(modeBlock);
-  } else {
-    // No committed GM Strategy: assessed-mode rules via the pure helper
-    // (same REBUILD / CONTEND / CROSSROADS text the server emits).
-    parts.push(dhqTeamModeBlock(tier, teamWindow));
-  }
-
-  // ── Quality thresholds ───────────────────────────────────────
-  parts.push(dhqQualityRulesBlock());
-
-  return parts.join('\n\n');
-}
-
-// Compact context builder — assembles labeled JSON sections for chat
-function dhqCompactContext() {
-  const parts = [];
-  const roster = dhqBuildRosterContext(true);
-  if (roster) parts.push('[ROSTER_CONTEXT]\n' + roster);
-  const mentality = dhqBuildMentalityContext();
-  if (mentality) parts.push('[MENTALITY]\n' + mentality);
-
-  const formatBlock = dhqBuildLeagueFormatBlock();
-  if (formatBlock) parts.push(formatBlock);
-
-  const behaviorBlock = dhqBuildBehaviorContext();
-  if (behaviorBlock) parts.push(behaviorBlock);
-
-  const recommendationBlock = dhqBuildRecommendationContext();
-  if (recommendationBlock) parts.push(recommendationBlock);
-
-  return parts.join('\n\n');
-}
-
-// ── Dynasty Read helper ──────────────────────────────────────────
-// Template-first, paid-gated, weekly-shared player news read.
-//
-// The SERVER path (OD.callAI) is canonical: it hits the shared weekly cache in
-// the ai-analyze edge function, so one web-search synthesis is reused across
-// every user for the NFL week. We call OD.callAI DIRECTLY rather than going
-// through dhqAI/callClaude, because the callClaude wrapper adds
-// system/messages/callType keys to the context — which makes the server treat
-// the call as "generic" and skip the shared cache entirely. A clean structured
-// context ({pid,name,team,pos,age,season,week}) keeps the call cacheable.
-//
-// Order: in-memory dedupe → server (shared cache) → BYO-key dhqAI (own tokens,
-// no shared cache) → caller's template. Never throws.
-const _dynReadCache = new Map();
-
-// Normalized, DISCRETE league-format flags for the current league. Deliberately
-// limited to {scoringType, superflex, tep, idp} — never the league id or raw
-// settings — so the server's shared weekly cache buckets by FORMAT, not per
-// league/user (a handful of buckets, bounded cost). Returns null when no league
-// is loaded → the read stays league-agnostic and shared across all such users.
-// Mirrors the server's detectLeagueFormat so client buckets match server buckets.
-function _dynReadFormat() {
-  try {
-    const S = window.S;
-    const league = (S && S.leagues && S.currentLeagueId)
-      ? S.leagues.find(function (l) { return l.league_id === S.currentLeagueId; })
-      : null;
-    if (!league) return null;
-    const rp = league.roster_positions || [];
-    const sc = league.scoring_settings || {};
-    if (!rp.length && !Object.keys(sc).length) return null;
-    const rec = Number(sc.rec) || 0;
-    const scoringType = rec >= 1 ? 'ppr' : rec >= 0.5 ? 'half_ppr' : 'std';
-    const qbSlots = rp.filter(function (p) { return p === 'QB'; }).length;
-    const superflex = rp.indexOf('SUPER_FLEX') !== -1 || qbSlots >= 2;
-    const tep = (Number(sc.bonus_rec_te) || Number(sc.rec_te) || 0) > 0;
-    const idp = rp.some(function (p) { return ['IDP_FLEX', 'DL', 'LB', 'DB', 'DE', 'CB', 'S'].indexOf(p) !== -1; });
-    return { scoringType: scoringType, superflex: superflex, tep: tep, idp: idp };
-  } catch (e) { return null; }
-}
-
-async function fetchDynastyRead(ctx, opts) {
-  opts = opts || {};
-  const fallback = opts.fallback || '';
-  try {
-    if (!ctx || !ctx.pid) return fallback;
-    // Paid-only feature. (Sandbox/localhost resolve to 'paid' for dev.)
-    if (typeof canAccess === 'function' && !canAccess('dynasty_read_ai')) return fallback;
-
-    const fmt = _dynReadFormat();
-    const fmtKey = fmt ? (fmt.scoringType + (fmt.superflex ? '-sf' : '') + (fmt.tep ? '-tep' : '') + (fmt.idp ? '-idp' : '')) : 'na';
-    const wkKey = (ctx.week == null || ctx.week === '') ? 'off' : ctx.week;
-    const key = 'dynread:' + ctx.pid + ':' + (ctx.season || '') + ':' + wkKey + ':' + fmtKey;
-    if (_dynReadCache.has(key)) return _dynReadCache.get(key);
-
-    const clean = {
-      pid: String(ctx.pid),
-      name: ctx.name || '',
-      team: ctx.team || '',
-      pos: ctx.pos || '',
-      age: ctx.age || null,
-      season: ctx.season || '',
-      week: ctx.week == null ? 0 : ctx.week,
-    };
-    // Discrete format flags → the server reads the player THROUGH the league's
-    // format and the shared cache buckets by format. Omitted entirely when no
-    // league is loaded, so those users share one league-agnostic read.
-    if (fmt) {
-      clean.scoringType = fmt.scoringType;
-      clean.superflex = fmt.superflex;
-      clean.tep = fmt.tep;
-      clean.idp = fmt.idp;
-    }
-
-    const sanitize = (window.AlexVoice && window.AlexVoice.sanitize)
-      ? window.AlexVoice.sanitize
-      : function (t) { return String(t || '').replace(/\s+/g, ' ').trim(); };
-
-    let text = '';
-    // Server path — shared weekly cache. Requires a Supabase session.
-    if (typeof window.hasServerAI === 'function' && window.hasServerAI() &&
-        window.OD && typeof window.OD.callAI === 'function') {
-      try {
-        const res = await window.OD.callAI({ type: 'dynasty_read', context: JSON.stringify(clean) });
-        text = sanitize((res && (res.analysis || res.text || res.response)) || '');
-      } catch (e) { /* rate limit / network → fall through */ }
-    }
-    // BYO-key path — user's own tokens, no shared cache.
-    if (!text && window.S && window.S.apiKey && typeof dhqAI === 'function') {
-      try {
-        const reply = await dhqAI('dynasty_read', '', JSON.stringify(clean));
-        text = sanitize(typeof reply === 'string' ? reply : ((reply && (reply.text || reply.analysis || reply.response)) || ''));
-      } catch (e) { /* fall through */ }
-    }
-
-    if (!text) return fallback;
-    _dynReadCache.set(key, text);
-    return text;
-  } catch (e) {
-    return fallback;
-  }
-}
-
-// ── Exports ─────────────────────────────────────────────────────
-Object.assign(window.App, {
-  DHQ_IDENTITY,
-  DHQ_PROMPTS,
-  dhqAI,
-  fetchDynastyRead,
-  dhqContext,
-  dhqCompactContext,
-  dhqBuildRosterContext,
-  dhqBuildMentalityContext,
-  dhqBuildLeagueContext,
-  dhqBuildLeagueFormatBlock,
-  dhqTeamModeBlock,
-  dhqQualityRulesBlock,
-  dhqCurrentLeagueProfile,
-  dhqBuildOwnerProfiles,
-  dhqBuildToneContext,
-  dhqBuildBehaviorContext,
-  dhqBuildRecommendationContext,
-  dhqEnrichWithNews,
-  extractPlayerNames,
-  findPlayerId,
-  validateAIResponse,
-});
-
-Object.assign(window, {
-  // Expose DHQ_IDENTITY and DHQ_PROMPTS as bare globals so ai-dispatch.js's
-  // `typeof DHQ_IDENTITY !== 'undefined'` check resolves the real prompt,
-  // not the hardcoded fallback string.
-  DHQ_IDENTITY,
-  DHQ_PROMPTS,
-  dhqAI,
-  fetchDynastyRead,
-  dhqContext,
-  dhqCompactContext,
-  dhqBuildRosterContext,
-  dhqBuildMentalityContext,
-  dhqBuildLeagueContext,
-  dhqBuildLeagueFormatBlock,
-  dhqTeamModeBlock,
-  dhqQualityRulesBlock,
-  dhqCurrentLeagueProfile,
-  dhqBuildOwnerProfiles,
-  dhqBuildToneContext,
-  dhqBuildBehaviorContext,
-  dhqBuildRecommendationContext,
-  dhqEnrichWithNews,
-  extractPlayerNames,
-  findPlayerId,
-  validateAIResponse,
-});
-
-// ── Module global exports (Vite migration) ───────────────────────────────────
-window.isRostered = isRostered;
-window.isOnMyRoster = isOnMyRoster;
-window.checkTradeMath = checkTradeMath;
-window.extractResponseNames = extractResponseNames;

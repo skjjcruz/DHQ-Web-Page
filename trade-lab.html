@@ -45,7 +45,7 @@
     })();
     </script>
 
-    <meta name="dhq-build" content="b160-110aafc32e">
+    <meta name="dhq-build" content="b160-c69907d077">
     <meta name="dhq-engine-v" content="12405259c4">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, viewport-fit=cover">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://skjjcruz.github.io/DHQ-Web-Page/data/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://sxshiqyxhhifvtfqawbq.supabase.co https://hovnqztlbsgsywrbidbh.supabase.co https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com https://api.sleeper.app https://site.api.espn.com https://sports.core.api.espn.com https://api.myfantasyleague.com https://*.myfantasyleague.com https://lm-api-reads.fantasy.espn.com https://site.web.api.espn.com https://fantasysports.yahooapis.com https://api.fantasycalc.com https://*.sentry.io; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; object-src 'none';">
@@ -170,13 +170,13 @@
     <link rel="preload" as="script" href="vendor/supabase.min.js">
     <link rel="preload" as="script" href="vendor/react.production.min.js">
     <link rel="preload" as="script" href="vendor/react-dom.production.min.js">
-    <script src="js/shared/shared-loader.js?v=2cb70263bd"></script>
+    <script src="js/shared/shared-loader.js?v=dc8a50912c"></script>
     <!-- Season-rollover cache hygiene — must run early, before any surface reads caches. -->
-    <script src="js/shared/season-guard.js?v=988bfb076d"></script>
+    <script src="js/shared/season-guard.js?v=5b705f54d8"></script>
     <!-- Native-shell external-link guard: outside links must never strand the WKWebView. -->
-    <script src="js/shared/external-links.js?v=f29b1dfca1"></script>
+    <script src="js/shared/external-links.js?v=2b17f66d8f"></script>
     <!-- Real market ADP (lab port): display-only companion data for redraft draft boards. -->
-    <script src="js/shared/adp-market.js?v=81397b7545"></script>
+    <script src="js/shared/adp-market.js?v=63f4a05ca2"></script>
     <script>
 window.DYNASTY_HQ_APP = 'warroom';
 // Sandbox = the WarRoom-sandbox deploy (c2-football.github.io/WarRoom-sandbox/),
@@ -218,6 +218,9 @@ if (_isLocalDev) {
 // the dynasty market at 0.92 against v2's 0.84, kept veteran IDP priced,
 // and did not put pick-slot rookies above Gibbs and Bijan. The one-brain
 // assessments (health, tiers, record-first power rank) run either way.
+// values-v2.js and pff-snapshot.js are no longer loaded or published
+// (cleanup, 2026-10-20): turning v2 back on means adding them back here and
+// to scripts/sync-reconai-shared.cjs.
 window.__DHQ_ENGINE_V2 = false;
 const WR_SHARED_FILES = [
   'app-config.js',
@@ -237,8 +240,6 @@ const WR_SHARED_FILES = [
   'intelligence-context.js',
   'points-ledger.js',
   'one-brain.js',
-  'values-v2.js',
-  'pff-snapshot.js',
   'intent-reads.js',
   'dhq-engine.js',
   'nfl-fit.js',
@@ -3200,39 +3201,39 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <script>window._sharedCanAccess = window.canAccess;</script>
 <!-- Scout-free vs Pro gate: wrIsPro() + chrome + lock card; boots loadUserTier().
      Must run after the shared tier chain above, before any tab code. -->
-<script src="js/shared/pro-gate.js?v=d304c3e6bd"></script>
-<script src="js/pro-launch.js?v=c9f18a7f5e"></script>
+<script src="js/shared/pro-gate.js?v=36d43c7fde"></script>
+<script src="js/pro-launch.js?v=9e7a0fc41c"></script>
 <!-- Billing shim (web-only build): keeps the window.DHQBilling API surface;
      purchases route to Stripe via upgrade.html (in-app purchase is iOS-app-only). -->
-<script src="js/billing.js?v=cdc5732cbc"></script>
-<script src="college-stats.js?v=bd4656ed45"></script>
-<script src="draft-history.js?v=873cee3040"></script>
-<script src="charts.js?v=408aed45a4"></script>
+<script src="js/billing.js?v=51070d5ead"></script>
+<script src="college-stats.js?v=485bf53277"></script>
+<script src="draft-history.js?v=4f88fd282a"></script>
+<script src="charts.js?v=76ff57064d"></script>
 <!-- html2canvas is lazy-loaded on first export via window.ensureHtml2Canvas() (defined in js/export.js) -->
-<script src="js/export.js?v=d25d2db04a"></script>
+<script src="js/export.js?v=079cfdeef5"></script>
 <script src="vendor/react.production.min.js?v=d949f1c368"></script>
 <script src="vendor/react-dom.production.min.js?v=35f4f974f4"></script>
 <!-- 0. Theme engine — must load before any widget/component (plain JS, no Babel needed) -->
-<script src="js/theme.js?v=e827d463e4"></script>
+<script src="js/theme.js?v=9536da9812"></script>
 <!-- 0b. Alex voice helper — seeded phrase variation + template-first AI upgrade (plain JS) -->
-<script src="js/shared/alex-voice.js?v=ebcfc86f18"></script>
-<script src="js/shared/alex-answer-chip.js?v=87899cf865"></script>
+<script src="js/shared/alex-voice.js?v=2a84dfa582"></script>
+<script src="js/shared/alex-answer-chip.js?v=3e76c44b4c"></script>
 <!-- (removed unused 'Press Start 2P' web font — it was a render-blocking request but referenced by no font-family) -->
 
 <!-- War Room modules — loaded in dependency order by Babel standalone -->
 <!-- 1. Core: tier system, React hooks, fetch helpers (everything depends on this) -->
 <!-- In-app confirm / notice / text / copy boxes (the native app can't show the
      browser's own). Plain JS, before core.js: every screen may use them. -->
-<script src="js/shared/dhq-dialogs.js?v=a903b966a1"></script>
+<script src="js/shared/dhq-dialogs.js?v=5d676388cb"></script>
 <script src="js/core.js?v=1a94fddcb4"></script>
 <!-- 1a. Central data-sync manager — window.WR.Sync — stale-while-revalidate on tab return + in-season interval (plain JS) -->
-<script src="js/shared/sync-manager.js?v=e53de045e9"></script>
+<script src="js/shared/sync-manager.js?v=d9fc495605"></script>
 <!-- 1a2. Shared viewport seam — WR.useViewport() hook + WR.viewport() snapshot (plain JS; must precede components.js and all tab files) -->
-<script src="js/shared/viewport.js?v=7629d5e214"></script>
+<script src="js/shared/viewport.js?v=ac8511b9d2"></script>
 <!-- 1a3. Live update — picks up a new deploy in a running page / resumed app (plain JS; replaces update-sentinel.js) -->
-<script src="js/shared/live-update.js?v=76a854447b"></script>
+<script src="js/shared/live-update.js?v=f09653177c"></script>
 <!-- 1b. Format/phase skin contract for league-type-aware modules -->
-<script src="js/league-skin.js?v=c80effc41c"></script>
+<script src="js/league-skin.js?v=4cb12026c6"></script>
 <!-- 2. Shared components: UpgradeGate, GMMessage, PlayerInlineCard -->
 <script src="js/components.js?v=aab6aa5c57"></script>
 <!-- 2b. Unified Player Card (SI-2) — window.WR.openPlayerCard — replaces CDN modal -->
@@ -3242,81 +3243,81 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <!-- 2c. Saved List Views (SI-1) — window.WR.SavedViews — shared across list surfaces -->
 <script src="js/shared/saved-views.js?v=48a1747f17"></script>
 <!-- 2c-2. Saved Alex Reports — window.WR.SavedReports — local cache + ai_analysis server sync -->
-<script src="js/shared/saved-reports.js?v=c0601d4b86"></script>
+<script src="js/shared/saved-reports.js?v=cec4287744"></script>
 <!-- 2d. GM Mode helper (Phase 1) — window.WR.GmMode — canonical mode/preset source of truth -->
 <script src="js/shared/gm-mode.js?v=930ae4274e"></script>
-<script src="js/shared/startsit-engine.js?v=98dabca03b"></script>
-<script src="js/shared/startsit-verdict.js?v=6961d1d21b"></script>
-<script src="js/shared/weekly-proj.js?v=184209a4ae"></script>
+<script src="js/shared/startsit-engine.js?v=3faf27e956"></script>
+<script src="js/shared/startsit-verdict.js?v=907ee11103"></script>
+<script src="js/shared/weekly-proj.js?v=929160e32a"></script>
 <!-- One FAAB rule for every surface (budget AND, on Sleeper, waiver_type 2) — boot-loaded; before dashboard-digest.js. -->
-<script src="js/shared/faab-league.js?v=e5eb2cc3bd"></script>
-<script src="js/shared/sleeper-proj.js?v=3ecaa16349"></script>
-<script src="js/shared/game-locks.js?v=a3365eb88e"></script>
-<script src="js/shared/player-news.js?v=89141160fb"></script>
-<script src="js/shared/server-build.js?v=a0e36f72ee"></script>
+<script src="js/shared/faab-league.js?v=e4c33d189d"></script>
+<script src="js/shared/sleeper-proj.js?v=a115465cde"></script>
+<script src="js/shared/game-locks.js?v=0790e08964"></script>
+<script src="js/shared/player-news.js?v=b326e3c720"></script>
+<script src="js/shared/server-build.js?v=ba761c5b19"></script>
 <!-- Transition step 3 (Lab only, 2026-10-19): open a league with the engine server's build when it is fresh; else the device computes as before. -->
-<script src="js/shared/server-intel.js?v=c3fc9c3030"></script>
-<script src="js/shared/ask-tools.js?v=b0b78af237"></script>
-<script src="js/shared/ask-tools-league.js?v=3237d2c0aa"></script>
-<script src="js/shared/ask-tools-players.js?v=90797833a7"></script>
-<script src="js/shared/ask-tools-roster.js?v=2bbbbf3b20"></script>
-<script src="js/shared/ask-tools-moves.js?v=65f5cdd7d1"></script>
-<script src="js/shared/ask-dhq.js?v=6c6326971e"></script>
+<script src="js/shared/server-intel.js?v=f84b73fd62"></script>
+<script src="js/shared/ask-tools.js?v=50e927a399"></script>
+<script src="js/shared/ask-tools-league.js?v=9d9b8dc352"></script>
+<script src="js/shared/ask-tools-players.js?v=e593de558b"></script>
+<script src="js/shared/ask-tools-roster.js?v=52d99b541a"></script>
+<script src="js/shared/ask-tools-moves.js?v=9941365158"></script>
+<script src="js/shared/ask-dhq.js?v=35c9b16181"></script>
 <script src="js/shared/dhq-proj.js?v=0803881252"></script>
 <script src="js/shared/nfl-context.js?v=f9baeb8de9"></script>
-<script src="js/shared/matchup.js?v=ede3b76a3d"></script>
+<script src="js/shared/matchup.js?v=59ba9fb79a"></script>
 <!-- League live scores + standings engines (C2 port 2026-09-27): one shared Sleeper
      scoreboard poller, the completed-week baseline, live standings. Plain JS,
      loaded at boot because The Wire (league-wide) consumes them too. -->
-<script src="js/shared/league-live-scores.js?v=c72d8a7ce8"></script>
-<script src="js/shared/league-live-standings.js?v=4dbe1e7867"></script>
-<script src="js/shared/league-live-table.js?v=eaafffa4e4"></script>
+<script src="js/shared/league-live-scores.js?v=914be386e3"></script>
+<script src="js/shared/league-live-standings.js?v=c0665b9988"></script>
+<script src="js/shared/league-live-table.js?v=50a0d04f07"></script>
 <!-- Season Odds engines (lab port 2026-08-16): plain Node-testable scripts —
      the luck ledger feeds the playoff Monte Carlo, so luck loads first. -->
-<script src="js/shared/luck-engine.js?v=21984470ab"></script>
-<script src="js/shared/chopped.js?v=a0cc781b90"></script>
-<script src="js/shared/chop-odds.js?v=cf44609086"></script>
-<script src="js/shared/playoff-odds.js?v=feb67d7551"></script>
-<script src="js/shared/faab-engine.js?v=df25bae4ed"></script>
-<script src="js/utils/schedule-engine.js?v=50ade3a5d4"></script>
-<script src="js/utils/gamelog-engine.js?v=038341a613"></script>
-<script src="js/shared/draft-gameplan.js?v=4c5de549f0"></script>
+<script src="js/shared/luck-engine.js?v=48c2238150"></script>
+<script src="js/shared/chopped.js?v=0d9f26ceb1"></script>
+<script src="js/shared/chop-odds.js?v=b39334972f"></script>
+<script src="js/shared/playoff-odds.js?v=99d6875178"></script>
+<script src="js/shared/faab-engine.js?v=6b06ec8853"></script>
+<script src="js/utils/schedule-engine.js?v=b49356c93d"></script>
+<script src="js/utils/gamelog-engine.js?v=6b502fa7d1"></script>
+<script src="js/shared/draft-gameplan.js?v=c1edbd4972"></script>
 <!-- 2e. Alex behavioral-insight settings — window.WR.AlexSettings — shared tuning for every Alex surface -->
 <script src="js/shared/alex-settings.js?v=176b17e258"></script>
 <!-- 2f. Achievements catalog — window.WrAchievements — first-class legacy badge system -->
-<script src="js/shared/achievements.js?v=c0b6f4ae95"></script>
+<script src="js/shared/achievements.js?v=15a5879daa"></script>
 <!-- 2g. League history loader — window.WrHistory — Sleeper chain walker for season history -->
-<script src="js/shared/league-history.js?v=322729c840"></script>
-<script src="js/shared/title-sweep.js?v=099898312a"></script>
+<script src="js/shared/league-history.js?v=fa6a247261"></script>
+<script src="js/shared/title-sweep.js?v=0e786d34da"></script>
 <!-- 2h. Weekly DHQ/health snapshot store — window.WrSnapshots — time-series for ▲/▼ deltas -->
-<script src="js/shared/snapshot-store.js?v=9c59b853e5"></script>
+<script src="js/shared/snapshot-store.js?v=58b653f470"></script>
 
-<script src="js/shared/wr-ai-context.js?v=60a4e507e7"></script>
+<script src="js/shared/wr-ai-context.js?v=cc93817493"></script>
 <!-- Feedback hub — floating launcher, bug reports + crash capture, feature voting board -->
-<script src="js/shared/feedback-hub.js?v=a53319b783"></script>
+<script src="js/shared/feedback-hub.js?v=23a15846cd"></script>
 <!-- NFL draft capital dataset — window.WR_DRAFT_PROFILE — static historical
      [year, round, overall, team] by Sleeper id (Sleeper's API has none).
      Regenerate with scripts/build-draft-profile.cjs. -->
-<script src="js/shared/draft-profile-data.js?v=f81e6fd7ab"></script>
+<script src="js/shared/draft-profile-data.js?v=0428a11158"></script>
 <!-- AI Conductor foundation — one shared team-state + change-fingerprint (window.WR.SituationRoom). Additive + flagged off; nothing consumes it yet. -->
-<script src="js/shared/situation-room.js?v=732ee8bffc"></script>
+<script src="js/shared/situation-room.js?v=22e174e60b"></script>
 <!-- AI Conductor Phase 2 — the command brief's "what changed" line (window.WR.BriefPulse), flag-gated. -->
-<script src="js/shared/rank-history.js?v=4cebaac48a"></script>
-<script src="js/shared/qb-trade-rules.js?v=12c376f03a"></script>
-<script src="js/shared/elite-skill-trade-rules.js?v=8a8943111f"></script>
-<script src="js/shared/brief-pulse.js?v=6fce6d2654"></script>
+<script src="js/shared/rank-history.js?v=e88c150595"></script>
+<script src="js/shared/qb-trade-rules.js?v=38c809e519"></script>
+<script src="js/shared/elite-skill-trade-rules.js?v=35c9fe1bfa"></script>
+<script src="js/shared/brief-pulse.js?v=03b46138f6"></script>
 <!-- AI Conductor Phase 3 — the reusable "explain this screen" line (window.WR.SurfaceRead), flag-gated. -->
-<script src="js/shared/surface-read.js?v=aabd90404c"></script>
+<script src="js/shared/surface-read.js?v=6ce04868a7"></script>
 <!-- Player Brief Phase 1 — the DHQ Composer: a written summary for EVERY player card (window.WR.PlayerBrief). -->
-<script src="js/shared/player-brief.js?v=396940d7ab"></script>
+<script src="js/shared/player-brief.js?v=4e08e938ae"></script>
 <!-- Player Brief Phase 2 — the journalism layer: current Rotowire read via ESPN, cached + fail-safe (window.WR.PlayerWire). -->
-<script src="js/shared/player-wire.js?v=9ef88b8435"></script>
+<script src="js/shared/player-wire.js?v=074c313deb"></script>
 <!-- Player Brief shared block — the layered summary box with composed-at stamp, mounted by the player card + My Roster (window.WR.PlayerBriefBlock). -->
-<script src="js/components/player-brief-block.js?v=4c6a22bdc8"></script>
+<script src="js/components/player-brief-block.js?v=449d65a493"></script>
 <!-- Alex's Desk — cross-league AI digest card for the hub (window.WR.DashboardDigestCard) -->
-<script src="js/tabs/dashboard-digest.js?v=231bc59d0e"></script>
+<script src="js/tabs/dashboard-digest.js?v=26d996b9f2"></script>
 <!-- 2i. Per-league transaction cache — window.WrTxns — cross-league activity + DNA substrate -->
-<script src="js/shared/txn-store.js?v=1976999bb6"></script>
+<script src="js/shared/txn-store.js?v=d70f30bca3"></script>
 <!-- 3. Shared utilities: player valuation constants + projection engine -->
 <script src="js/utils/sos-engine.js?v=a988d9091c"></script>
 <script src="js/utils/player-value.js?v=192d4c74f1"></script>
@@ -3325,7 +3326,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
      every build/serve pipeline) so the browser does NOT parse/execute them at app
      boot. js/module-loader.js injects executable copies, in DOM order within each
      group, when the owning surface first calls wrLoadModuleGroup('<group>'). -->
-<script src="js/module-loader.js?v=fa2c63b653"></script>
+<script src="js/module-loader.js?v=08959b8260"></script>
 <script src="js/settings.js?v=50b9e414f0"></script>
 <script type="text/wr-deferred" data-wr-defer="trade" src="js/trade-calc.js?v=ac1a347614"></script>
 <script src="js/lab-cutdown.js?v=cd15d7635f"></script>
@@ -3451,7 +3452,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <!-- Group "empire": hub-level Empire Dashboard (Pro mode), loaded by app.js when
      Pro mode activates — also provides window.App.buildEmpireDna etc. -->
 <script type="text/wr-deferred" data-wr-defer="empire" src="js/tabs/global-view.js?v=85cf1209a9"></script>
-<script src="js/tutorial.js?v=ef60cb1d3b"></script>
+<script src="js/tutorial.js?v=05d94792b1"></script>
 <!-- 6. Strategy editor: calls shared GMStrategy API, no logic duplication.
      Only consumed by alex-insights' Strategy sub-view, so it rides the same
      "alex" lazy group — inert at boot, loaded on first GM's Office / Strategy open. -->
@@ -3528,7 +3529,7 @@ window.addEventListener('appinstalled', () => {
 <!-- Deploy tag (owner ask 2026-08-19): a tiny always-visible build code so the
      owner can read back exactly which version his device is running before
      testing — kills the stale-cache guessing game. Bump the code every deploy. -->
-<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b160 · LAB294</div>
+<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b160 · LAB295</div>
 </body>
 </html>
 <!-- build 1774212614 -->
