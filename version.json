@@ -1,7 +1,7 @@
 {
-  "build": "b160-c720af856f",
+  "build": "b160-f6a170817c",
   "tag": "b160",
-  "builtAt": "2026-10-19T13:33:52.795Z",
+  "builtAt": "2026-10-20T12:01:58.172Z",
   "critical": false,
   "notes": "",
   "commit": null,
@@ -177,7 +177,7 @@
       "js/tabs/global-view.js?v=85cf1209a9",
       "js/tutorial.js?v=ef60cb1d3b",
       "js/tabs/strategy-editor.js?v=d3f9750b0c",
-      "js/league-detail.js?v=a3ad0af8a0",
+      "js/league-detail.js?v=2419061d8f",
       "js/app.js?v=d03aab6a29",
       "js/shared/matchup-engine.js?v=12405259c4",
       "js/shared/dhq-baseline.js?v=12405259c4",
@@ -414,7 +414,7 @@
     "js/tabs/global-view.js": "85cf1209a9",
     "js/tutorial.js": "ef60cb1d3b",
     "js/tabs/strategy-editor.js": "d3f9750b0c",
-    "js/league-detail.js": "a3ad0af8a0",
+    "js/league-detail.js": "2419061d8f",
     "js/app.js": "d03aab6a29",
     "js/shared/matchup-engine.js": "1dfdeabe71",
     "js/shared/dhq-baseline.js": "90e71e8f9a",
@@ -465,9 +465,9 @@
     "reconai-shared/values-v2.js": "de14219501",
     "reconai-shared/weekly-proj.js": "354cdcf558",
     "reconai-shared/yahoo-api.js": "353efc2019",
-    "index.html": "f21913332a",
-    "landing.html": "4be4f02153",
-    "connect-sleeper.html": "11ee50326c",
-    "upgrade.html": "dd7c11682d"
+    "index.html": "48c8bb14a1",
+    "landing.html": "253bcbbaf7",
+    "connect-sleeper.html": "b8be4dc14d",
+    "upgrade.html": "82174c0b3d"
   }
 }
