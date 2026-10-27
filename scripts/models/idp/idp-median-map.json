@@ -1,0 +1,76 @@
+{
+ "name": "idp-median-map",
+ "formula": "typical = max(0, b0 + b_tackles*T + b_mid*M + R*(b_rare + b_rare_p*pBig)); T/M/R = the league's points from the expected line: T tackles (solo, assisted), M TFL + QB hits + passes defended, R big plays (sacks, INT, FF, FR, TD, safety, blocked kick, sack/return yards, 3+ PD bonus); pBig = 1 - exp(-(E sacks + E INT + E FF + E FR)), league-independent",
+ "fit": "median (quantile 0.5) regression of actual league points on T, M, R, R*pBig; every defender-week 2023-2025 (out-of-fold expected lines), standard and psycho scoring rows pooled",
+ "b0": -0.20200631765713176,
+ "b_tackles": 1.1025227449648174,
+ "b_mid": 0.8119443326530467,
+ "b_rare": -1.0383949895360505,
+ "b_rare_p": 3.2950262348741766,
+ "ratio": {
+  "td": 0.056261343012704176,
+  "sackyd": 6.726460958428415,
+  "intyd": 12.495243757431629,
+  "fryd": 4.410997204100652,
+  "sfty": 0.007341998214108542,
+  "blk": 0.002925472064810458
+ },
+ "groups": {
+  "tackles": [
+   "idp_tkl_solo",
+   "idp_tkl_ast"
+  ],
+  "mid": [
+   "idp_tkl_loss",
+   "idp_qb_hit",
+   "idp_pass_def"
+  ],
+  "rare": [
+   "idp_sack",
+   "idp_int",
+   "idp_ff",
+   "idp_fum_rec",
+   "idp_def_td",
+   "idp_safe",
+   "idp_blk_kick",
+   "idp_sack_yd",
+   "idp_int_ret_yd",
+   "idp_fum_ret_yd",
+   "idp_pass_def_3p"
+  ]
+ },
+ "scorings": {
+  "std": {
+   "idp_tkl_solo": 1,
+   "idp_tkl_ast": 0.5,
+   "idp_tkl_loss": 1,
+   "idp_sack": 2,
+   "idp_qb_hit": 1,
+   "idp_int": 3,
+   "idp_pass_def": 1,
+   "idp_ff": 2,
+   "idp_fum_rec": 2,
+   "idp_def_td": 6,
+   "idp_safe": 2,
+   "idp_blk_kick": 2
+  },
+  "psy": {
+   "idp_tkl_solo": 0.5,
+   "idp_tkl_ast": 0.25,
+   "idp_tkl_loss": 2,
+   "idp_sack": 5,
+   "idp_qb_hit": 1.25,
+   "idp_int": 5,
+   "idp_pass_def": 5,
+   "idp_ff": 3,
+   "idp_fum_rec": 3,
+   "idp_def_td": 6,
+   "idp_safe": 2,
+   "idp_blk_kick": 3,
+   "idp_sack_yd": 0.1,
+   "idp_int_ret_yd": 0.1,
+   "idp_fum_ret_yd": 0.1,
+   "idp_pass_def_3p": 1
+  }
+ }
+}
