@@ -45,8 +45,8 @@
     })();
     </script>
 
-    <meta name="dhq-build" content="b160-c69907d077">
-    <meta name="dhq-engine-v" content="53e2d2ecbf">
+    <meta name="dhq-build" content="b160-5f90ee5c16">
+    <meta name="dhq-engine-v" content="c14597f169">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, viewport-fit=cover">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://skjjcruz.github.io/DHQ-Web-Page/data/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://sxshiqyxhhifvtfqawbq.supabase.co https://hovnqztlbsgsywrbidbh.supabase.co https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com https://api.sleeper.app https://site.api.espn.com https://sports.core.api.espn.com https://api.myfantasyleague.com https://*.myfantasyleague.com https://lm-api-reads.fantasy.espn.com https://site.web.api.espn.com https://fantasysports.yahooapis.com https://api.fantasycalc.com https://*.sentry.io; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; object-src 'none';">
 
@@ -170,7 +170,7 @@
     <link rel="preload" as="script" href="vendor/supabase.min.js">
     <link rel="preload" as="script" href="vendor/react.production.min.js">
     <link rel="preload" as="script" href="vendor/react-dom.production.min.js">
-    <script src="js/shared/shared-loader.js?v=dc8a50912c"></script>
+    <script src="js/shared/shared-loader.js?v=d702265d2f"></script>
     <!-- Season-rollover cache hygiene — must run early, before any surface reads caches. -->
     <script src="js/shared/season-guard.js?v=5b705f54d8"></script>
     <!-- Native-shell external-link guard: outside links must never strand the WKWebView. -->
@@ -3256,14 +3256,14 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <script src="js/shared/player-news.js?v=b326e3c720"></script>
 <script src="js/shared/server-build.js?v=ba761c5b19"></script>
 <!-- Transition step 3 (Lab only, 2026-10-19): open a league with the engine server's build when it is fresh; else the device computes as before. -->
-<script src="js/shared/server-intel.js?v=f84b73fd62"></script>
+<script src="js/shared/server-intel.js?v=bdbe82937c"></script>
 <script src="js/shared/ask-tools.js?v=50e927a399"></script>
 <script src="js/shared/ask-tools-league.js?v=9d9b8dc352"></script>
 <script src="js/shared/ask-tools-players.js?v=e593de558b"></script>
 <script src="js/shared/ask-tools-roster.js?v=52d99b541a"></script>
 <script src="js/shared/ask-tools-moves.js?v=9941365158"></script>
 <script src="js/shared/ask-dhq.js?v=35c9b16181"></script>
-<script src="js/shared/dhq-proj.js?v=8d2a8412b8"></script>
+<script src="js/shared/dhq-proj.js?v=88defc68dc"></script>
 <script src="js/shared/nfl-context.js?v=f9baeb8de9"></script>
 <script src="js/shared/matchup.js?v=59ba9fb79a"></script>
 <!-- League live scores + standings engines (C2 port 2026-09-27): one shared Sleeper
@@ -3529,7 +3529,7 @@ window.addEventListener('appinstalled', () => {
 <!-- Deploy tag (owner ask 2026-08-19): a tiny always-visible build code so the
      owner can read back exactly which version his device is running before
      testing — kills the stale-cache guessing game. Bump the code every deploy. -->
-<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b160 · LAB296</div>
+<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b160 · LAB297</div>
 </body>
 </html>
 <!-- build 1774212614 -->
