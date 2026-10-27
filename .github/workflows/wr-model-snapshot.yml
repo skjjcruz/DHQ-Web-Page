@@ -1,5 +1,5 @@
-# Refreshes data/wr-model-snapshot.js (DHQ's own WR model: every active
-# receiver's typical game for the coming week, from free nflverse data)
+# Refreshes data/wr-model-snapshot.js (DHQ's own WR, RB and TE models: every
+# active player's typical game for the coming week, from free nflverse data)
 # four times a day and on demand. No Sleeper projection, no secrets.
 name: WR model snapshot
 
@@ -8,7 +8,7 @@ on:
     branches: [main]
     paths:
       - 'scripts/build-wr-model-snapshot.mjs'
-      - 'scripts/models/wr-median.json'
+      - 'scripts/models/**'
       - '.github/workflows/wr-model-snapshot.yml'
   schedule:
     - cron: '23 1,7,13,19 * * *'   # every six hours, UTC
