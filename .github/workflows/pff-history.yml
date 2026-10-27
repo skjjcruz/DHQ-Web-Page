@@ -29,9 +29,9 @@ jobs:
       - name: Pull
         env:
           PFF_API_KEY: ${{ secrets.PFF_API_KEY }}
-          MODE: probe
+          MODE: pull
         run: |
-          if [ "$MODE" = "probe" ]; then node scripts/pff-history.mjs probe; else node scripts/pff-history.mjs probe && node scripts/pff-history.mjs pull 2026 2025 2024; fi
+          if [ "$MODE" = "probe" ]; then node scripts/pff-history.mjs probe; else node scripts/pff-history.mjs probe && node scripts/pff-history.mjs pull 2025 2024 2026; fi
       - name: Commit to this branch
         run: |
           git config user.name "dhq-snapshot-bot"

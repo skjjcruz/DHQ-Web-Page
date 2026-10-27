@@ -66,7 +66,7 @@ async function probe() {
 async function pull(seasons) {
     const ok = JSON.parse(await (await import('node:fs/promises')).readFile(OUT + '/probe.json', 'utf8').catch(() => '{"reports":{}}'));
     const reps = Object.entries(ok.reports || {}).filter(([, r]) => r.week5 && r.week5.status === 200 && r.week5.rows > 0).map(([k]) => k);
-    const use = reps.length ? reps : ['passing', 'rushing', 'receiving', 'defense'];
+    const use = (reps.length ? reps : ['passing', 'rushing', 'receiving', 'defense']).filter(r => !['special-teams', 'field-goals'].includes(r));
     console.log('reports: ' + use.join(', '));
     await mkdir(OUT, { recursive: true });
     for (const season of seasons) {
