@@ -6,7 +6,7 @@
   "entitled": true,
   "entitlement_reason": null,
   "credential": "api_key",
-  "session_expires_at": null,
+  "session_expires_at": "2026-11-25T23:57:26.844Z",
   "installations": {
    "max": 2
   }
@@ -156,7 +156,7 @@
    "weeks1-4": {
     "status": 400,
     "rows": null,
-    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"17f8fed0-5364-462d-b47c-f00fbb95a10e\"}}"
+    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"b343fe36-bf33-4bee-9f4b-f9620f1e418e\"}}"
    },
    "week5grp": {
     "status": 200,
@@ -626,7 +626,7 @@
    "weeks1-4": {
     "status": 400,
     "rows": null,
-    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"ca38c89b-cfa0-4a42-8a6f-08772b230165\"}}"
+    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"7b9fa842-f0f4-46a7-8b4a-b00335b57260\"}}"
    },
    "week5grp": {
     "status": 200,
@@ -1786,7 +1786,7 @@
    "weeks1-4": {
     "status": 400,
     "rows": null,
-    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"eafcaf97-13fc-42ff-920c-530034154dee\"}}"
+    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"8bb88b91-6af7-4bb4-b16c-4be11096e593\"}}"
    },
    "week5grp": {
     "status": 200,
@@ -1814,7 +1814,7 @@
    "weeks1-4": {
     "status": 400,
     "rows": null,
-    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"1387d2c3-9e16-4624-92c3-2b21b40cde49\"}}"
+    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"f9bb23d4-327f-4de7-8d4c-9f018e3e3ddc\"}}"
    },
    "week5grp": {
     "status": 400,
@@ -1836,7 +1836,7 @@
    "weeks1-4": {
     "status": 400,
     "rows": null,
-    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"bf1ae82c-c2eb-4bef-bc34-b2e3cb3409d3\"}}"
+    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"d389581b-f376-4900-a5a5-b895395f3d25\"}}"
    },
    "week5grp": {
     "status": 400,
@@ -1858,7 +1858,7 @@
    "weeks1-4": {
     "status": 400,
     "rows": null,
-    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"45968fd0-bbb6-4fe7-8179-7c5250f11108\"}}"
+    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"8d434a69-dbf8-42b8-9617-283ef2d3f079\"}}"
    },
    "week5grp": {
     "status": 400,
@@ -2004,7 +2004,7 @@
    "weeks1-4": {
     "status": 400,
     "rows": null,
-    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"48769d3d-b12c-4543-a4bd-a85fb7264398\"}}"
+    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"2280a0ad-7b02-452b-8f4c-3dca70b8ba1c\"}}"
    },
    "week5grp": {
     "status": 200,
@@ -2156,7 +2156,7 @@
    "weeks1-4": {
     "status": 400,
     "rows": null,
-    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"7c242196-54ac-4ed4-9709-5a2c8672a201\"}}"
+    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"6a286318-1e38-43cc-aeba-063ea834776b\"}}"
    },
    "week5grp": {
     "status": 200,
@@ -2404,7 +2404,7 @@
    "weeks1-4": {
     "status": 400,
     "rows": null,
-    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"df09530d-31e3-4069-ab01-95e3aa9b6221\"}}"
+    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"7d72e1c7-867c-4afd-84ac-8d9afa10765e\"}}"
    },
    "week5grp": {
     "status": 200,
@@ -2432,7 +2432,7 @@
    "weeks1-4": {
     "status": 400,
     "rows": null,
-    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"f76fd0f7-dc3f-4e78-8787-51c40f44d03a\"}}"
+    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"2b67f2d5-ba8f-4165-a7ef-8402be9c16af\"}}"
    },
    "week5grp": {
     "status": 400,
@@ -2454,7 +2454,7 @@
    "weeks1-4": {
     "status": 400,
     "rows": null,
-    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"b3bb8e90-0e11-44d9-8279-a6f7b910e650\"}}"
+    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"33d84f58-5e6c-4297-9997-e05f5ac54fca\"}}"
    },
    "week5grp": {
     "status": 400,
@@ -2476,7 +2476,7 @@
    "weeks1-4": {
     "status": 400,
     "rows": null,
-    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"805c2de3-ef8f-43e8-9384-3101840c4ac5\"}}"
+    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"9713a3c2-d232-4ade-9997-585b20d93e8a\"}}"
    },
    "week5grp": {
     "status": 400,
@@ -2498,7 +2498,7 @@
    "weeks1-4": {
     "status": 400,
     "rows": null,
-    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"2cf5380b-534d-467c-97fd-d41161671ae8\"}}"
+    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"e2362006-176a-4259-8ae9-faac0f3d94a2\"}}"
    },
    "week5grp": {
     "status": 400,
@@ -2520,7 +2520,7 @@
    "weeks1-4": {
     "status": 400,
     "rows": null,
-    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"8f777703-e071-4442-98de-ab388f5a3bc3\"}}"
+    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"f030b2dd-e902-4b23-84c3-1320d503bfdc\"}}"
    },
    "week5grp": {
     "status": 400,
@@ -2658,7 +2658,7 @@
    "weeks1-4": {
     "status": 400,
     "rows": null,
-    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"6b61937f-f4f2-42a9-90f1-d099c6517f72\"}}"
+    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"f10ef33c-a6ca-4ba9-9c50-968d080da1fd\"}}"
    },
    "week5grp": {
     "status": 200,
@@ -2780,7 +2780,7 @@
    "weeks1-4": {
     "status": 400,
     "rows": null,
-    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"1d0cd3d2-c735-49c4-91df-0100795663a8\"}}"
+    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"4beaa4cb-ddcd-42bf-bd0c-6e58c2c5560c\"}}"
    },
    "week5grp": {
     "status": 200,
@@ -2942,7 +2942,7 @@
    "weeks1-4": {
     "status": 400,
     "rows": null,
-    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"a18be45b-a959-4c79-9bef-ff59332e04e3\"}}"
+    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"0d7a491b-46d1-4ce4-a597-93b0f9595d99\"}}"
    },
    "week5grp": {
     "status": 200,
@@ -3126,7 +3126,7 @@
    "weeks1-4": {
     "status": 400,
     "rows": null,
-    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"ab50b7c0-0a71-4256-996b-80c82ae4e512\"}}"
+    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"47a173e2-d748-4d32-bcdf-941af95ca0d2\"}}"
    },
    "week5grp": {
     "status": 200,
@@ -3154,7 +3154,7 @@
    "weeks1-4": {
     "status": 400,
     "rows": null,
-    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"43191cc8-0f92-4adf-b33a-5751cce373e3\"}}"
+    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"b8576181-4bc8-47c1-9c11-02fad9e688ff\"}}"
    },
    "week5grp": {
     "status": 400,
@@ -3252,7 +3252,7 @@
    "weeks1-4": {
     "status": 400,
     "rows": null,
-    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"0a23a9db-b617-4225-ac94-28f2b2a30535\"}}"
+    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"c7447793-3bda-47b6-acea-6b312ec2d7ed\"}}"
    },
    "week5grp": {
     "status": 200,
@@ -3280,7 +3280,7 @@
    "weeks1-4": {
     "status": 400,
     "rows": null,
-    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"d934a809-986e-41f8-af6f-f8dcb8f09a52\"}}"
+    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"0e307a9e-1918-4b7a-804d-7abaa6b3249a\"}}"
    },
    "week5grp": {
     "status": 400,
@@ -3406,7 +3406,7 @@
    "weeks1-4": {
     "status": 400,
     "rows": null,
-    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"5657043a-e591-4709-8637-51fc2afd5521\"}}"
+    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"f76ce1b2-89a8-4778-a943-fcf818cda4a7\"}}"
    },
    "week5grp": {
     "status": 200,
@@ -3434,7 +3434,7 @@
    "weeks1-4": {
     "status": 400,
     "rows": null,
-    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"47f64279-94cd-43b1-9da5-f38e0c0700c2\"}}"
+    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"fefe4348-27fc-4733-953b-496289f063fa\"}}"
    },
    "week5grp": {
     "status": 400,
@@ -3456,7 +3456,7 @@
    "weeks1-4": {
     "status": 400,
     "rows": null,
-    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"51ddeb1e-5caa-4be3-8765-edb040eb79e7\"}}"
+    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"d1b61a41-c52d-4029-a60d-da14be0d4ab1\"}}"
    },
    "week5grp": {
     "status": 400,
@@ -3558,7 +3558,7 @@
    "weeks1-4": {
     "status": 400,
     "rows": null,
-    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"2cf079ca-1f8c-4197-8b3a-72378957057f\"}}"
+    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"0bbf71f1-c325-4ff2-b389-fa603bad46a7\"}}"
    },
    "week5grp": {
     "status": 200,
@@ -3674,7 +3674,7 @@
    "weeks1-4": {
     "status": 400,
     "rows": null,
-    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"47123124-fe1c-4791-981b-2dd27192e60f\"}}"
+    "err": "{\"error\":{\"code\":\"invalid_parameter\",\"message\":\"Invalid week \\\"1,2,3,4\\\" — expected one week id\",\"request_id\":\"a3ddd54d-43fa-49f5-bc53-fa97b06f6522\"}}"
    },
    "week5grp": {
     "status": 200,
