@@ -1,0 +1,68 @@
+# Refreshes data/wr-model-snapshot.js (DHQ's own WR model: every active
+# receiver's typical game for the coming week, from free nflverse data)
+# four times a day and on demand. No Sleeper projection, no secrets.
+name: WR model snapshot
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/build-wr-model-snapshot.mjs'
+      - 'scripts/models/wr-median.json'
+      - '.github/workflows/wr-model-snapshot.yml'
+  schedule:
+    - cron: '23 1,7,13,19 * * *'   # every six hours, UTC
+  workflow_dispatch:
+    inputs:
+      season:
+        description: 'Season (four-digit year). Leave blank for the current season.'
+        required: false
+      week:
+        description: 'Week. Leave blank for the week of the next unplayed game.'
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wr-model-snapshot
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build the snapshot
+        run: node scripts/build-wr-model-snapshot.mjs ${{ github.event.inputs.season }} ${{ github.event.inputs.week }}
+      - name: Commit if changed
+        # The branch can move while the build runs (a merge, or another
+        # snapshot job), so: keep the fresh build aside, sync to the latest
+        # commit, lay the build back down, and push; up to three tries.
+        run: |
+          if [ ! -f data/wr-model-snapshot.js ]; then echo "No snapshot built (no game to project)."; exit 0; fi
+          git config user.name "dhq-snapshot-bot"
+          git config user.email "noreply@dhqfootball.com"
+          cp data/wr-model-snapshot.js /tmp/fresh-snapshot.js
+          BRANCH="${{ github.ref_name }}"
+          for attempt in 1 2 3; do
+            git fetch origin "$BRANCH"
+            git reset --hard "origin/$BRANCH"
+            cp /tmp/fresh-snapshot.js data/wr-model-snapshot.js
+            git add data/wr-model-snapshot.js
+            if git diff --cached --quiet; then
+              echo "Snapshot unchanged, nothing to commit."
+              exit 0
+            fi
+            git commit -m "WR model snapshot $(date -u '+%Y-%m-%d %H:%M UTC')"
+            if git push origin "HEAD:$BRANCH"; then
+              exit 0
+            fi
+            echo "Push rejected (attempt $attempt), the branch moved; syncing and trying again."
+            sleep $((attempt * 5))
+          done
+          echo "::error::Could not push the snapshot after three tries."
+          exit 1
