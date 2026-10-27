@@ -52,6 +52,7 @@
         ctx: null, ctxKey: null,
         error: null,
         data: {},            // snapshot src → { ok, built?, why? } (see checkData)
+        served: 0,           // results taken from the engine server's build (Phase A3)
     };
 
     // ── plumbing ──────────────────────────────────────────────────────
@@ -197,6 +198,26 @@
     function notify() {
         try { root.dispatchEvent(new CustomEvent('wr:proj-updated', { detail: { source: 'dhq', week: week() } })); } catch (e) { /* no window */ }
     }
+    // This week's engine context for the league (st.ctx), built once per
+    // league and week. run() projects on it; later weeks borrow its form
+    // (the completed weeks), so projectWeek prepares it too when this week's
+    // numbers came from the server and run() never had to (Phase A3).
+    async function prepareWeek(at, yr, shared) {
+        // every player's recent weeks in this league's scoring, like the lab page builds them
+        if (!shared.wpp[at.lg.id] && App.calcRawPts) {
+            const wpp = {};
+            shared.weekly.forEach(({ week: w, rows }) => { const m = wpp[w] = {}; Object.keys(rows).forEach(pid => { if (pid.indexOf('TEAM_') !== 0 && rows[pid]) m[pid] = +App.calcRawPts(rows[pid], at.lg.scoring).toFixed(2); }); });
+            shared.wpp[at.lg.id] = wpp;
+        }
+        const opts = { playersData: shared.players, statsData: shared.statsCur, priorData: shared.statsPrior, scoring: at.lg.scoring, season: yr, baselineMode: 'dhq', weeklyPoints: shared.wpp[at.lg.id] || null };
+        if (st.ctxKey !== at.key) {
+            checkData(yr);
+            const teams = [...new Set(Object.values(shared.players).map(p => p && p.team).filter(Boolean))];
+            const ctx = await App.MatchupInputs.prepare(teams, at.wk, opts);
+            if (st.key === at.key) { st.ctx = ctx; st.ctxKey = at.key; }
+        }
+        return opts;
+    }
     async function run() {
         if (st.running) return;
         st.running = true;
@@ -208,19 +229,7 @@
                 const yr = season();
                 const shared = await sharedFor(yr, at.wk);
                 const MI = App.MatchupInputs;
-                // every player's recent weeks in this league's scoring, like the lab page builds them
-                if (!shared.wpp[at.lg.id] && App.calcRawPts) {
-                    const wpp = {};
-                    shared.weekly.forEach(({ week: w, rows }) => { const m = wpp[w] = {}; Object.keys(rows).forEach(pid => { if (pid.indexOf('TEAM_') !== 0 && rows[pid]) m[pid] = +App.calcRawPts(rows[pid], at.lg.scoring).toFixed(2); }); });
-                    shared.wpp[at.lg.id] = wpp;
-                }
-                const opts = { playersData: shared.players, statsData: shared.statsCur, priorData: shared.statsPrior, scoring: at.lg.scoring, season: yr, baselineMode: 'dhq', weeklyPoints: shared.wpp[at.lg.id] || null };
-                if (st.ctxKey !== at.key) {
-                    checkData(yr);
-                    const teams = [...new Set(Object.values(shared.players).map(p => p && p.team).filter(Boolean))];
-                    st.ctx = await MI.prepare(teams, at.wk, opts);
-                    st.ctxKey = at.key;
-                }
+                const opts = await prepareWeek(at, yr, shared);
                 const now = resetIfMoved(); if (!now || now.key !== at.key) continue;   // league or week changed while preparing
                 const batch = [...st.queue].slice(0, CHUNK);
                 batch.forEach(pid => st.queue.delete(pid));
@@ -260,16 +269,63 @@
         const g = App.MatchupInputs ? App.MatchupInputs.posGroup(p) : String((App.normPos && App.normPos(p.position)) || p.position || '').toUpperCase();
         return !!POS_OK[g] || !!POS_OK[({ DE: 'DL', DT: 'DL', NT: 'DL', CB: 'DB', S: 'DB', SS: 'DB', FS: 'DB', OLB: 'LB', ILB: 'LB', MLB: 'LB' })[String(p.position || '').toUpperCase()]];
     }
+    // ── The engine server's numbers (Phase A3, 2026-10-27) ────────────
+    // The server builds this week's DHQ projections with this same code
+    // (server/engine/dhq-proj.js) for every rostered player and everyone
+    // Sleeper projects, so the AI tools and the app read one number. When
+    // this page runs the same projection model (<meta name="dhq-proj-model">,
+    // stamped by the build, equals the server build's) for this league and
+    // week, a player's result comes from the server instead of being
+    // computed here, with nothing downloaded. A player whose injury tag has
+    // changed since the build is computed here as before. The truth law
+    // (gated) and game locks still apply live, on top of either.
+    function pageModel() {
+        try {
+            const m = root.document && root.document.querySelector && root.document.querySelector('meta[name="dhq-proj-model"]');
+            return (m && m.content) || null;
+        } catch (e) { return null; }
+    }
+    function served() {
+        const sp = App.ServerProj, lg = league(), wk = week();
+        if (!sp || !sp.app || !lg || !wk || String(sp.leagueId) !== lg.id || Number(sp.week) !== wk) return null;
+        const pm = pageModel();
+        return pm && sp.app.model === pm ? sp : null;
+    }
+    // undefined: compute here; null: DHQ has no number for him; else his result.
+    function fromServer(pid) {
+        const sp = served();
+        if (!sp) return undefined;
+        const live = String(((S().players || {})[pid] || {}).injury_status || '');
+        if (live !== String((sp.app.inj || {})[pid] || '')) return undefined;
+        const r = (sp.app.results || {})[pid];
+        if (r) { st.served++; return Object.assign({}, r); }
+        if ((sp.app.none || []).indexOf(pid) >= 0) { st.served++; return null; }
+        return undefined;
+    }
+    let notifyTimer = null;
+    function notifySoon() { if (notifyTimer) return; notifyTimer = setTimeout(() => { notifyTimer = null; notify(); }, 0); }
+    // The server's projections just arrived (server-intel.js): anyone still
+    // waiting in the queue takes the server's number instead.
+    function adoptServer() {
+        if (!resetIfMoved() || !served()) return 0;
+        let n = 0;
+        [...st.queue].forEach(pid => { const r = fromServer(pid); if (r !== undefined) { st.queue.delete(pid); st.results[pid] = r; n++; } });
+        if (n) notifySoon();
+        return n;
+    }
     function request(pids) {
         if (!resetIfMoved()) return;
-        let added = false;
+        let added = false, fromSrv = false;
         (pids || []).forEach(pid => {
             pid = String(pid || '');
             if (!pid || pid in st.results || st.queue.has(pid)) return;
             if (!eligible(pid)) { st.results[pid] = null; return; }
+            const sv = fromServer(pid);
+            if (sv !== undefined) { st.results[pid] = sv; fromSrv = true; return; }
             st.queue.add(pid); added = true;
         });
         if (added) kick();
+        if (fromSrv) notifySoon();
     }
     // ── Truth law: if it's not in Sleeper, it's not there ─────────────
     // Once Sleeper has published this week's projections, a player it gives
@@ -313,7 +369,7 @@
         if (!resetIfMoved() || !pid) return null;
         if (pid in st.results) return gated(pid, st.results[pid]);
         request([pid]);
-        return null;
+        return pid in st.results ? gated(pid, st.results[pid]) : null;   // the server's number, when it had one
     }
     // A player's shown number is his typical week; every choice (lineups,
     // sorts, swaps, THE CALL) and every total uses his average week.
@@ -573,7 +629,40 @@
         }
         return shared.wpp[lg.id] || null;
     }
+    // Later weeks from the engine server's build (Phase A3, 2026-10-27):
+    // dhq-league?part=later, the same projectWeek run on the server for
+    // every rostered player through the regular season, at most 12 hours
+    // old. Used while the page runs the same projection model for this
+    // league and current week; a player missing from it, or whose injury tag
+    // has changed since, is projected here as before.
+    async function laterServed(lg, cur) {
+        const pm = pageModel(), SI = App.ServerIntel;
+        if (!pm || !SI || !SI.later) return null;
+        let sl = null;
+        try { sl = await SI.later(lg.id); } catch (e) { return null; }
+        if (!sl || !sl.weeks || sl.model !== pm || String(sl.league_id) !== lg.id || Number(sl.cur) !== Number(cur)) return null;
+        return Date.now() - Date.parse(sl.built_at) < 24 * 60 * 60 * 1000 ? sl : null;
+    }
     async function projectWeek(pids, wk) {
+        const lg = league(), cur = week();
+        wk = Number(wk);
+        if (!lg || !cur || !(wk > cur)) return {};
+        const sl = await laterServed(lg, cur);
+        const m = sl && sl.weeks[wk];
+        if (!m) return projectWeekHere(pids, wk);
+        const out = {}, miss = [];
+        for (const pid0 of (pids || [])) {
+            const pid = String(pid0 || '');
+            if (!pid) continue;
+            const live = String(((S().players || {})[pid] || {}).injury_status || '');
+            if (!(pid in m) || live !== String((sl.inj || {})[pid] || '')) { miss.push(pid); continue; }
+            const v = m[pid];
+            out[pid] = v ? { median: v[0], mean: v[1], floor: v[2], ceiling: v[3], why: v[4] } : null;
+        }
+        if (miss.length) Object.assign(out, await projectWeekHere(miss, wk));
+        return out;
+    }
+    async function projectWeekHere(pids, wk) {
         const lg = league(), cur = week();
         wk = Number(wk);
         if (!lg || !cur || !(wk > cur)) return {};
@@ -587,6 +676,8 @@
         if (!W.ready) {
             W.ready = (async () => {
                 const shared = await sharedFor(yr, cur);
+                const at = resetIfMoved();
+                if (at && at.key === k) await prepareWeek(at, yr, shared);   // the form later weeks borrow
                 const players = {};
                 const LONG = /^(IR|PUP|SUS|NFI|COV|NA|INJURED RESERVE|SUSPENDED)/i;
                 Object.keys(shared.players).forEach(pid => {
@@ -863,7 +954,7 @@
         root.addEventListener && root.addEventListener('wr:proj-updated', (e) => { if (!(e && e.detail && e.detail.source === 'dhq')) { loadPlatform(); setTimeout(warmLeague, 500); } });
     }
 
-    App.DhqProj = App.DhqProj || { get, fmt, sum, totalNum, stamp, week, teamDist, weekDists, rosterDists, optimalFor, matchup, lineupCheck, projectWeek, futureMatchup, seasonDists, slotList, assignSlots, hungarian, posList, provLabel, loadPlatform, request, warmLeague, avgOf, ptsOf, dataStatus, cols: COLS, _checkData: checkData, _loadDeps: loadDeps, _st: st, VERSION };
+    App.DhqProj = App.DhqProj || { get, fmt, sum, totalNum, stamp, week, teamDist, weekDists, rosterDists, optimalFor, matchup, lineupCheck, projectWeek, futureMatchup, seasonDists, slotList, assignSlots, hungarian, posList, provLabel, loadPlatform, request, warmLeague, avgOf, ptsOf, dataStatus, adoptServer, served, cols: COLS, _checkData: checkData, _loadDeps: loadDeps, _st: st, VERSION };
     if (typeof document !== 'undefined') boot();
     /* global module */
     if (typeof module !== 'undefined' && module.exports) module.exports = App.DhqProj;
