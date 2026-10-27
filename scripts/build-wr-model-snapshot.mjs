@@ -186,12 +186,15 @@ async function main() {
         INJ[r.gsis_id] = { st, pr, rest };
     }
     // ── who is active: the 53-man roster (ACT/INA) minus Out/Doubtful. Rosters
-    // are published per week; before this week's is out, the latest one stands.
-    const RO = readCSV(F.roster, ['season', 'week', 'game_type', 'team', 'gsis_id', 'position', 'status']).filter(r => r.game_type === 'REG' && +r.season === Y);
-    const rWeeks = [...new Set(RO.map(r => +r.week))].filter(w => w <= W);
-    const rW = rWeeks.length ? Math.max(...rWeeks) : null;
+    // are published per week and list only the teams that played it, so each
+    // team's own latest roster at or before this week stands (a team coming
+    // off its bye was missing whole: BUF, JAX, WAS and LAC in week 8 2026).
+    const RO = readCSV(F.roster, ['season', 'week', 'game_type', 'team', 'gsis_id', 'position', 'status']).filter(r => r.game_type === 'REG' && +r.season === Y && +r.week <= W);
+    const teamWeek = {};
+    for (const r of RO) { const t = fx(r.team); teamWeek[t] = Math.max(teamWeek[t] || 0, +r.week); }
+    const rW = Object.keys(teamWeek).length ? Math.max(...Object.values(teamWeek)) : null;
     if (rW == null) throw new Error('no weekly roster for season ' + Y + ' at or before week ' + W);
-    const ACTIVE = RO.filter(r => +r.week === rW && (r.status === 'ACT' || r.status === 'INA') && r.gsis_id && ['WR', 'TE', 'RB', 'FB'].includes(r.position))
+    const ACTIVE = RO.filter(r => +r.week === teamWeek[fx(r.team)] && (r.status === 'ACT' || r.status === 'INA') && r.gsis_id && ['WR', 'TE', 'RB', 'FB'].includes(r.position))
         .filter(r => !((INJ[r.gsis_id] || {}).st >= 2))
         .map(r => ({ g: r.gsis_id, team: fx(r.team), pos: r.position === 'FB' ? 'RB' : r.position }));
     const byTeam = {};
