@@ -31,6 +31,7 @@ R('js/shared/startsit-engine.js'); R('js/shared/weekly-proj.js'); R('js/utils/so
 R('js/shared/matchup-engine.js'); R('js/shared/dhq-baseline.js'); R('js/shared/matchup-feeds-espn.js'); R('js/shared/matchup-inputs.js');
 globalThis.DhqPffMatchup = R('data/pff-matchup-snapshot.js');
 globalThis.DhqUsage = R('data/usage-snapshot.js');
+try { globalThis.DhqWrModel = R('data/wr-model-snapshot.js'); } catch (e) { globalThis.DhqWrModel = null; }   // DHQ WR model (optional)
 
 const UA = { headers: { 'User-Agent': 'curl/8.5.0', Accept: 'application/json' } };
 async function J(u, tries = 3) { for (let i = 1; i <= tries; i++) { try { const r = await fetch(u, UA); if (r.status === 404) return null; if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + u); return await r.json(); } catch (e) { if (i === tries) throw e; await new Promise(res => setTimeout(res, 800 * i)); } } }
