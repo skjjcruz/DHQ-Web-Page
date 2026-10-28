@@ -133,6 +133,20 @@ async function main() {
                 written++;
             }
         }
+        // Team defenses (DHQ D/ST model, MatchupInputs.dstFor), in the scorings that score them
+        if (Object.keys(sc.scoring || {}).some(k => /^pts_allow|^yds_allow|^def_td$|^sack$/.test(k) && Number(sc.scoring[k]))) {
+            for (const [pid, pl] of Object.entries(players)) {
+                if (!pl || String(pl.position || '').toUpperCase() !== 'DEF' || !pl.team) continue;
+                const T = String(pl.team).toUpperCase();
+                const prev = existing && !existing.reconstructed && existing.scorings[key] && existing.scorings[key].players[pid];
+                if (prev && started[T] && existing.players[pid]) { rows[pid] = prev; if (!out.players[pid]) out.players[pid] = existing.players[pid]; continue; }
+                const d = App.MatchupInputs.dstFor ? App.MatchupInputs.dstFor(pl, week, season, sc.scoring) : null;
+                if (!d) continue;
+                const sl = App.WeeklyProj.projLine(pid, week);
+                rows[pid] = [+d.typical.toFixed(2), sl ? +App.calcRawPts(sl, sc.scoring).toFixed(2) : null, +d.average.toFixed(2), +d.typical.toFixed(2)];
+                if (!out.players[pid]) out.players[pid] = { pos: 'DEF', team: T, opp: d.opp || null, why: 'DHQ D/ST model vs ' + d.opp + ': ' + (d.line.sack || 0).toFixed(1) + ' sacks, ' + ((d.line.int || 0) + (d.line.fum_rec || 0)).toFixed(1) + ' takeaways, ' + (d.line.pts_allow || 0).toFixed(0) + ' points allowed expected', t: now.toISOString() };
+            }
+        }
         out.scorings[key] = { name: sc.name, scoring: sc.scoring, players: rows };
         console.log('  ' + key + ' (' + sc.name + '): ' + Object.keys(rows).length + ' players');
     }
