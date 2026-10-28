@@ -45,7 +45,7 @@
     })();
     </script>
 
-    <meta name="dhq-build" content="b160-188389d151">
+    <meta name="dhq-build" content="b160-2ff4e3ebeb">
     <meta name="dhq-engine-v" content="ecd492cb95">
     <meta name="dhq-proj-model" content="1c46a0c3e1f4">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, viewport-fit=cover">
@@ -171,7 +171,7 @@
     <link rel="preload" as="script" href="vendor/supabase.min.js">
     <link rel="preload" as="script" href="vendor/react.production.min.js">
     <link rel="preload" as="script" href="vendor/react-dom.production.min.js">
-    <script src="js/shared/shared-loader.js?v=f63bda16b2"></script>
+    <script src="js/shared/shared-loader.js?v=4aa8d9966e"></script>
     <!-- Season-rollover cache hygiene — must run early, before any surface reads caches. -->
     <script src="js/shared/season-guard.js?v=5b705f54d8"></script>
     <!-- Native-shell external-link guard: outside links must never strand the WKWebView. -->
@@ -243,6 +243,7 @@ const WR_SHARED_FILES = [
   'one-brain.js',
   'intent-reads.js',
   'dhq-engine.js',
+  'dhq-engine-values.js',
   'nfl-fit.js',
   'nfl-roles.js',
   'team-assess.js',
@@ -3530,7 +3531,7 @@ window.addEventListener('appinstalled', () => {
 <!-- Deploy tag (owner ask 2026-08-19): a tiny always-visible build code so the
      owner can read back exactly which version his device is running before
      testing — kills the stale-cache guessing game. Bump the code every deploy. -->
-<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b160 · LAB312</div>
+<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b160 · LAB313</div>
 </body>
 </html>
 <!-- build 1774212614 -->
