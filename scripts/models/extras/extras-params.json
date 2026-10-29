@@ -1,0 +1,394 @@
+{
+ "fit": "2016-2024 nflverse (REG)",
+ "rates": {
+  "catch": {
+   "num": "rec",
+   "den": "rec_tgt",
+   "K": 160,
+   "K2": 160,
+   "norm": {
+    "QB": 0.75281,
+    "RB": 0.76506,
+    "WR": 0.62395,
+    "TE": 0.68373
+   }
+  },
+  "ypt": {
+   "num": "rec_yd",
+   "den": "rec_tgt",
+   "K": 160,
+   "K2": 160,
+   "norm": {
+    "QB": 2.2809,
+    "RB": 5.88851,
+    "WR": 7.93029,
+    "TE": 7.31745
+   }
+  },
+  "ypc": {
+   "num": "rush_yd",
+   "den": "rush_att",
+   "K": 160,
+   "K2": 160,
+   "norm": {
+    "QB": 4.31678,
+    "RB": 4.2574,
+    "WR": 5.88699,
+    "TE": 4.84414
+   }
+  },
+  "ypa": {
+   "num": "pass_yd",
+   "den": "pass_att",
+   "K": 320,
+   "K2": 640,
+   "norm": {
+    "QB": 7.13496,
+    "RB": 5.66,
+    "WR": 10.75635,
+    "TE": 7.74359
+   }
+  },
+  "cmp": {
+   "num": "pass_cmp",
+   "den": "pass_att",
+   "K": 640,
+   "K2": 640,
+   "norm": {
+    "QB": 0.64186,
+    "RB": 0.52,
+    "WR": 0.51269,
+    "TE": 0.62821
+   }
+  },
+  "recfd": {
+   "num": "rec_fd",
+   "den": "rec",
+   "K": 80,
+   "K2": 160,
+   "norm": {
+    "QB": 0.13433,
+    "RB": 0.30977,
+    "WR": 0.53432,
+    "TE": 0.46732
+   }
+  },
+  "rushfd": {
+   "num": "rush_fd",
+   "den": "rush_att",
+   "K": 320,
+   "K2": 640,
+   "norm": {
+    "QB": 0.2893,
+    "RB": 0.18982,
+    "WR": 0.26976,
+    "TE": 0.32253
+   }
+  },
+  "passfd": {
+   "num": "pass_fd",
+   "den": "pass_cmp",
+   "K": 320,
+   "K2": 320,
+   "norm": {
+    "QB": 0.46833,
+    "RB": 0.26923,
+    "WR": 0.49505,
+    "TE": 0.52041
+   }
+  },
+  "sack": {
+   "num": "pass_sack",
+   "den": "pass_att",
+   "K": 320,
+   "K2": 320,
+   "norm": {
+    "QB": 0.06932,
+    "RB": 0.18,
+    "WR": 0.13198,
+    "TE": 0.09936
+   }
+  },
+  "int": {
+   "num": "pass_int",
+   "den": "pass_att",
+   "K": 640,
+   "K2": 1280,
+   "norm": {
+    "QB": 0.02297,
+    "RB": 0.12,
+    "WR": 0.06091,
+    "TE": 0.03526
+   }
+  },
+  "rec40": {
+   "num": "rec_40p",
+   "den": "rec",
+   "K": 160,
+   "K2": 160,
+   "norm": {
+    "QB": 0.0,
+    "RB": 0.00779,
+    "WR": 0.0347,
+    "TE": 0.01158
+   }
+  },
+  "rush40": {
+   "num": "rush_40p",
+   "den": "rush_att",
+   "K": 640,
+   "K2": 640,
+   "norm": {
+    "QB": 0.00229,
+    "RB": 0.0048,
+    "WR": 0.00924,
+    "TE": 0.00926
+   }
+  },
+  "pass40": {
+   "num": "pass_cmp_40p",
+   "den": "pass_cmp",
+   "K": 640,
+   "K2": 1280,
+   "norm": {
+    "QB": 0.02346,
+    "RB": 0.03846,
+    "WR": 0.10891,
+    "TE": 0.03571
+   }
+  },
+  "rec10": {
+   "num": "rec_10p",
+   "den": "rec",
+   "K": 80,
+   "K2": 80,
+   "norm": {
+    "QB": 0.19403,
+    "RB": 0.28281,
+    "WR": 0.51268,
+    "TE": 0.43733
+   }
+  },
+  "rec20": {
+   "num": "rec_20p",
+   "den": "rec",
+   "K": 80,
+   "K2": 160,
+   "norm": {
+    "QB": 0.02985,
+    "RB": 0.06511,
+    "WR": 0.17454,
+    "TE": 0.12709
+   }
+  },
+  "fum": {
+   "num": "fum",
+   "den": "opps",
+   "K": 640,
+   "K2": 1280,
+   "norm": {
+    "QB": 0.01364,
+    "RB": 0.00891,
+    "TE": 0.01212,
+    "WR": 0.01711
+   }
+  },
+  "kr_ypr": {
+   "num": "kr_yd",
+   "den": "kr",
+   "K": 20,
+   "K2": 20,
+   "norm": "league"
+  },
+  "pr_ypr": {
+   "num": "pr_yd",
+   "den": "pr",
+   "K": 80,
+   "K2": 80,
+   "norm": "league"
+  }
+ },
+ "vol": {
+  "rec_tgt": {
+   "K": 2,
+   "K2": 4,
+   "norm": {
+    "QB": 0.016,
+    "RB": 2.124,
+    "WR": 4.385,
+    "TE": 3.166
+   }
+  },
+  "rush_att": {
+   "K": 2,
+   "K2": 4,
+   "norm": {
+    "QB": 3.187,
+    "RB": 7.176,
+    "WR": 0.174,
+    "TE": 0.062
+   }
+  },
+  "pass_att": {
+   "K": 2,
+   "K2": 4,
+   "norm": {
+    "QB": 28.761,
+    "RB": 0.003,
+    "WR": 0.009,
+    "TE": 0.03
+   }
+  }
+ },
+ "const": {
+  "pos": {
+   "QB": {
+    "rec_td40": 0.0,
+    "rec_td50": 0.0,
+    "rush_td40": 0.3415,
+    "rush_td50": 0.1707
+   },
+   "RB": {
+    "rec_td40": 0.3224,
+    "rec_td50": 0.2459,
+    "rush_td40": 0.4357,
+    "rush_td50": 0.3092
+   },
+   "WR": {
+    "rec_td40": 0.3914,
+    "rec_td50": 0.2401,
+    "rush_td40": 0.5,
+    "rush_td50": 0.3235
+   },
+   "TE": {
+    "rec_td40": 0.2814,
+    "rec_td50": 0.1711,
+    "rush_td40": 0.5,
+    "rush_td50": 0.3333
+   }
+  },
+  "pass_td40": 0.3744,
+  "pass_td50": 0.2329,
+  "pick6": 0.0906,
+  "ret_td": 0.00748,
+  "f0_4": {
+   "RB": 0.465,
+   "WR": 0.312,
+   "TE": 0.323,
+   "QB": 0.4
+  },
+  "f20_29": {
+   "RB": 0.75,
+   "WR": 0.742,
+   "TE": 0.798,
+   "QB": 0.75
+  }
+ },
+ "logit": {
+  "bonus_rec_yd_100": [
+   -13.8025,
+   2.9453
+  ],
+  "bonus_rec_yd_200": [
+   -24.5636,
+   4.5345
+  ],
+  "bonus_rush_yd_100": [
+   -11.4018,
+   2.3766
+  ],
+  "bonus_rush_yd_200": [
+   -21.9328,
+   3.9703
+  ],
+  "bonus_rush_rec_yd_100": [
+   -13.2043,
+   2.8166
+  ],
+  "bonus_rush_rec_yd_200": [
+   -24.1037,
+   4.4273
+  ],
+  "bonus_pass_yd_300": [
+   -18.8479,
+   3.2067
+  ],
+  "bonus_pass_yd_400": [
+   -30.0416,
+   4.7947
+  ],
+  "bonus_pass_cmp_25": [
+   -10.9149,
+   3.2982
+  ],
+  "bonus_rush_att_20": [
+   -9.181,
+   2.9508
+  ]
+ },
+ "groups": {
+  "steady": [
+   "rec_fd",
+   "rush_fd",
+   "pass_fd",
+   "bonus_fd_qb",
+   "bonus_fd_rb",
+   "bonus_fd_wr",
+   "bonus_fd_te",
+   "bonus_rec_rb",
+   "bonus_rec_wr",
+   "pass_inc",
+   "pass_sack",
+   "kr_yd",
+   "pr_yd",
+   "rec_0_4",
+   "rec_5_9",
+   "rec_10_19",
+   "rec_20_29",
+   "rec_30_39"
+  ],
+  "rare": [
+   "bonus_rec_yd_100",
+   "bonus_rec_yd_200",
+   "bonus_rush_yd_100",
+   "bonus_rush_yd_200",
+   "bonus_rush_rec_yd_100",
+   "bonus_rush_rec_yd_200",
+   "bonus_pass_yd_300",
+   "bonus_pass_yd_400",
+   "bonus_pass_cmp_25",
+   "bonus_rush_att_20",
+   "rec_40p",
+   "rush_40p",
+   "pass_cmp_40p",
+   "rec_td_40p",
+   "rec_td_50p",
+   "rush_td_40p",
+   "rush_td_50p",
+   "pass_td_40p",
+   "pass_td_50p",
+   "st_td"
+  ],
+  "neg": [
+   "fum",
+   "pass_int_td"
+  ]
+ },
+ "typical": {
+  "steady": 1,
+  "rare": 1,
+  "neg": 0
+ },
+ "bonus_mu": {
+  "bonus_rec_yd_100": "mu_rec_yd",
+  "bonus_rec_yd_200": "mu_rec_yd",
+  "bonus_rush_yd_100": "mu_rush_yd",
+  "bonus_rush_yd_200": "mu_rush_yd",
+  "bonus_rush_rec_yd_100": "mu_rr_yd",
+  "bonus_rush_rec_yd_200": "mu_rr_yd",
+  "bonus_pass_yd_300": "mu_pass_yd",
+  "bonus_pass_yd_400": "mu_pass_yd",
+  "bonus_pass_cmp_25": "mu_cmp",
+  "bonus_rush_att_20": "mu_rush_att"
+ }
+}
