@@ -45,7 +45,7 @@
     })();
     </script>
 
-    <meta name="dhq-build" content="b160-410a82544c">
+    <meta name="dhq-build" content="b160-ba2917f2cd">
     <meta name="dhq-engine-v" content="ecd492cb95">
     <meta name="dhq-proj-model" content="1c46a0c3e1f4">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, viewport-fit=cover">
@@ -171,7 +171,7 @@
     <link rel="preload" as="script" href="vendor/supabase.min.js">
     <link rel="preload" as="script" href="vendor/react.production.min.js">
     <link rel="preload" as="script" href="vendor/react-dom.production.min.js">
-    <script src="js/shared/shared-loader.js?v=c27b2a1a13"></script>
+    <script src="js/shared/shared-loader.js?v=643a844a15"></script>
     <!-- Season-rollover cache hygiene — must run early, before any surface reads caches. -->
     <script src="js/shared/season-guard.js?v=5b705f54d8"></script>
     <!-- Native-shell external-link guard: outside links must never strand the WKWebView. -->
@@ -252,10 +252,9 @@ const WR_SHARED_FILES = [
   'ai-dispatch.js',
   'strategy.js',
   'trade-engine.js',
-  'mock-engine.js',
   'gm-engine.js',
   'player-modal.js',
-  'rookie-data.js',
+  'rookie-class.js',
 ];
 // MFL is GA on production (mirrors MFL_ENABLED=true in js/app.js). ESPN/Yahoo stay sandbox-only beta.
 WR_SHARED_FILES.splice(7, 0, 'mfl-api.js');
@@ -3394,7 +3393,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/trade-helpers.js?v=8df2437674"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/context.js?v=791653bde4"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/persona.js?v=0b4dbbc0cb"></script>
-<script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/cpu-engine.js?v=9ea00c9c23"></script>
+<script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/cpu-engine.js?v=a6071d49be"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/state.js?v=10910b2da5"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/big-board.js?v=0557276615"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/draft-grid.js?v=fc375aeee4"></script>
@@ -3415,7 +3414,7 @@ WRShared.preloadMany(WR_SHARED_FILES);
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/live-sync.js?v=fed4c6aef0"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/live-decision-engine.js?v=90b271dbe2"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/analyst-mock.js?v=91b4e236cd"></script>
-<script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/command-center.js?v=0d2b9db184"></script>
+<script type="text/wr-deferred" data-wr-defer="draft" src="js/draft/command-center.js?v=2d5b0d0ff2"></script>
 <script type="text/wr-deferred" data-wr-defer="draft" src="js/draft-room.js?v=cb27618f42"></script>
 <!-- 5. League detail tab components (extracted from league-detail.js) -->
 <!-- v2 widget modules (load before dashboard.js which consumes them) -->
@@ -3530,7 +3529,7 @@ window.addEventListener('appinstalled', () => {
 <!-- Deploy tag (owner ask 2026-08-19): a tiny always-visible build code so the
      owner can read back exactly which version his device is running before
      testing — kills the stale-cache guessing game. Bump the code every deploy. -->
-<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b160 · LAB317</div>
+<div id="dhq-build-tag" style="position:fixed;bottom:2px;right:6px;z-index:2147483647;font:700 9px/1.4 monospace;color:rgba(212,175,55,0.75);pointer-events:none;user-select:none;">b160 · LAB318</div>
 </body>
 </html>
 <!-- build 1774212614 -->
