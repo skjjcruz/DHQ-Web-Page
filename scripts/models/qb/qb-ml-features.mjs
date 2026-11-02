@@ -12,7 +12,7 @@
 //   --active=snaps  (backtest): active receivers = the ones who played; the starter is games.csv's QB.
 //   --active=roster (live):     53-man roster (ACT/INA) minus Out/Doubtful; starter = games.csv's QB unless Out/Doubtful/off
 //                               the roster, then the top active QB on the depth chart.
-//   --rows=CSV season,week,gsis,team: the starter of each team, as picked by scripts/models/qb/qb-features.mjs.
+//   --rows=CSV season,week,gsis,team: the candidate starters of each team (one or more), as picked by qb-features.mjs.
 import fs from 'fs';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
@@ -243,9 +243,10 @@ function depthQB(t) {
   return rows.filter(r => r.dt.slice(0, 10) === d).sort((p, q) => +p.pos_rank - +q.pos_rank).map(r => r.gsis_id);
 }
 const onRoster = g => !ROSTER || ROSTER.some(r => r.gsis_id === g && r.position === 'QB');
-const ROWS = A.rows ? Object.fromEntries(readCSV(A.rows, ['season', 'week', 'gsis', 'team']).filter(r => +r.season === Y && +r.week === W).map(r => [fx(r.team), r.gsis])) : null;
+const ROWS = A.rows ? {} : null;   // team -> [gsis, ...] (several candidates per team allowed)
+if (A.rows) for (const r of readCSV(A.rows, ['season', 'week', 'gsis', 'team'])) if (+r.season === Y && +r.week === W && r.gsis) (ROWS[fx(r.team)] || (ROWS[fx(r.team)] = [])).push(r.gsis);
+function startersFor(t) { if (ROWS) return (ROWS[t] || []).map(g => ({ g, src: 'rows' })); const s = starterFor(t); return s ? [s] : []; }
 function starterFor(t) {
-  if (ROWS) return ROWS[t] ? { g: ROWS[t], src: 'rows' } : null;
   const gm = GM[t], ok = g => g && !((INJ[g] || {}).st >= 2) && onRoster(g);
   if (A.active !== 'roster') return gm.qb ? { g: gm.qb, src: 'games.csv' } : null;
   if (ok(gm.qb)) return { g: gm.qb, src: 'games.csv' };
@@ -256,8 +257,8 @@ function starterFor(t) {
 // ---------------------------------------------------------------- assemble the 31 inputs for every team's starter and score
 const M = JSON.parse(fs.readFileSync(A.model));
 const out = [];
-for (const t in GM) {
-  const gm = GM[t], s = starterFor(t); if (!s || gm.itt == null) continue;
+for (const t in GM) for (const s of startersFor(t)) {   // each candidate of the team
+  const gm = GM[t]; if (gm.itt == null) continue;
   const u = qbUsage(s.g), st = starterStatus(s.g, t);
   const vtd = clip(0.045 * (1 + 0.06 * clip(gm.itt - 22.5, -10, 10)), 0.01, 0.09);
   const x = {

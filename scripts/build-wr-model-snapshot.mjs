@@ -87,6 +87,16 @@ function treePredict(model, x) {
     return Math.max(model.clip_min ?? -Infinity, s);
 }
 
+// qbMap.sim: the shape of qb-stat's joint simulation (copula correlations R over `sims`, the pass-yard ratio and
+// rush-yard residual quantiles on a 101-point grid from u[0] to u[1], NB dispersions a of the counts), which the
+// engine (matchup-inputs qbSkew) runs to get each league's typical/average ratio over half-PPR's.
+function qbSimFrom(m) {
+    const g = m.qgrid || [0.0005, 0.9995, 1000], n = 101, r4 = v => +(+v).toFixed(4);
+    const down = q => Array.from({ length: n }, (_, i) => { const p = i / (n - 1) * (q.length - 1), j = Math.min(q.length - 2, Math.floor(p)); return r4(q[j] + (q[j + 1] - q[j]) * (p - j)); });
+    return { sims: m.sims, R: m.R.map(r => r.map(r4)), u: [g[0], g[1]], pyd: down(m.marg.pyd.q), ryd: { sc: m.marg.ryd.sc.map(r4), q: down(m.marg.ryd.q) },
+        a: Object.fromEntries(['ptd', 'int', 'rtd', 'fum'].map(k => [k, r4(m.marg[k].a)])) };
+}
+
 async function main() {
     const games = await file('games.csv', 'https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv');
     const G0 = readCSV(games, ['season', 'game_type', 'week', 'gameday', 'home_team', 'away_team', 'spread_line', 'total_line', 'result']).filter(r => r.game_type === 'REG');
@@ -328,7 +338,11 @@ async function main() {
     // which used to be Sleeper's line pulled toward the Vegas number): DHQ's
     // stand-alone stack of six models (scripts/models/qb/qb-features.mjs:
     // Vegas/team, stat-line GLM, LightGBM, rushing, young-QB and this-season
-    // change), one starter per team. Each row carries the typical game
+    // change), every plausible starter of each team (games.csv's posted QB,
+    // the depth chart's QB1 and last game's leading passer, deduplicated:
+    // usually one row a team, two in about 8% of team-weeks, so whichever QB
+    // the user starts has a number; row[8] = 1 marks the likely starter).
+    // Each row carries the typical game
     // (half-PPR) and the expected stat line in qbMap.keys order, which the
     // engine scores with each league's own rules. Out of sample vs Sleeper:
     // 2023-24 52.8% (miss 5.525 vs 5.678), 2025-26 53.8% (5.778 vs 5.883).
@@ -342,13 +356,16 @@ async function main() {
         const keys = ['pass_yd', 'pass_td', 'pass_int', 'pass_sack', 'rush_yd', 'rush_td', 'fum_lost', 'pass_fd', 'rush_fd', 'pass_2pt', 'pass_att', 'rush_att'];
         const r1 = (v, d) => v == null || !Number.isFinite(v) ? null : +v.toFixed(d), m = {};
         for (const r of rows) {
-            // [sleeper id, name, team, typical game (half-PPR), the line's half-PPR total, expected stat line (qbMap.keys order), opponent, team total]
+            // [sleeper id, name, team, typical game (half-PPR), the line's half-PPR total, expected stat line (qbMap.keys order), opponent, team total, likely starter 1/0]
             m[r.gsis] = [SID[r.gsis] || null, P[r.gsis] ? P[r.gsis].name : r.name, TO_APP[r.team] || r.team, r1(r.typical, 2), r1(r.mean, 2),
-                keys.map(k => r1(r.line[k] ?? 0, 3)), TO_APP[r.opp] || r.opp, r1(r.itt, 1)];
+                keys.map(k => r1(r.line[k] ?? 0, 3)), TO_APP[r.opp] || r.opp, r1(r.itt, 1), r.primary ? 1 : 0];
         }
         if (rows.length) { byPos.QB = m; qbMap = { keys, model: 'DHQ QB stack (qb-team, qb-stat, qb-ml, qb-rush + qb-young, qb-change)' }; }
-        console.log('QB: ' + rows.length + ' starters scored');
+        console.log('QB: ' + rows.length + ' QBs scored (' + new Set(rows.map(r => r.team)).size + ' teams, ' + rows.filter(r => r.primary).length + ' likely starters)');
     } catch (e) { console.log('QB model skipped: ' + (e.message || e).toString().slice(0, 200)); }
+    try {   // the league skew's simulation shape (see qbSimFrom); without it the engine scores the line at its average
+        if (qbMap) qbMap.sim = qbSimFrom(JSON.parse(fs.readFileSync(path.join(process.env.QB_MODELS || path.join(ROOT, 'scripts/models/qb'), 'qb-stat.json'), 'utf8')));
+    } catch (e) { console.log('QB simulation shape skipped: ' + (e.message || e).toString().slice(0, 200)); }
     // ── League extras (owner, 2026-10-29: "fit each league's scoring"): the
     // stats some leagues score that the models' half-PPR number leaves out:
     // first downs, sacks taken, incompletions, return yards, yardage and
@@ -378,7 +395,7 @@ async function main() {
         cols: ['sid', 'name', 'team', 'median', null, 'targets', 'snaps', 'teamTotal'], players,
         // RB and TE rows: [sid, name, team, median, null, carries (RB) / targets (TE), snaps, teamTotal, targets (RB)]
         // DL/LB/DB rows: [sid, name, team, typical (std), null, tackles, snaps, teamTotal, null, expected idp_* line in idpMap.keys order]
-        // QB rows: [sid, name, team, typical (half-PPR), the line's half-PPR total, expected stat line in qbMap.keys order (Sleeper scoring keys), opponent, teamTotal]
+        // QB rows (every plausible starter, 1-2 a team): [sid, name, team, typical (half-PPR), the line's half-PPR total, expected stat line in qbMap.keys order (Sleeper scoring keys), opponent, teamTotal, likely starter 1/0]
         byPos, idpMap, qbMap,
         // D/ST: teams[team] = [opponent, expected Sleeper-key line in dst.keys order]
         dst,
