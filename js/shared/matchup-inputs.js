@@ -134,12 +134,6 @@
         // An every-down defender (see everyDown): the share of his team's
         // defensive snaps he played in its last game
         noLineSnap: 0.5,
-        // QB market check (see qbMarket): Sleeper's line pulled `pull` of the
-        // way toward what the Vegas line expects of a starting QB, then
-        // blended with DHQ's own number at `engineW`. Vegas-expected half-PPR
-        // QB points = a + bItt x implied team total + cSpread x spread (2023-25
-        // starters with a line of 10+, n 1,573).
-        qbMarket: { pull: 0.3, engineW: 0.25, a: 0.142, bItt: 0.7463, cSpread: 0.1134, minHalf: 10 },
     }, root.__DHQ_TUNE || {});
     const SLEEPER_DEPTH_POS = { QB: 'QB', RB: 'RB', FB: 'RB', WR: 'WR', LWR: 'WR', SWR: 'WR', RWR: 'WR', TE: 'TE', K: 'K',
         LDE: 'DL', RDE: 'DL', DE: 'DL', DT: 'DL', NT: 'DL', LDT: 'DL', RDT: 'DL', DL: 'DL',
@@ -2005,43 +1999,7 @@
         const sn = lastGameSnap(pid, String(input.team || (player && player.team) || '').toUpperCase(), ctx, opts, 'def');
         return sn != null && sn >= TUNE.noLineSnap;
     }
-    // QB market check (owner ruling 2026-10-27, QB project). A starting QB's
-    // week is mostly luck (about 7 points a game either way), so the edge
-    // over Sleeper is in where its line disagrees with the betting market:
-    // when Sleeper sits above what the Vegas team total and spread expect of
-    // a QB, he falls short of it, and below, he beats it, by about half the
-    // gap (slope -0.27 to -0.65 in each of 2023-26 held out). The shown
-    // number is Sleeper's line pulled 30% toward the Vegas-expected number,
-    // blended 75/25 with DHQ's own (touchdowns already following the team
-    // total, dhq-baseline.js). Held-out seasons vs Sleeper: 2025 54.2%
-    // (engine alone 52.4%, before the QB project 49.7%), 2026 52.3% (47.0%,
-    // 44.6%); 2023 50.4% and 2024 53.3% for the pull alone. Starters only
-    // (Sleeper's half-PPR line 10+); no Vegas line: no pull, the blend
-    // stands; no Sleeper line: untouched (the truth law decides).
     const HALF = { pass_yd: 0.04, pass_td: 4, pass_int: -1, pass_2pt: 2, rush_yd: 0.1, rush_td: 6, rush_2pt: 2, rec: 0.5, rec_yd: 0.1, rec_td: 6, rec_2pt: 2, fum_lost: -2 };
-    function qbMarket(pid, out, input, opts, ctx) {
-        const M = TUNE.qbMarket;
-        if (!M || !out || !out.available || !out.points || !(out.sleeper > 0)) return;
-        if (posGroup(opts.playersData && opts.playersData[pid]) !== 'QB') return;
-        const WP = App.WeeklyProj, line = WP && WP.projLine ? WP.projLine(pid, ctx.week) : null;
-        const half = line && App.DhqBaseline ? num(App.DhqBaseline.scoreLine(line, HALF, 'QB')) : null;
-        if (!(half >= M.minHalf)) return;
-        const wk = WP && WP._ctx && WP._ctx.byTeamWeek[String(input.team || '').toUpperCase() + '|' + ctx.week];
-        const v = wk && wk.vegas, imp = v ? num(v.impliedTotal) : null, spr = v ? num(v.spread) : null;
-        let anchor = out.sleeper, note = 'No betting line yet';
-        if (imp != null) {
-            const expect = M.a + M.bItt * imp + M.cSpread * (spr || 0);
-            anchor = out.sleeper * (1 - M.pull * (1 - expect / half));
-            note = 'Team total ' + imp.toFixed(1) + (spr != null ? ', spread ' + (spr > 0 ? '+' : '') + spr : '') + ': the market expects ' + expect.toFixed(1) + ' from his offense';
-        }
-        const shown = num(out.points.median) || 0;
-        const to = M.engineW * shown + (1 - M.engineW) * anchor;
-        if (!(to > 0)) return;
-        const k = shown > 0 ? to / shown : null;
-        for (const f of ['median', 'typical', 'mean', 'floor', 'ceiling']) if (out.points[f] != null) out.points[f] = +(k != null ? out.points[f] * k : to).toFixed(2);
-        out.market = { from: +shown.toFixed(2), to: +to.toFixed(2), anchor: +anchor.toFixed(2) };
-        out.why = [{ key: 'market', label: 'Market check', impactPct: k != null ? +((k - 1) * 100).toFixed(1) : 0, note: note + '; held at ' + to.toFixed(1) }].concat(out.why || []);
-    }
     // DHQ WR model (owner ruling 2026-10-27: our WR number stands on its own;
     // Sleeper is only the yardstick). A gradient-boosted model of a
     // receiver's TYPICAL game from free nflverse data, scored weekly in a
@@ -2067,7 +2025,19 @@
     // 62.5% (a big-play league), 2026 60.6% / 60.9%; the engine was lower in
     // every position, season and scoring. A league that scores no IDP stat:
     // unchanged.
-    const MODEL_POS = { WR: 1, RB: 1, TE: 1, DL: 1, LB: 1, DB: 1 };
+    // QBs (owner ruling 2026-11-02: no Sleeper projection in our QB number;
+    // it replaces the "market check" that pulled Sleeper's line toward the
+    // Vegas number): DHQ's stand-alone stack of six models (scripts/models/
+    // qb/qb-features.mjs; byPos.QB, one starter per team) gives his typical
+    // game (half-PPR) and his expected stat line (qbMap.keys: passing and
+    // rushing yards and TDs, INT, sacks, fumbles lost, first downs, 2-pt,
+    // attempts). The line is scored with the league's own rules and carried
+    // by the model's typical/line ratio (about 1); leagueExtras then adds
+    // only what the line lacks (300/400-yard bonuses, long TDs, ...). Out of
+    // sample vs Sleeper: 2023-24 52.8% (miss 5.525 vs 5.678), 2025-26 53.8%
+    // (5.778 vs 5.883). No row for him this week (a backup, no snapshot):
+    // the engine's own QB number stands.
+    const MODEL_POS = { QB: 1, WR: 1, RB: 1, TE: 1, DL: 1, LB: 1, DB: 1 };
     const IDP_GRP = { DL: 1, LB: 1, DB: 1 };
     function idpPoints(row, S, scoring) {
         const M = S && S.idpMap, arr = row && row[9];
@@ -2107,12 +2077,36 @@
         for (const g of groups) { const ix = modelIdx[g]; if (ix && ntKey && ix.nt[ntKey]) return ix.nt[ntKey]; }
         return null;
     }
+    // a QB row's league score: { typical, line } (the line keyed by Sleeper scoring keys), or null
+    function qbPoints(row, S, scoring) {
+        const keys = S && S.qbMap && S.qbMap.keys, arr = row && row[5], DB = App.DhqBaseline;
+        if (!keys || !Array.isArray(arr) || !DB) return null;
+        const line = {};
+        keys.forEach((k, i) => { line[k] = num(arr[i]) || 0; });   // 2-pt conversions all sit in pass_2pt
+        const own = num(DB.scoreLine(line, scoring, 'QB')), typ = num(row[3]), half = num(row[4]);
+        if (own == null || typ == null) return null;
+        return { typical: Math.max(0, own * (half > 0 ? typ / half : 1)), line };
+    }
     function wrModel(pid, out, input, opts, ctx) {
         if (!out || out.available === false || !out.points) return;
         const player = opts.playersData && opts.playersData[pid];
         const pos = posGroup(player);
         if (!MODEL_POS[pos]) return;
         const row = modelRow(pos, pid, player, ctx);
+        if (pos === 'QB') {
+            const qp = row ? qbPoints(row, root.DhqWrModel, opts.scoring) : null;
+            if (!qp) return;
+            const shown = num(out.points.median) || 0, to = qp.typical, k = shown > 0 ? to / shown : null;
+            for (const f of ['median', 'typical', 'mean', 'floor', 'ceiling']) if (out.points[f] != null) out.points[f] = +(k != null ? out.points[f] * k : to).toFixed(2);
+            out.wrModel = { from: +shown.toFixed(2), to: +to.toFixed(2), half: num(row[3]), qbLine: true };
+            const L = qp.line, bits = [];
+            bits.push(Math.round(L.pass_yd) + ' pass yds, ' + L.pass_td.toFixed(1) + ' TD, ' + L.pass_int.toFixed(1) + ' INT');
+            if (L.rush_yd >= 5) bits.push(Math.round(L.rush_yd) + ' rush yds' + (L.rush_td >= 0.05 ? ', ' + L.rush_td.toFixed(2) + ' rush TD' : ''));
+            if (num(row[7]) != null) bits.push('team total ' + num(row[7]).toFixed(1));
+            out.why = [{ key: 'wrModel', label: 'DHQ QB model', impactPct: k != null ? +((k - 1) * 100).toFixed(1) : 0,
+                note: 'Typical game ' + to.toFixed(1) + ': ' + bits.join(', ') }].concat(out.why || []);
+            return;
+        }
         if (IDP_GRP[pos]) {
             const ip = row ? idpPoints(row, root.DhqWrModel, opts.scoring) : null;
             if (!ip) return;
@@ -2175,9 +2169,10 @@
     // fumbles, pick-sixes — projected from his own history (snapshot extras,
     // scripts/models/extras/) and scored with the league's own rules. The
     // typical week takes the steady stats and the bonuses; fumbles and
-    // pick-sixes count only in the average. QBs get them before the market
-    // check's blend (Sleeper's anchor already carries its own). A league
-    // that scores none of them: unchanged. Out of sample vs Sleeper: Psycho
+    // pick-sixes count only in the average. A QB scored from the DHQ QB
+    // model's stat line (wrModel) already has first downs and sacks in it:
+    // those keys are not added again. A league that scores none of them:
+    // unchanged. Out of sample vs Sleeper: Psycho
     // RB/WR/TE 51.2% -> 55.8%, QB 52.0 -> 55.4; CTB The One 51.1 -> 54.1,
     // QB 53.3 -> 55.7; the other leagues about even.
     const EXTRA_POS = { QB: 1, RB: 1, WR: 1, TE: 1 };
@@ -2191,6 +2186,7 @@
         if (!row) return;
         const sc = opts.scoring || {}, at = {};
         E.keys.forEach((k, i) => { at[k] = num(row[i]) || 0; });
+        if (out.wrModel && out.wrModel.qbLine && S.qbMap && S.qbMap.keys) for (const k of S.qbMap.keys) if (k in at) at[k] = 0;   // already in the QB line
         const sum = keys => keys.reduce((a, k) => a + (Number(sc[k]) || 0) * (at[k] || 0), 0);
         const st = sum(E.groups.steady), ra = sum(E.groups.rare), ng = sum(E.groups.neg);
         const typ = E.typical.steady * st + E.typical.rare * ra + E.typical.neg * ng, avg = st + ra + ng;
@@ -2242,7 +2238,6 @@
         out.everyDown = everyDown(pid, out, input, opts, ctx);
         wrModel(pid, out, input, opts, ctx);
         leagueExtras(pid, out, input, opts, ctx);
-        qbMarket(pid, out, input, opts, ctx);
         return out;
     }
 
@@ -2260,7 +2255,7 @@
 
     App.MatchupInputs = App.MatchupInputs || {
         prepare, build, project, projectRoster, statusOf, idpRankings, priorRankings, depthCharts, baselineFor, dhqBaselineFor, sleeperPoints, opponentOf, opponentFor, trenchFor, castFor, teamDepth, expectedShare, teamSlotNorm, passPool, freedTargetShare, posGroup, normName, roleFor, oppHealthFor, returnLine, recentPPGFrom,
-        splitShare, roomScaleParts, typicalWeek, TUNE, _safetyCheck: safetyCheck, _everyDown: everyDown, _qbMarket: qbMarket, _wrModel: wrModel, dstFor,
+        splitShare, roomScaleParts, typicalWeek, TUNE, _safetyCheck: safetyCheck, _everyDown: everyDown, _wrModel: wrModel, dstFor,
     };
     /* global module */
     if (typeof module !== 'undefined' && module.exports) module.exports = App.MatchupInputs;

@@ -1,0 +1,124 @@
+{
+ "model": "qb-change update-speed layer",
+ "apply": "pred = base + adj; adj = sum_j coef_j * (x_j - mu_j) / sd_j",
+ "features": [
+  "trend",
+  "qepa_tr"
+ ],
+ "k_games": 10.0,
+ "k_db": 300.0,
+ "feature_defs": {
+  "trend": "(ppg_cur - ppg_ly) * g_cur / (g_cur + k_games), 0 if either missing, clip +-10",
+  "qepa_tr": "(epa_cur - epa_ly) * db_cur / (db_cur + k_db), 0 if either missing, clip +-0.5",
+  "qualifying game": "QB with attempts>=15, or the most attempts on his team (>0); REG season only",
+  "ppg": "half-PPR mean over qualifying games (this season before week W / all of last season, any team)",
+  "epa": "sum passing_epa / sum (attempts + sacks_suffered) over the same qualifying games"
+ },
+ "fits": {
+  "2021": {
+   "mu": [
+    0.13995998,
+    0.00460359
+   ],
+   "sd": [
+    1.49200731,
+    0.05743598
+   ],
+   "coef": [
+    0.41843296,
+    -0.07476682
+   ],
+   "n": 3691
+  },
+  "2022": {
+   "mu": [
+    0.10731358,
+    0.0038024
+   ],
+   "sd": [
+    1.46966357,
+    0.05657736
+   ],
+   "coef": [
+    0.24001517,
+    0.0128504
+   ],
+   "n": 4253
+  },
+  "2023": {
+   "mu": [
+    0.09773952,
+    0.0034129
+   ],
+   "sd": [
+    1.46168842,
+    0.05659646
+   ],
+   "coef": [
+    0.28957233,
+    0.04518789
+   ],
+   "n": 4816
+  },
+  "2024": {
+   "mu": [
+    0.07072135,
+    0.00288372
+   ],
+   "sd": [
+    1.43699278,
+    0.05570568
+   ],
+   "coef": [
+    0.25344118,
+    0.11130895
+   ],
+   "n": 5381
+  },
+  "2025": {
+   "mu": [
+    0.04950834,
+    0.00257174
+   ],
+   "sd": [
+    1.42210839,
+    0.05502564
+   ],
+   "coef": [
+    0.29938246,
+    0.08183576
+   ],
+   "n": 5978
+  },
+  "2026": {
+   "mu": [
+    0.05856318,
+    0.00304785
+   ],
+   "sd": [
+    1.42431156,
+    0.05560488
+   ],
+   "coef": [
+    0.29752513,
+    0.10831678
+   ],
+   "n": 6546
+  },
+  "2027": {
+   "mu": [
+    0.05456182,
+    0.00270577
+   ],
+   "sd": [
+    1.41737957,
+    0.0555881
+   ],
+   "coef": [
+    0.27801129,
+    0.09847162
+   ],
+   "n": 6775
+  }
+ }
+}
