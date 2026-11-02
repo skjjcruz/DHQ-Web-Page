@@ -1,6 +1,7 @@
-# Refreshes data/wr-model-snapshot.js (DHQ's own WR, RB and TE models: every
-# active player's typical game for the coming week, from free nflverse data)
-# four times a day and on demand. No Sleeper projection, no secrets.
+# Refreshes data/wr-model-snapshot.js (DHQ's own QB, WR, RB, TE, IDP and D/ST
+# models: every active player's typical game for the coming week, from free
+# nflverse data) four times a day and on demand. No Sleeper projection, no
+# secrets.
 name: WR model snapshot
 
 on:
@@ -36,8 +37,24 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      # The QB model's rushing part reads 14 seasons of play-by-play; each
+      # completed season is summarised once into qb-rush-cache/ (about 3 MB in
+      # all), kept here between runs so only the current season is downloaded.
+      - name: Restore the QB play-by-play summaries
+        uses: actions/cache/restore@v4
+        with:
+          path: scripts/.wr-cache/qb-rush-cache
+          key: qb-rush-qbg-v1-restore
+          restore-keys: qb-rush-qbg-v1-
       - name: Build the snapshot
         run: node scripts/build-wr-model-snapshot.mjs ${{ github.event.inputs.season }} ${{ github.event.inputs.week }}
+      - name: Save the QB play-by-play summaries
+        if: always()
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: scripts/.wr-cache/qb-rush-cache
+          key: qb-rush-qbg-v1-${{ hashFiles('scripts/.wr-cache/qb-rush-cache/*.json') }}
       - name: Commit if changed
         # The branch can move while the build runs (a merge, or another
         # snapshot job), so: keep the fresh build aside, sync to the latest

@@ -26,8 +26,8 @@ import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
-const CACHE = path.join(ROOT, 'scripts/.wr-cache');
-const OUT = process.env.WR_OUT || path.join(ROOT, 'data/wr-model-snapshot.js');   // WR_OUT / WR_MODEL: backtests only
+const CACHE = process.env.WR_CACHE || path.join(ROOT, 'scripts/.wr-cache');
+const OUT = process.env.WR_OUT || path.join(ROOT, 'data/wr-model-snapshot.js');   // WR_CACHE / WR_OUT / WR_MODEL / QB_MODELS: backtests only
 const REL = 'https://github.com/nflverse/nflverse-data/releases/download';
 
 // ── downloads (cached for the run) ─────────────────────────────────
@@ -104,6 +104,13 @@ async function main() {
     F.depth = await file('depth_charts_' + Y + '.csv', REL + '/depth_charts/depth_charts_' + Y + '.csv', { optional: true });
     F.roster = await file('roster_weekly_' + Y + '.csv', REL + '/weekly_rosters/roster_weekly_' + Y + '.csv');
     F.ids = await file('db_playerids.csv', 'https://raw.githubusercontent.com/dynastyprocess/data/master/files/db_playerids.csv', { optional: true });
+    // QB stack only (scripts/models/qb): up to 14 seasons (from 2012, as its fit) of weekly stats and play-by-play for
+    // qb-rush (a completed season's play-by-play is summarised once into qb-rush-cache/, which the Action keeps between
+    // runs) and the combine for qb-young
+    const Y0 = Math.max(2012, Y - 14);
+    for (let y = Y0; y < 2013; y++) await file('stats_player_week_' + y + '.csv', REL + '/stats_player/stats_player_week_' + y + '.csv', { optional: true });
+    for (let y = Y0; y <= Y; y++) if (y === Y || !fs.existsSync(path.join(CACHE, 'qb-rush-cache/qbg_' + y + '.json'))) await file('play_by_play_' + y + '.csv.gz', REL + '/pbp/play_by_play_' + y + '.csv.gz', { optional: true });
+    await file('combine.csv', REL + '/combine/combine.csv', { optional: true });
 
     // ── players
     const P = {}, pfr2g = {};
@@ -317,6 +324,31 @@ async function main() {
         for (const r of rows) dst.teams[r.team] = [r.opp, keys.map(k => +(+(r.line[k] || 0)).toFixed(4))];
         console.log('D/ST: ' + rows.length + ' teams');
     } catch (e) { console.log('D/ST model skipped: ' + (e.message || e).toString().slice(0, 200)); }
+    // ── QBs (owner ruling 2026-11-02: no Sleeper projection in the QB number,
+    // which used to be Sleeper's line pulled toward the Vegas number): DHQ's
+    // stand-alone stack of six models (scripts/models/qb/qb-features.mjs:
+    // Vegas/team, stat-line GLM, LightGBM, rushing, young-QB and this-season
+    // change), one starter per team. Each row carries the typical game
+    // (half-PPR) and the expected stat line in qbMap.keys order, which the
+    // engine scores with each league's own rules. Out of sample vs Sleeper:
+    // 2023-24 52.8% (miss 5.525 vs 5.678), 2025-26 53.8% (5.778 vs 5.883).
+    let qbMap = null;
+    try {
+        const tmp = path.join(CACHE, 'qb-rows.json');
+        execFileSync(process.execPath, [path.join(ROOT, 'scripts/models/qb/qb-features.mjs'), '--season=' + Y, '--week=' + W,
+            '--models=' + (process.env.QB_MODELS || path.join(ROOT, 'scripts/models/qb')), '--active=roster', '--out=' + tmp],
+            { env: Object.assign({}, process.env, { MODEL_DATA: CACHE }), stdio: ['ignore', 'pipe', 'inherit'] });
+        const rows = JSON.parse(fs.readFileSync(tmp, 'utf8'));
+        const keys = ['pass_yd', 'pass_td', 'pass_int', 'pass_sack', 'rush_yd', 'rush_td', 'fum_lost', 'pass_fd', 'rush_fd', 'pass_2pt', 'pass_att', 'rush_att'];
+        const r1 = (v, d) => v == null || !Number.isFinite(v) ? null : +v.toFixed(d), m = {};
+        for (const r of rows) {
+            // [sleeper id, name, team, typical game (half-PPR), the line's half-PPR total, expected stat line (qbMap.keys order), opponent, team total]
+            m[r.gsis] = [SID[r.gsis] || null, P[r.gsis] ? P[r.gsis].name : r.name, TO_APP[r.team] || r.team, r1(r.typical, 2), r1(r.mean, 2),
+                keys.map(k => r1(r.line[k] ?? 0, 3)), TO_APP[r.opp] || r.opp, r1(r.itt, 1)];
+        }
+        if (rows.length) { byPos.QB = m; qbMap = { keys, model: 'DHQ QB stack (qb-team, qb-stat, qb-ml, qb-rush + qb-young, qb-change)' }; }
+        console.log('QB: ' + rows.length + ' starters scored');
+    } catch (e) { console.log('QB model skipped: ' + (e.message || e).toString().slice(0, 200)); }
     // ── League extras (owner, 2026-10-29: "fit each league's scoring"): the
     // stats some leagues score that the models' half-PPR number leaves out:
     // first downs, sacks taken, incompletions, return yards, yardage and
@@ -341,12 +373,13 @@ async function main() {
         console.log('extras: ' + Object.keys(extras.players).length + ' players');
     } catch (e) { console.log('extras skipped: ' + (e.message || e).toString().slice(0, 200)); }
     const snapshot = {
-        season: Y, week: W, built: new Date().toISOString(), source: 'nflverse (free) · DHQ WR, RB, TE, IDP and D/ST models',
+        season: Y, week: W, built: new Date().toISOString(), source: 'nflverse (free) · DHQ QB, WR, RB, TE, IDP and D/ST models',
         model: { median: MED.name, trained: MED.trained_on, inputs: MED.features }, rosterWeek: rW,
         cols: ['sid', 'name', 'team', 'median', null, 'targets', 'snaps', 'teamTotal'], players,
         // RB and TE rows: [sid, name, team, median, null, carries (RB) / targets (TE), snaps, teamTotal, targets (RB)]
         // DL/LB/DB rows: [sid, name, team, typical (std), null, tackles, snaps, teamTotal, null, expected idp_* line in idpMap.keys order]
-        byPos, idpMap,
+        // QB rows: [sid, name, team, typical (half-PPR), the line's half-PPR total, expected stat line in qbMap.keys order (Sleeper scoring keys), opponent, teamTotal]
+        byPos, idpMap, qbMap,
         // D/ST: teams[team] = [opponent, expected Sleeper-key line in dst.keys order]
         dst,
         // league extras: players[sleeper id] = expected values in extras.keys order
