@@ -2028,7 +2028,8 @@
     // QBs (owner ruling 2026-11-02: no Sleeper projection in our QB number;
     // it replaces the "market check" that pulled Sleeper's line toward the
     // Vegas number): DHQ's stand-alone stack of six models (scripts/models/
-    // qb/qb-features.mjs; byPos.QB, one starter per team) gives his typical
+    // qb/qb-features.mjs; byPos.QB, a row for every plausible starter of a
+    // team, 1-2 a team, each found by his own Sleeper id) gives his typical
     // game (half-PPR) and his expected stat line (qbMap.keys: passing and
     // rushing yards and TDs, INT, sacks, fumbles lost, first downs, 2-pt,
     // attempts). The line is scored with the league's own rules and carried
@@ -2077,7 +2078,109 @@
         for (const g of groups) { const ix = modelIdx[g]; if (ix && ntKey && ix.nt[ntKey]) return ix.nt[ntKey]; }
         return null;
     }
-    // a QB row's league score: { typical, line } (the line keyed by Sleeper scoring keys), or null
+    // League skew (QB fix, 2026-11-02). The model's typical game is
+    // half-PPR, and his league number used to be the line scored at its
+    // average (+ bonuses at their full expected value). A league with 6-point
+    // passing TDs, -2/-3 INTs or 300/400-yard bonuses is more right-skewed
+    // than half-PPR, so its typical game sits further below its average week
+    // (over 2023-24 the shown number sat 0.2-0.7 above the typical game in
+    // those leagues and on target in half-PPR). qb-stat's joint simulation
+    // (qbMap.sim: its copula correlations and each stat's spread; 20,000
+    // seeded draws of the week's average starter line, the league's bonuses
+    // and long TDs riding on the drawn yards and TDs) gives the league's
+    // typical/average ratio over half-PPR's: about 0.98 with 6-point TDs, 1 in
+    // half-PPR and leagues scored like it. His typical game is the scored line
+    // x that ratio; his average week is not scaled.
+    const QB_SIM = { pyd: 'pass_yd', ptd: 'pass_td', int: 'pass_int', ryd: 'rush_yd', rtd: 'rush_td', fum: 'fum_lost' };
+    let qbSimCache = null;
+    function qbSimDraws(S) {
+        if (qbSimCache && qbSimCache.src === S) return qbSimCache;
+        qbSimCache = { src: S, ok: false, byScoring: new Map() };
+        const M = S && S.qbMap, sim = M && M.sim, keys = M && M.keys, rows = Object.values((S && S.byPos && S.byPos.QB) || {});
+        if (!sim || !keys || !rows.length || !Array.isArray(sim.R) || !Array.isArray(sim.sims)) return qbSimCache;
+        // the reference: the week's likely starters' average line (and their league-extras rates)
+        const starters = rows.filter(r => r[8] === 1), use = starters.length >= 8 ? starters : rows;
+        const ref = {}, refX = {}, E = S.extras;
+        keys.forEach((k, i) => { ref[k] = use.reduce((a, r) => a + (num(r[5] && r[5][i]) || 0), 0) / use.length; });
+        if (E && E.players && E.keys) {
+            const xr = use.map(r => E.players[String(r[0])]).filter(Boolean);
+            if (xr.length) E.keys.forEach((k, i) => { refX[k] = xr.reduce((a, x) => a + (num(x[i]) || 0), 0) / xr.length; });
+        }
+        // seeded joint draws (Gaussian copula) of the simulated stats
+        const d = sim.sims.length, R = sim.R, L = [];
+        for (let i = 0; i < d; i++) {
+            L.push(new Array(d).fill(0));
+            for (let j = 0; j <= i; j++) {
+                let s = R[i][j]; for (let k = 0; k < j; k++) s -= L[i][k] * L[j][k];
+                L[i][j] = i === j ? Math.sqrt(Math.max(s, 1e-9)) : s / L[j][j];
+            }
+        }
+        let seed = 20261102 >>> 0;
+        const rnd = () => { seed = (seed + 0x6D2B79F5) >>> 0; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return (((t ^ (t >>> 14)) >>> 0) + 0.5) / 4294967296; };
+        const Phi = z => { const x = Math.abs(z) / Math.SQRT2, t = 1 / (1 + 0.5 * x);
+            const e = t * Math.exp(-x * x - 1.26551223 + t * (1.00002368 + t * (0.37409196 + t * (0.09678418 + t * (-0.18628806 + t * (0.27886807 + t * (-1.13520398 + t * (1.48851587 + t * (-0.82215223 + t * 0.17087277)))))))));
+            return z >= 0 ? 1 - e / 2 : e / 2; };
+        const u0 = sim.u[0], u1 = sim.u[1];
+        const interp = (q, u) => { const p = Math.min(q.length - 1, Math.max(0, (u - u0) / (u1 - u0) * (q.length - 1))), i = Math.min(q.length - 2, Math.floor(p)); return q[i] + (q[i + 1] - q[i]) * (p - i); };
+        const cdfOf = (mu, a) => {   // NB2 (Var = mu + a mu^2), Poisson when a ~ 0: cdf at 0..15
+            mu = Math.max(mu, 1e-4); const out = []; let p, c = 0;
+            if (!(a > 1e-6)) { p = Math.exp(-mu); for (let k = 0; k < 16; k++) { c += p; out.push(c); p *= mu / (k + 1); } }
+            else { const r = 1 / a, q = mu / (r + mu); p = Math.pow(r / (r + mu), r); for (let k = 0; k < 16; k++) { c += p; out.push(c); p *= (k + r) / (k + 1) * q; } }
+            return out; };
+        const N = 20000, draws = {}, ix = {};
+        sim.sims.forEach((v, j) => { ix[v] = j; draws[QB_SIM[v]] = new Float64Array(N); });
+        const cdf = {}; for (const v of ['ptd', 'int', 'rtd', 'fum']) cdf[v] = cdfOf(ref[QB_SIM[v]], num(sim.a[v]) || 0);
+        const rs = (num(sim.ryd.sc[0]) || 0) * Math.min(80, Math.max(0, ref.rush_yd)) + (num(sim.ryd.sc[1]) || 0);
+        const z = new Array(d), u = new Array(d);
+        for (let n = 0; n < N; n++) {
+            for (let j = 0; j < d; j += 2) { const a = Math.sqrt(-2 * Math.log(rnd())), b = 2 * Math.PI * rnd(); z[j] = a * Math.cos(b); if (j + 1 < d) z[j + 1] = a * Math.sin(b); }
+            for (let i = 0; i < d; i++) { let s = 0; for (let j = 0; j <= i; j++) s += L[i][j] * z[j]; u[i] = Phi(s); }
+            draws.pass_yd[n] = Math.max(ref.pass_yd, 1) * interp(sim.pyd, u[ix.pyd]);
+            draws.rush_yd[n] = ref.rush_yd + rs * interp(sim.ryd.q, u[ix.ryd]);
+            for (const v of ['ptd', 'int', 'rtd', 'fum']) { let k = 0; const c = cdf[v], uu = u[ix[v]]; while (k < 16 && uu > c[k]) k++; draws[QB_SIM[v]][n] = k; }
+        }
+        Object.assign(qbSimCache, { ok: true, ref, refX, draws, N, keys, groups: E && E.groups });
+        return qbSimCache;
+    }
+    // league typical/average over half-PPR's for this snapshot's QBs (1 when there is no simulation)
+    function qbSkew(S, scoring) {
+        const C = qbSimDraws(S);
+        if (!C.ok) return 1;
+        const sc = scoring || {}, ck = JSON.stringify(sc);
+        if (C.byScoring.has(ck)) return C.byScoring.get(ck);
+        const stat = (rules, extras) => {
+            const P = new Float64Array(C.N), sim = Object.values(QB_SIM);
+            let base = 0;
+            for (const k of C.keys) if (!sim.includes(k)) base += (Number(rules[k]) || 0) * (C.ref[k] || 0);
+            let tdBonus = 0;
+            if (extras && C.groups) {
+                const skip = new Set(C.keys.concat(['bonus_pass_yd_300', 'bonus_pass_yd_400', 'pass_td_40p', 'pass_td_50p']));
+                for (const k of C.groups.steady.concat(C.groups.rare)) if (!skip.has(k)) base += (Number(rules[k]) || 0) * (C.refX[k] || 0);
+                if (C.ref.pass_td > 0) tdBonus = ((Number(rules.pass_td_40p) || 0) * (C.refX.pass_td_40p || 0) + (Number(rules.pass_td_50p) || 0) * (C.refX.pass_td_50p || 0)) / C.ref.pass_td;
+            }
+            const b3 = extras ? Number(rules.bonus_pass_yd_300) || 0 : 0, b4 = extras ? Number(rules.bonus_pass_yd_400) || 0 : 0, D = C.draws;
+            const w = sim.map(k => Number(rules[k]) || 0);
+            let tot = 0;
+            for (let n = 0; n < C.N; n++) {
+                let p = base;
+                for (let j = 0; j < sim.length; j++) if (w[j]) p += w[j] * D[sim[j]][n];
+                const yd = D.pass_yd[n];
+                if (yd >= 300) p += b3; if (yd >= 400) p += b4;
+                p += tdBonus * D.pass_td[n];
+                P[n] = p; tot += p;
+            }
+            P.sort();
+            const lo = Math.floor(C.N * 0.45), hi = Math.floor(C.N * 0.55);   // the typical game: the middle 10% of the draws
+            let m = 0; for (let n = lo; n <= hi; n++) m += P[n];
+            return { typical: m / (hi - lo + 1), mean: tot / C.N };
+        };
+        const L = stat(sc, true), H = stat(HALF, false);
+        const r = L.mean > 1 && H.mean > 1 && L.typical > 0 && H.typical > 0 ? (L.typical / L.mean) / (H.typical / H.mean) : 1;
+        const out = Math.min(1.1, Math.max(0.85, r));
+        C.byScoring.set(ck, out);
+        return out;
+    }
+    // a QB row's league score: { typical, average, skew, line } (the line keyed by Sleeper scoring keys), or null
     function qbPoints(row, S, scoring) {
         const keys = S && S.qbMap && S.qbMap.keys, arr = row && row[5], DB = App.DhqBaseline;
         if (!keys || !Array.isArray(arr) || !DB) return null;
@@ -2085,7 +2188,8 @@
         keys.forEach((k, i) => { line[k] = num(arr[i]) || 0; });   // 2-pt conversions all sit in pass_2pt
         const own = num(DB.scoreLine(line, scoring, 'QB')), typ = num(row[3]), half = num(row[4]);
         if (own == null || typ == null) return null;
-        return { typical: Math.max(0, own * (half > 0 ? typ / half : 1)), line };
+        const average = Math.max(0, own * (half > 0 ? typ / half : 1)), skew = qbSkew(S, scoring);
+        return { typical: average * skew, average, skew, line };
     }
     function wrModel(pid, out, input, opts, ctx) {
         if (!out || out.available === false || !out.points) return;
@@ -2098,11 +2202,13 @@
             if (!qp) return;
             const shown = num(out.points.median) || 0, to = qp.typical, k = shown > 0 ? to / shown : null;
             for (const f of ['median', 'typical', 'mean', 'floor', 'ceiling']) if (out.points[f] != null) out.points[f] = +(k != null ? out.points[f] * k : to).toFixed(2);
-            out.wrModel = { from: +shown.toFixed(2), to: +to.toFixed(2), half: num(row[3]), qbLine: true };
+            if (out.points.mean != null && qp.skew > 0) out.points.mean = +(out.points.mean / qp.skew).toFixed(2);   // the average week is not skew-scaled
+            out.wrModel = { from: +shown.toFixed(2), to: +to.toFixed(2), half: num(row[3]), qbLine: true, skew: +qp.skew.toFixed(4) };
             const L = qp.line, bits = [];
             bits.push(Math.round(L.pass_yd) + ' pass yds, ' + L.pass_td.toFixed(1) + ' TD, ' + L.pass_int.toFixed(1) + ' INT');
             if (L.rush_yd >= 5) bits.push(Math.round(L.rush_yd) + ' rush yds' + (L.rush_td >= 0.05 ? ', ' + L.rush_td.toFixed(2) + ' rush TD' : ''));
             if (num(row[7]) != null) bits.push('team total ' + num(row[7]).toFixed(1));
+            if (qp.skew < 0.995) bits.push('your scoring is streakier: typical game ' + ((1 - qp.skew) * 100).toFixed(1) + '% under his average');
             out.why = [{ key: 'wrModel', label: 'DHQ QB model', impactPct: k != null ? +((k - 1) * 100).toFixed(1) : 0,
                 note: 'Typical game ' + to.toFixed(1) + ': ' + bits.join(', ') }].concat(out.why || []);
             return;
@@ -2189,7 +2295,8 @@
         if (out.wrModel && out.wrModel.qbLine && S.qbMap && S.qbMap.keys) for (const k of S.qbMap.keys) if (k in at) at[k] = 0;   // already in the QB line
         const sum = keys => keys.reduce((a, k) => a + (Number(sc[k]) || 0) * (at[k] || 0), 0);
         const st = sum(E.groups.steady), ra = sum(E.groups.rare), ng = sum(E.groups.neg);
-        const typ = E.typical.steady * st + E.typical.rare * ra + E.typical.neg * ng, avg = st + ra + ng;
+        const qbSk = out.wrModel && out.wrModel.qbLine && out.wrModel.skew > 0 ? out.wrModel.skew : 1;   // a QB's league skew (qbSkew) covers his extras too
+        const typ0 = E.typical.steady * st + E.typical.rare * ra + E.typical.neg * ng, typ = qbSk * typ0, avg = st + ra + ng;
         if (!typ && !avg) return;
         for (const f of ['median', 'typical', 'floor', 'ceiling']) if (out.points[f] != null) out.points[f] = +Math.max(0, out.points[f] + typ).toFixed(2);
         if (out.points.mean != null) out.points.mean = +Math.max(0, out.points.mean + avg).toFixed(2);
@@ -2198,7 +2305,7 @@
         const fd = (at.rec_fd || 0) * (Number(sc.rec_fd) || 0) + (at.rush_fd || 0) * (Number(sc.rush_fd) || 0) + (at.pass_fd || 0) * (Number(sc.pass_fd) || 0);
         if (Math.abs(fd) >= 0.05) bits.push('first downs ' + (fd > 0 ? '+' : '') + fd.toFixed(1));
         if (Math.abs(ra) >= 0.05) bits.push('bonuses ' + (ra > 0 ? '+' : '') + ra.toFixed(1));
-        const rest = typ - fd - E.typical.rare * ra;
+        const rest = typ0 - fd - E.typical.rare * ra;
         if (Math.abs(rest) >= 0.05) bits.push('other league rules ' + (rest > 0 ? '+' : '') + rest.toFixed(1));
         out.why = (out.why || []).concat([{ key: 'extras', label: 'League scoring', impactPct: 0, note: 'Your league\'s extra rules: ' + (bits.join(', ') || (typ > 0 ? '+' : '') + typ.toFixed(1)) }]);
     }

@@ -5,7 +5,7 @@
 // node qb-team-features.mjs --season=2026 --week=8 --model=qb-team.json [--rows=starters.csv] [--out=f.json]
 //   files (MODEL_DATA folder, nflverse names): stats_player_week_<yr>.csv for season-3..season, games.csv,
 //   injuries_<season>.csv, depth_charts_<season>.csv (ESPN daily format; only read when games.csv has no starter id).
-//   --rows: CSV season,week,gsis,team = the starter of each team (scripts/models/qb/qb-features.mjs picks them);
+//   --rows: CSV season,week,gsis,team = the candidate starters of each team, one or more (qb-features.mjs picks them);
 //   without it, games.csv's posted starter (or the depth chart's QB1).
 // (DHQ QB stack component "qb-team", QB project, qb2/qb-team; model qb-team.json = qb_team_ship_<season>.json.)
 import fs from 'fs';
@@ -173,32 +173,35 @@ function predict(x) {
   return { pred: mean + MODEL.med_off, pred_mean: mean, p25: MODEL.p25.a + MODEL.p25.b * mean, p75: MODEL.p75.a + MODEL.p75.b * mean, ...e };
 }
 
-// ---------------------------------------------------------------- rows: each team's posted starter this week
-const ROWS = A.rows ? Object.fromEntries(readCSV(A.rows, ['season', 'week', 'gsis', 'team']).filter(r => +r.season === Y && +r.week === W).map(r => [fx(r.team), r.gsis])) : null;
+// ---------------------------------------------------------------- rows: each team's candidate starter(s) this week
+const ROWS = A.rows ? {} : null;   // team -> [gsis, ...] (several candidates per team allowed)
+if (A.rows) for (const r of readCSV(A.rows, ['season', 'week', 'gsis', 'team'])) if (+r.season === Y && +r.week === W && r.gsis) (ROWS[fx(r.team)] || (ROWS[fx(r.team)] = [])).push(r.gsis);
 const out = [];
 const wk = G.filter(g => +g.season === Y && +g.week === W);
 const tl = wk.map(g => +g.total_line).filter(v => !isNaN(v) && v > 0), meanTot = tl.reduce((a, b) => a + b, 0) / Math.max(1, tl.length);
 for (const g of wk) {
   for (const h of [1, 0]) {
     const team = fx(h ? g.home_team : g.away_team), opp = fx(h ? g.away_team : g.home_team);
-    let gsis = ROWS ? ROWS[team] : (h ? g.home_qb_id : g.away_qb_id); if (!ROWS && isNA(gsis)) gsis = depthStarter(team, g.gameday); if (!gsis) continue;
-    const tot = isNA(g.total_line) ? meanTot : +g.total_line, spr = isNA(g.spread_line) ? 0 : +g.spread_line;
-    const itt = h ? (tot + spr) / 2 : (tot - spr) / 2, spread = h ? -spr : spr;
-    const dome = (g.roof === 'dome' || g.roof === 'closed') ? 1 : 0;
-    const wind = dome ? 0 : (isNA(g.wind) ? 0 : +g.wind), temp = dome ? 70 : (isNA(g.temp) ? 60 : +g.temp);
-    const tf = teamFeats(team, opp), qf = qbFeats(gsis);
-    const cs = (starts[gsis] || []).filter(o => o < Y * 100 + W).length, inj = INJ[gsis] || 0, c_ptd_sh = cPtd(coachOf[`${team}|${Y}|${W}`]);
-    const x = { ...tf, ...qf, c_ptd_sh, itt, total: tot, fav: -spread, dome, inj, car_starts: cs,
-      l_itt: Math.log(clip(itt, 8, 40) / 22.5), l_tot: Math.log(clip(tot, 28, 65) / 45.0),
-      wind10: Math.max(0, clip(wind, 0, 30) - 10), cold: Math.max(0, 40 - clip(temp, -10, 100)),
-      lg_t_ptd: lgt(tf.t_ptd_sh) - lgt(.64), lg_o_ptd: lgt(tf.o_ptd_sh) - lgt(.64), lg_c_ptd: lgt(c_ptd_sh) - lgt(.64),
-      lg_t_tdfg: lgt(tf.t_tdfg) - lgt(.59), lg_o_tdfg: lgt(tf.o_tdfg) - lgt(.59),
-      lg_rtdsh: lgt(qf.q_rtd_sh) - lgt(.12), lg_qptd: lgt(qf.q_ptd_sh) - lgt(.93), lg_dbsh: lgt(qf.q_db_sh) - lgt(.95),
-      lg_int: Math.log(qf.int_rate / .024), lg_oint: Math.log(tf.o_int_rate / .022), lg_sk: Math.log(qf.sack_rate / .068),
-      lg_osk: Math.log(tf.o_sk_rate / .065), lg_tsk: Math.log(tf.t_sk_rate / .065), lg_tdr: Math.log(qf.td_rate / .043),
-      lg_rtd: Math.log(clip(qf.rtd_pg, .01, 1.5) / .12), lg_fum: Math.log(qf.fum_rate / .006),
-      lowexp: cs < 4 ? 1 : 0, l_starts: Math.log1p(cs) };
-    out.push({ season: Y, week: W, gsis, team, opp, ...predict(x), itt, total: tot, spread, x });
+    let g0 = ROWS ? null : (h ? g.home_qb_id : g.away_qb_id); if (!ROWS && isNA(g0)) g0 = depthStarter(team, g.gameday);
+    for (const gsis of ROWS ? (ROWS[team] || []) : (g0 ? [g0] : [])) {
+      const tot = isNA(g.total_line) ? meanTot : +g.total_line, spr = isNA(g.spread_line) ? 0 : +g.spread_line;
+      const itt = h ? (tot + spr) / 2 : (tot - spr) / 2, spread = h ? -spr : spr;
+      const dome = (g.roof === 'dome' || g.roof === 'closed') ? 1 : 0;
+      const wind = dome ? 0 : (isNA(g.wind) ? 0 : +g.wind), temp = dome ? 70 : (isNA(g.temp) ? 60 : +g.temp);
+      const tf = teamFeats(team, opp), qf = qbFeats(gsis);
+      const cs = (starts[gsis] || []).filter(o => o < Y * 100 + W).length, inj = INJ[gsis] || 0, c_ptd_sh = cPtd(coachOf[`${team}|${Y}|${W}`]);
+      const x = { ...tf, ...qf, c_ptd_sh, itt, total: tot, fav: -spread, dome, inj, car_starts: cs,
+        l_itt: Math.log(clip(itt, 8, 40) / 22.5), l_tot: Math.log(clip(tot, 28, 65) / 45.0),
+        wind10: Math.max(0, clip(wind, 0, 30) - 10), cold: Math.max(0, 40 - clip(temp, -10, 100)),
+        lg_t_ptd: lgt(tf.t_ptd_sh) - lgt(.64), lg_o_ptd: lgt(tf.o_ptd_sh) - lgt(.64), lg_c_ptd: lgt(c_ptd_sh) - lgt(.64),
+        lg_t_tdfg: lgt(tf.t_tdfg) - lgt(.59), lg_o_tdfg: lgt(tf.o_tdfg) - lgt(.59),
+        lg_rtdsh: lgt(qf.q_rtd_sh) - lgt(.12), lg_qptd: lgt(qf.q_ptd_sh) - lgt(.93), lg_dbsh: lgt(qf.q_db_sh) - lgt(.95),
+        lg_int: Math.log(qf.int_rate / .024), lg_oint: Math.log(tf.o_int_rate / .022), lg_sk: Math.log(qf.sack_rate / .068),
+        lg_osk: Math.log(tf.o_sk_rate / .065), lg_tsk: Math.log(tf.t_sk_rate / .065), lg_tdr: Math.log(qf.td_rate / .043),
+        lg_rtd: Math.log(clip(qf.rtd_pg, .01, 1.5) / .12), lg_fum: Math.log(qf.fum_rate / .006),
+        lowexp: cs < 4 ? 1 : 0, l_starts: Math.log1p(cs) };
+      out.push({ season: Y, week: W, gsis, team, opp, ...predict(x), itt, total: tot, spread, x });
+    }
   }
 }
 const res = JSON.stringify({ model: MODEL.name, season: Y, week: W, rows: out });

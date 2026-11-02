@@ -19,7 +19,8 @@
 // Out of sample vs Sleeper (half-PPR, starters Sleeper projects 10+):
 // 2023-24 52.8% (miss 5.525 vs 5.678), 2025-26 53.8% (5.778 vs 5.883).
 // The stat line (for each league's scoring) is the mean of qb-stat's and
-// qb-ml's calibrated expected stats, its yardage / TD / first-down parts
+// qb-ml's calibrated expected stats (first downs without the TDs, as Sleeper
+// counts them), its yardage / TD / first-down parts
 // scaled so the half-PPR total equals the typical number.
 //
 // node qb-features.mjs --season=2026 --week=9 [--models=dir] [--active=roster] [--out=rows.json]
@@ -29,9 +30,16 @@
 //   may be summarised in qb-rush-cache/ instead), combine.csv (qb-young).
 //   --models: folder holding qb-team.json, qb-stat.json, qb-ml.json, qb-rush.json, qb-young.json, qb-change.json and
 //   cfb_qb.json (default: this folder; backtests point it at the fits of an earlier season).
-// The starter of each team (one per team playing): games.csv's posted QB unless he is Out/Doubtful on the week's
-// injury report or off the team's latest posted roster (ACT/INA) at or before the week, then the top such QB on the
-// ESPN depth chart before game day. Every component scores that same QB.
+// Every plausible starter of each team playing gets his own row (games.csv's posted QB is wrong in about 4-6% of
+// team-weeks, and whichever QB the user starts must have a number). Candidates, deduplicated:
+//   games.csv    the posted QB
+//   depth chart  the top QB on the ESPN depth chart before game day
+//   last game    the team's leading passer (most attempts) in its most recent game before this week
+// each only if he is not Out/Doubtful on the week's injury report and is on a latest posted roster (ACT/INA; IR is
+// RES) at or before the week (the last-game passer: on this team's). Usually one QB, two in about 8% of team-weeks.
+// `primary` (1 = the row the builder thinks most likely starts) is the candidate most rules name, ties going to
+// games.csv then the depth chart: right ~97% of the time in 2025-26 (games.csv alone ~95%; any candidate ~98%,
+// the rest are in-game injuries). Every component scores every candidate on his own history.
 // ══════════════════════════════════════════════════════════════════
 import fs from 'node:fs';
 import os from 'node:os';
@@ -82,12 +90,27 @@ if (fs.existsSync(D + `injuries_${Y}.csv`)) for (const r of readCSV(D + `injurie
     if (+r.season !== Y || +r.week !== W || !r.gsis_id) continue;
     INJ[r.gsis_id] = { Questionable: 1, Doubtful: 2, Out: 3 }[r.report_status] || 0;
 }
-let onRoster = () => true;
+let onRoster = () => true, onTeam = () => true;   // on any latest posted roster / on team t's (no roster for t: any)
 if (A.active !== 'snaps' && fs.existsSync(D + `roster_weekly_${Y}.csv`)) {
     const RO = readCSV(D + `roster_weekly_${Y}.csv`, ['season', 'week', 'game_type', 'team', 'gsis_id', 'position', 'status']).filter(r => r.game_type === 'REG' && +r.season === Y && +r.week <= W);
     const rW = {}; for (const r of RO) rW[fx(r.team)] = Math.max(rW[fx(r.team)] || 0, +r.week);
-    const S = new Set(RO.filter(r => +r.week === rW[fx(r.team)] && (r.status === 'ACT' || r.status === 'INA') && r.position === 'QB' && r.gsis_id).map(r => r.gsis_id));
+    const cur = RO.filter(r => +r.week === rW[fx(r.team)] && (r.status === 'ACT' || r.status === 'INA') && r.position === 'QB' && r.gsis_id);
+    const S = new Set(cur.map(r => r.gsis_id)), ST = {};
+    for (const r of cur) (ST[fx(r.team)] || (ST[fx(r.team)] = new Set())).add(r.gsis_id);
     onRoster = g => S.has(g);
+    onTeam = (g, t) => ST[t] ? ST[t].has(g) : S.has(g);
+}
+// the team's leading passer (most attempts, QBs) in its most recent regular-season game before week W
+const LAST = {};
+for (const y of [Y, Y - 1]) {
+    const f = D + `stats_player_week_${y}.csv`; if (!fs.existsSync(f)) continue;
+    const best = {};
+    for (const r of readCSV(f, ['player_id', 'position', 'season', 'week', 'season_type', 'team', 'attempts'])) {
+        if (r.season_type !== 'REG' || r.position !== 'QB' || +r.season !== y || (y === Y && +r.week >= W) || !r.player_id) continue;
+        const t = fx(r.team), b = best[t], wk = +r.week, att = +r.attempts || 0;
+        if (!b || wk > b.w || (wk === b.w && att > b.att)) best[t] = { w: wk, att, g: r.player_id };
+    }
+    for (const t in best) if (!LAST[t]) LAST[t] = best[t].g;
 }
 let DEPTH = null;
 function depthQBs(t) {
@@ -103,19 +126,30 @@ function depthQBs(t) {
     return rows.filter(r => r.d === d).sort((p, q) => p.k - q.k).map(r => r.g);
 }
 const ok = g => g && !(INJ[g] >= 2) && onRoster(g);
-const START = {};
+// START: every candidate { t, g, src (the rules naming him), primary } — a QB named for two teams stays with the team
+// whose roster he is on
+const START = [], seen = {};
 for (const t of Object.keys(GM).sort()) {
-    if (ok(GM[t].qb)) { START[t] = { g: GM[t].qb, src: 'games.csv' }; continue; }
-    const d = depthQBs(t).find(ok);
-    if (d) START[t] = { g: d, src: 'depth chart' };
+    const named = [['games.csv', ok(GM[t].qb) ? GM[t].qb : null], ['depth chart', depthQBs(t).find(ok) || null],
+        ['last game', ok(LAST[t]) && onTeam(LAST[t], t) ? LAST[t] : null]].filter(([, g]) => g);
+    const C = [];
+    for (const [rule, g] of named) { const c = C.find(x => x.g === g); if (c) c.rules.push(rule); else C.push({ t, g, rules: [rule] }); }
+    let top = null; for (const c of C) if (!top || c.rules.length > top.rules.length) top = c;   // ties: games.csv, then depth chart
+    for (const c of C) {
+        const prev = seen[c.g];
+        if (prev && (onTeam(c.g, prev.t) || !onTeam(c.g, t))) continue;
+        if (prev) START.splice(START.indexOf(prev), 1);
+        const s = { t, g: c.g, src: c.rules.join('+'), primary: c === top ? 1 : 0 };
+        START.push(s); seen[c.g] = s;
+    }
 }
 const PL = {};
 for (const r of readCSV(D + 'players.csv', ['gsis_id', 'display_name'])) if (r.gsis_id) PL[r.gsis_id] = r.display_name;
 
-// ── the six components, each scoring the same starters
+// ── the six components, each scoring every candidate (several rows per team allowed)
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'dhq-qb-'));
 const rowsCsv = path.join(TMP, 'starters.csv');
-fs.writeFileSync(rowsCsv, 'season,week,gsis,team\n' + Object.entries(START).map(([t, s]) => [Y, W, s.g, t].join(',')).join('\n') + '\n');
+fs.writeFileSync(rowsCsv, 'season,week,gsis,team\n' + START.map(s => [Y, W, s.g, s.t].join(',')).join('\n') + '\n');
 const M = f => path.join(MDIR, f), common = ['--season=' + Y, '--week=' + W, '--rows=' + rowsCsv];
 const JOBS = {
     team: ['qb-team-features.mjs', '--model=' + M('qb-team.json')],
@@ -145,7 +179,8 @@ const SCALE = ['pass_yd', 'pass_td', 'rush_yd', 'rush_td', 'pass_fd', 'rush_fd']
 const half = l => .04 * l.pass_yd + 4 * l.pass_td - l.pass_int + .1 * l.rush_yd + 6 * l.rush_td - 2 * l.fum_lost + 2 * l.pass_2pt;
 const mean = a => { const v = a.filter(fin); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null; };
 const out = [];
-for (const [t, s] of Object.entries(START)) {
+for (const s of START) {
+    const t = s.t;
     const g = s.g, c = { team: R.team[g], stat: R.stat[g], ml: R.ml[g], rush: R.rush[g], young: R.young[g], change: R.change[g] };
     const parts = { team: c.team && c.team.pred, stat: c.stat && c.stat.pred_mean, ml: c.ml && c.ml.pred_mean, rush: c.rush && c.rush.pred_mean };
     const b = mean(Object.values(parts));
@@ -160,13 +195,17 @@ for (const [t, s] of Object.entries(START)) {
     const pts = .04 * line.pass_yd + 4 * line.pass_td + .1 * line.rush_yd + 6 * line.rush_td, fixed = half(line) - pts;
     const k = pts > 0 ? Math.min(2, Math.max(0.3, (typical - fixed) / pts)) : 1;
     for (const key of SCALE) line[key] *= k;
+    // first downs in Sleeper's sense: nflverse's (the models' E_*_fd) count every TD as a first down, Sleeper's
+    // pass_fd / rush_fd do not (~1.4 + 0.2 a game too many in a league that scores first downs)
+    if (line.pass_fd > 0) line.pass_fd = Math.max(0, line.pass_fd - line.pass_td);
+    if (line.rush_fd > 0) line.rush_fd = Math.max(0, line.rush_fd - line.rush_td);
     if (c.stat && fin(c.stat.E_pass_att)) line.pass_att = c.stat.E_pass_att;
     if (c.stat && fin(c.stat.E_rush_att)) line.rush_att = c.stat.E_rush_att;
     const r3 = v => fin(v) ? +v.toFixed(3) : null;
-    out.push({ season: Y, week: W, gsis: g, name: PL[g] || (c.stat && c.stat.name) || '', team: t, opp: GM[t].opp, src: s.src, itt: r3(GM[t].itt),
+    out.push({ season: Y, week: W, gsis: g, name: PL[g] || (c.stat && c.stat.name) || '', team: t, opp: GM[t].opp, src: s.src, primary: s.primary, itt: r3(GM[t].itt),
         typical: r3(typical), mean: r3(half(line)), line: Object.fromEntries(Object.entries(line).map(([kk, v]) => [kk, r3(v)])),
         parts: { team: r3(parts.team), stat: r3(parts.stat), ml: r3(parts.ml), rush: r3(parts.rush), b: r3(b), S: r3(S), w, adj: r3(adj) } });
 }
 const js = JSON.stringify(out);
 if (A.out) fs.writeFileSync(A.out, js); else process.stdout.write(js + '\n');
-console.error(`qb ${Y} wk${W}: ${out.length} starters (${Object.keys(START).length} teams; ` + Object.entries(R).map(([k, v]) => k + ' ' + Object.keys(v).length).join(', ') + ')');
+console.error(`qb ${Y} wk${W}: ${out.length} QBs (${new Set(START.map(s => s.t)).size} teams, ${START.filter(s => s.primary).length} likely starters; ` + Object.entries(R).map(([k, v]) => k + ' ' + Object.keys(v).length).join(', ') + ')');

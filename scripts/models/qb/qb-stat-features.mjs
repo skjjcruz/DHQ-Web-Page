@@ -11,7 +11,7 @@
 //   --active=snaps  (backtest): the starter is games.csv's posted QB.
 //   --active=roster (live):     games.csv's QB unless he is Out/Doubtful or off the active roster, then the top active QB
 //                               on the depth chart.
-//   --rows=CSV season,week,gsis,team: the starter of each team, as picked by scripts/models/qb/qb-features.mjs.
+//   --rows=CSV season,week,gsis,team: the candidate starters of each team (one or more), as picked by qb-features.mjs.
 //   (DHQ QB stack component "qb-stat", QB project, qb2/qb-stat; model qb-stat.json = qbstat_<season>.json.)
 //   --score='{"pyd":0.04,"ptd":6,...}' re-scores the simulated games for another league (sacks/first downs: use E_* columns).
 import fs from 'fs';
@@ -202,9 +202,10 @@ function depthQB(t) {   // ESPN: last snapshot strictly before gameday, QBs by r
   return rows.filter(r => r.dt.slice(0, 10) === d).sort((p, q) => +p.pos_rank - +q.pos_rank).map(r => r.gsis_id);
 }
 const onRoster = g => !ROSTER || ROSTER.some(r => r.gsis_id === g && r.position === 'QB');
-const ROWS = A.rows ? Object.fromEntries(readCSV(A.rows, ['season', 'week', 'gsis', 'team']).filter(r => +r.season === Y && +r.week === W).map(r => [fx(r.team), r.gsis])) : null;
+const ROWS = A.rows ? {} : null;   // team -> [gsis, ...] (several candidates per team allowed)
+if (A.rows) for (const r of readCSV(A.rows, ['season', 'week', 'gsis', 'team'])) if (+r.season === Y && +r.week === W && r.gsis) (ROWS[fx(r.team)] || (ROWS[fx(r.team)] = [])).push(r.gsis);
+function startersFor(t) { if (ROWS) return (ROWS[t] || []).map(g => ({ g, src: 'rows' })); const s = starterFor(t); return s ? [s] : []; }
 function starterFor(t) {
-  if (ROWS) return ROWS[t] ? { g: ROWS[t], src: 'rows' } : null;
   const gm = GM[t], ok = g => g && !((INJ[g] || {}).st >= 2) && onRoster(g);
   if (A.active !== 'roster') return gm.qb ? { g: gm.qb, src: 'games.csv' } : null;
   if (ok(gm.qb)) return { g: gm.qb, src: 'games.csv' };
@@ -274,8 +275,8 @@ function predict(d) {
 
 // ---------------------------------------------------------------- every team's starter this week
 const out = [];
-for (const t in GM) {
-  const gm = GM[t], s = starterFor(t); if (!s || gm.itt == null) continue;
+for (const t in GM) for (const s of startersFor(t)) {   // each candidate of the team
+  const gm = GM[t]; if (gm.itt == null) continue;
   const j = INJ[s.g] || { st: 0, pr: 0, rest: 0 }, p = P[s.g] || {};
   const age = has(p.birth) ? Math.round((Date.parse(gm.day) - Date.parse(p.birth)) / 864e5) / 365.25 : null;
   const d = { ...gm, ...qbFeatures(s.g), ...defFeatures(gm.opp), inj_status: j.st, inj_prac: j.pr, inj_rest: j.rest,
