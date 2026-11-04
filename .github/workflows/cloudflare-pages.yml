@@ -53,7 +53,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p site
-          rsync -a --exclude .git --exclude .github src/ site/
+          # The Lab's model-building code and notes (scripts/, README) are for
+          # the jobs that build data/, not for visitors: only what the pages
+          # and the data files need is published.
+          rsync -a --exclude .git --exclude .github --exclude scripts --exclude README.md --exclude .gitignore --exclude "package*.json" --exclude node_modules src/ site/
           [ -f site/index.html ] && [ -d site/data ] || { echo "Missing index.html or data/" >&2; exit 1; }
           # GitHub Pages answers an unknown path with a 404. Cloudflare Pages,
           # when a site has no 404.html, answers it with index.html and a 200,
