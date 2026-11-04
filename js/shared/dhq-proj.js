@@ -33,10 +33,12 @@
     // (skjjcruz/DHQ-Web-Page), where the PFF key is a repo secret and never
     // reaches a browser. The Lab reads its own copies; the website and the
     // app read the Lab's published ones, so every surface sees one fresh set.
-    const DATA_HOME = 'https://skjjcruz.github.io/DHQ-Web-Page/';
+    // Served from Cloudflare Pages since 2026-11-04 (the Lab repo is private).
+    const DATA_HOME = 'https://dhq-lab.pages.dev/';
     function depUrl(src) {
         if (!/^data\//.test(src)) return src;
-        const onLab = /\/DHQ-Web-Page\//.test((root.location && root.location.pathname) || '');
+        const loc = root.location || {};
+        const onLab = loc.origin === 'https://dhq-lab.pages.dev' || /\/DHQ-Web-Page\//.test(loc.pathname || '');
         return onLab ? src : DATA_HOME + src;
     }
     const CHUNK = 25;

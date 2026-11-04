@@ -652,7 +652,7 @@
   document.getElementById('google-btn').addEventListener('click', () => {
     const db = sbClient();
     if (!db) { document.getElementById('gate-error').textContent = 'Still loading — try again in a moment.'; return; }
-    db.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + window.location.pathname } });
+    db.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + window.location.pathname.replace(/\/([^/.]+)$/, '/$1.html') } });
   });
 
   // Email sign-in → fw-signin → store app session → unlock.

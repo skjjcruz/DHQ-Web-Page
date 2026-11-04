@@ -432,7 +432,7 @@
             });
 
             // Generate shareable URL
-            const base = window.location.href.replace('gift.html', 'login.html');
+            const base = new URL('login.html', window.location.href).href.split(/[?#]/)[0];   // works for /gift.html and /gift (Cloudflare drops .html)
             generatedUrl = `${base}?for=${encodeURIComponent(verifiedUsername)}`;
             document.getElementById('shareUrl').textContent = generatedUrl;
 

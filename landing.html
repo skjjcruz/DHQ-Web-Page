@@ -44,7 +44,7 @@
     })();
     </script>
 
-<meta name="dhq-build" content="b160-750f71bcba">
+<meta name="dhq-build" content="b160-95b9b927d7">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://sxshiqyxhhifvtfqawbq.supabase.co https://api.sleeper.app https://api.myfantasyleague.com https://*.myfantasyleague.com https://lm-api-reads.fantasy.espn.com https://fantasysports.yahooapis.com https://*.sentry.io; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; object-src 'none';">
 <title>Dynasty HQ — Generic advice stops here.</title>
@@ -571,7 +571,8 @@
       <a href="our-vision.html">Our vision</a>
       <a href="legal/privacy-policy.html">Privacy</a>
       <a href="legal/terms-of-service.html">Terms</a>
-      <a href="mailto:admin@c2football.com">Contact</a>
+      <a id="contactLink" href="#">Contact</a>
+      <script>/* the address is put together here so Cloudflare's email obfuscation has nothing to rewrite in the HTML */document.getElementById('contactLink').href = 'mailto:' + ['admin', 'c2football.com'].join('@');</script>
     </nav>
     <small>© 2026 C2 Football LLC</small>
   </footer>
@@ -1167,7 +1168,7 @@
       // reads 0 no matter how many people sign up (owner ask 2026-08-20).
       trackLandingEvent(authMode === 'signup' ? 'signup_started' : 'signin_started', { method: 'google' });
       markOAuthPending();
-      db.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + window.location.pathname } });
+      db.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + window.location.pathname.replace(/\/([^/.]+)$/, '/$1.html') } });
     }
 
     // ── Apple OAuth (account only) ──────────────────────────────────────────
@@ -1181,7 +1182,7 @@
       // reads 0 no matter how many people sign up (owner ask 2026-08-20).
       trackLandingEvent(authMode === 'signup' ? 'signup_started' : 'signin_started', { method: 'apple' });
       markOAuthPending();
-      db.auth.signInWithOAuth({ provider: 'apple', options: { redirectTo: window.location.origin + window.location.pathname } });
+      db.auth.signInWithOAuth({ provider: 'apple', options: { redirectTo: window.location.origin + window.location.pathname.replace(/\/([^/.]+)$/, '/$1.html') } });
     }
 
     // Handle Google redirect back: store session, then route to step 2.
