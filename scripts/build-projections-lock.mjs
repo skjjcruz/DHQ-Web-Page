@@ -11,9 +11,17 @@
 // hourly; a player's numbers keep updating until his game has started,
 // then they are kept as they were. Runs the same engine the Lab page
 // runs, in Node, with the same public feeds; no keys.
+//
+// lock.platforms = { espn: {sleeperId: statLine}, cbs: {...}, fetched: {espn, cbs} }:
+// ESPN's and CBS's projections for the week as Sleeper stat lines
+// (scripts/platform-projections.mjs), scored on the page with each league's
+// rules. Same freeze: a line stops updating once his game has kicked off,
+// and a line is never first taken after kickoff. A source that is down is
+// skipped and its earlier lines are kept; it never fails the job.
 import { createRequire } from 'node:module';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
+import { fetchPlatformProjections } from './platform-projections.mjs';
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const R = (p) => require(path.join(ROOT, p));
@@ -72,6 +80,8 @@ async function main() {
     for (const [pid, st] of Object.entries(box || {})) { const p = players[pid]; if (p && st && st.gp >= 1 && p.injury_status) { p.injury_status_after = p.injury_status; p.injury_status = null; } }
     globalThis.S = { season, nflState: state, weeklyPlayerPoints: {}, players };
     for (let w = 1; w < week; w++) { S.weeklyPlayerPoints[w] = {}; for (const [pid, s] of Object.entries(weekly[w - 1])) S.weeklyPlayerPoints[w][pid] = +App.calcRawPts(s, DEFAULT_SCORING).toFixed(2); }
+    // ESPN and CBS lines, fetched while the engine runs (never throws)
+    const platformsP = reconstruct ? null : fetchPlatformProjections({ season, week, players, log: m => console.log('  ' + m) }).catch(e => ({ errors: { all: e.message } }));
     await App.SOS.initialize(String(season), players);
     App.WeeklyProj.setProjections(week, proj || {});
     // kickoffs and game state from the ESPN scoreboard
@@ -150,6 +160,31 @@ async function main() {
         out.scorings[key] = { name: sc.name, scoring: sc.scoring, players: rows };
         console.log('  ' + key + ' (' + sc.name + '): ' + Object.keys(rows).length + ' players');
     }
+    // ── ESPN and CBS: the same freeze as ours, by the lock's kickoffs
+    const prevPl = existing && !existing.reconstructed && existing.platforms ? existing.platforms : null;
+    if (platformsP) {
+        const got = await platformsP;
+        const kicked = (T) => { const k = kickoffs[T] || (existing && existing.kickoffs && existing.kickoffs[T]); return !!started[T] || !!(k && new Date(k) <= now); };
+        const teamOf = (pid) => (out.players[pid] && out.players[pid].team) || String((players[pid] && players[pid].team) || (players[pid] && players[pid].position === 'DEF' ? pid : '')).toUpperCase();
+        const plat = { fetched: {} };
+        for (const src of ['espn', 'cbs']) {
+            const prev = (prevPl && prevPl[src]) || null, fresh = got[src] || null;
+            if (!fresh) {
+                if (prev) { plat[src] = prev; if (prevPl.fetched && prevPl.fetched[src]) plat.fetched[src] = prevPl.fetched[src]; }
+                console.log('  ' + src + ': not fetched this run' + (prev ? ', kept the ' + Object.keys(prev).length + ' lines from before' : ''));
+                continue;
+            }
+            const lines = {}; let held = 0, late = 0;
+            for (const [pid, line] of Object.entries(fresh)) {
+                if (kicked(teamOf(pid))) { if (prev && prev[pid]) { lines[pid] = prev[pid]; held++; } else late++; continue; }
+                lines[pid] = line;
+            }
+            if (prev) for (const [pid, line] of Object.entries(prev)) if (!(pid in lines) && kicked(teamOf(pid))) { lines[pid] = line; held++; }
+            plat[src] = lines; plat.fetched[src] = got.fetched[src];
+            console.log('  ' + src + ': ' + Object.keys(lines).length + ' lines · kept locked ' + held + (late ? ' · ' + late + ' skipped (game already started, never captured before kickoff)' : ''));
+        }
+        if (plat.espn || plat.cbs) out.platforms = plat;
+    } else if (prevPl) out.platforms = prevPl;
     await mkdir(path.dirname(OUT), { recursive: true });
     await writeFile(OUT, JSON.stringify(out));
     console.log('wrote ' + path.relative(ROOT, OUT) + ' (' + Math.round(JSON.stringify(out).length / 1024) + ' KB) · updated ' + written + ' · kept locked ' + kept);
