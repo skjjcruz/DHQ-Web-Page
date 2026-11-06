@@ -328,35 +328,76 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
         t.n++; t.de += de; t.se += se;
         if (de < se - 0.05) t.w++; else if (se < de - 0.05) t.l++; else t.t++;
     }
-    function posTable(byPos, label) {
-        var rows = BOARD_POS.filter(function (g) { return byPos[g] && byPos[g].n; });
+    // ESPN and CBS (lock.platforms): their week's projection as Sleeper stat
+    // lines, scored here with the same rules as everything else on the sheet.
+    // NFL.com's own game is shut down (ESPN is the NFL's official game now).
+    var PLATFORMS = [['espn', 'ESPN'], ['cbs', 'CBS']];
+    function platPts(lock, pid, scoring) {
+        var pl = lock && lock.platforms, out = {};
+        PLATFORMS.forEach(function (x) { var line = pl && pl[x[0]] && pl[x[0]][pid]; out[x[0]] = line ? +App.calcRawPts(line, scoring).toFixed(2) : null; });
+        return out;
+    }
+    function attachPlatforms(P, lock, scoring) {
+        if (!lock || !lock.platforms) return 0;
+        var n = 0;
+        Object.keys(P).forEach(function (pid) { P[pid].plat = platPts(lock, pid, scoring); if (P[pid].plat.espn != null || P[pid].plat.cbs != null) n++; });
+        return n;
+    }
+    // byPos: DHQ vs Sleeper tallies by position. plat (optional): { espn: {pos: tally}, cbs: {...} },
+    // DHQ vs that platform; its columns show only when it has rows.
+    function posTable(byPos, label, plat) {
+        var have = PLATFORMS.filter(function (x) { var m = plat && plat[x[0]]; return m && Object.keys(m).some(function (g) { return m[g].n; }); });
+        var rows = BOARD_POS.filter(function (g) { return (byPos[g] && byPos[g].n) || have.some(function (x) { return plat[x[0]][g] && plat[x[0]][g].n; }); });
         if (!rows.length) return '';
-        return '<h3>' + label + '</h3><div class="sc-wrap"><table class="sc"><tr><th>Pos</th><th class="num">W - L</th><th class="num">Win %</th><th class="num hide-m">Even</th><th class="num">DHQ<br>miss</th><th class="num">Sleeper<br>miss</th></tr>'
-            + rows.map(function (g) { var t = byPos[g]; return '<tr><td>' + g + '</td><td class="num">' + t.w + ' - ' + t.l + '</td><td class="num"><b>' + winPct(t.w, t.l) + '</b></td><td class="num hide-m">' + t.t + '</td><td class="num">' + (t.de / t.n).toFixed(2) + '</td><td class="num">' + (t.se / t.n).toFixed(2) + '</td></tr>'; }).join('')
+        var dash = '<td class="num">—</td>';
+        return '<h3>' + label + (have.length ? ' · ' + have.map(function (x) { return x[1]; }).join(' · ') : '') + '</h3><div class="sc-wrap"><table class="sc"><tr><th>Pos</th><th class="num">W - L</th><th class="num">Win %</th><th class="num hide-m">Even</th><th class="num">DHQ<br>miss</th><th class="num">Sleeper<br>miss</th>'
+            + have.map(function (x) { return '<th class="num">Win %<br>vs ' + x[1] + '</th>'; }).join('')
+            + have.map(function (x) { return '<th class="num hide-m">' + x[1] + '<br>miss</th>'; }).join('') + '</tr>'
+            + rows.map(function (g) {
+                var t = byPos[g];
+                var cells = t && t.n ? '<td class="num">' + t.w + ' - ' + t.l + '</td><td class="num"><b>' + winPct(t.w, t.l) + '</b></td><td class="num hide-m">' + t.t + '</td><td class="num">' + (t.de / t.n).toFixed(2) + '</td><td class="num">' + (t.se / t.n).toFixed(2) + '</td>'
+                    : dash + dash + '<td class="num hide-m">—</td>' + dash + dash;
+                return '<tr><td>' + g + '</td>' + cells
+                    + have.map(function (x) { var u = plat[x[0]][g]; return u && u.n ? '<td class="num" title="' + u.w + ' - ' + u.l + (u.t ? ', ' + u.t + ' even' : '') + ' on ' + u.n + '">' + winPct(u.w, u.l) + '</td>' : dash; }).join('')
+                    + have.map(function (x) { var u = plat[x[0]][g]; return '<td class="num hide-m">' + (u && u.n ? (u.se / u.n).toFixed(2) : '—') + '</td>'; }).join('')
+                    + '</tr>';
+            }).join('')
             + '</table></div>';
     }
     // How each projection did against the box scores: average miss, who was
-    // closer, the win % against Sleeper, and the same by position.
+    // closer, the win % against Sleeper (and ESPN and CBS when the week's
+    // lock has their lines), and the same by position. A row where one of
+    // them has no line counts only for the others.
     function scorecard(P, actuals) {
         var n = 0, sErr = 0, dErr = 0, dWins = 0, dLoss = 0, ties = 0;
         var nAll = 0, dErrAll = 0, byPos = {};
+        var pt = {}; PLATFORMS.forEach(function (x) { pt[x[0]] = { all: tally(), byPos: {} }; });
         Object.keys(actuals).forEach(function (pid) {
             var p = P[pid]; if (!p || !p.available) return;
-            var a = actuals[pid], de = Math.abs(p.points.median - a);
+            var a = actuals[pid], de = Math.abs(p.points.median - a), g = p.position;
             nAll++; dErrAll += de;
+            PLATFORMS.forEach(function (x) {
+                var o = p.plat && p.plat[x[0]]; if (o == null) return;
+                tallyAdd(pt[x[0]].all, p.points.median, o, a);
+                if (g) tallyAdd(pt[x[0]].byPos[g] = pt[x[0]].byPos[g] || tally(), p.points.median, o, a);
+            });
             if (p.sleeper == null) return;
             var se = Math.abs(p.sleeper - a);
             n++; sErr += se; dErr += de;
             if (de < se - 0.05) dWins++; else if (se < de - 0.05) dLoss++; else ties++;
-            var g = p.position; if (g) tallyAdd(byPos[g] = byPos[g] || tally(), p.points.median, p.sleeper, a);
+            if (g) tallyAdd(byPos[g] = byPos[g] || tally(), p.points.median, p.sleeper, a);
         });
         if (!nAll) return '';
+        var have = PLATFORMS.filter(function (x) { return pt[x[0]].all.n; });
+        var platMiss = have.map(function (x) { var t = pt[x[0]].all; return '<div class="tile">' + x[1] + ' avg miss<b>' + (t.se / t.n).toFixed(1) + '</b>' + t.n + (x[0] === 'espn' ? ' with an ' : ' with a ') + x[1] + ' line · DHQ ' + (t.de / t.n).toFixed(1) + '</div>'; }).join('');
+        var platWin = have.map(function (x) { var t = pt[x[0]].all; return '<div class="tile">Win % vs ' + x[1] + '<b>' + winPct(t.w, t.l) + '</b>' + t.w + ' - ' + t.l + (t.t ? ', ' + t.t + ' even' : '') + '</div>'; }).join('');
+        var plat = {}; have.forEach(function (x) { plat[x[0]] = pt[x[0]].byPos; });
         return '<h3>HOW WE DID · ' + nAll + ' PLAYED</h3><div class="grid">'
             + '<div class="tile">DHQ avg miss<b>' + (dErrAll / nAll).toFixed(1) + '</b>' + nAll + ' players</div>'
-            + (n ? '<div class="tile">Sleeper avg miss<b>' + (sErr / n).toFixed(1) + '</b>' + n + ' with a Sleeper line</div>'
-            + '<div class="tile">Wins - Losses<b><span class="wl wl-w">W</span> ' + dWins + ' &nbsp;-&nbsp; <span class="wl wl-l">L</span> ' + dLoss + '</b>' + (ties ? ties + ' even' : 'DHQ vs Sleeper, closer to the actual') + '</div>'
-            + '<div class="tile">Win % vs Sleeper<b>' + winPct(dWins, dLoss) + '</b>wins over wins + losses</div>' : '')
-            + '</div>' + (n ? posTable(byPos, 'BY POSITION · VS SLEEPER') : '');
+            + (n ? '<div class="tile">Sleeper avg miss<b>' + (sErr / n).toFixed(1) + '</b>' + n + ' with a Sleeper line</div>' : '') + platMiss
+            + (n ? '<div class="tile">Wins - Losses<b><span class="wl wl-w">W</span> ' + dWins + ' &nbsp;-&nbsp; <span class="wl wl-l">L</span> ' + dLoss + '</b>' + (ties ? ties + ' even' : 'DHQ vs Sleeper, closer to the actual') + '</div>'
+            + '<div class="tile">Win % vs Sleeper<b>' + winPct(dWins, dLoss) + '</b>wins over wins + losses</div>' : '') + platWin
+            + '</div>' + (n || have.length ? posTable(byPos, 'BY POSITION · VS SLEEPER', plat) : '');
     }
 
     // One league: rosters, scoring, weekly points in this league's rules,
@@ -377,6 +418,7 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
         var opts = { playersData: S.players, statsData: shared.statsCur, priorData: shared.statsPrior, scoring: scoring, season: shared.season, league: league, baselineMode: $('fBase').value };
         var res = await App.MatchupInputs.projectRoster(mine.players || [], shared.week, opts);
         var lines = (mine.players || []).filter(function (pid) { return App.WeeklyProj.projLine(pid, shared.week); }).length;
+        attachPlatforms(res.projections, sheet.season === shared.season ? await lockFor(shared.week) : null, scoring);
         return { league: league, mine: mine, res: res, lines: lines, actuals: actualsFor(shared, scoring, mine.players) };
     }
 
@@ -408,6 +450,7 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
                 baseline: { median: row[1] != null ? row[1] : row[0], source: 'locked', why: m.why || '' }, factors: [], missing: [], why: [], available: true, lockedWhy: m.why || '', lockedAt: m.t };
             var line = actual[pid]; if (line && line.gp >= 1) actuals[pid] = +App.calcRawPts(line, scoring).toFixed(2);
         });
+        attachPlatforms(P, lock, scoring);
         return { league: league, mine: roster, res: { projections: P }, lines: lines, actuals: actuals, locked: { week: week, built: lock.built, reconstructed: !!lock.reconstructed } };
     }
 
@@ -744,6 +787,10 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
             var t0 = Date.now();
             var opts = { playersData: S.players, statsData: shared.statsCur, priorData: shared.statsPrior, scoring: scoring, season: shared.season, sleeperOnly: mode !== 'dhq', baselineMode: mode };
             var res = await App.MatchupInputs.projectRoster(pids, shared.week, opts);
+            // ESPN and CBS from this week's lock, scored with these rules
+            var wkLock = sheet.season === shared.season ? await lockFor(shared.week) : null;
+            var nPlat = attachPlatforms(res.projections, wkLock, scoring);
+            if (nPlat) step('   ESPN / CBS lines for ' + nPlat + ' players (week ' + shared.week + ' lock)', 'ok');
             board.actuals = actualsFor(shared, scoring, pids);
             board.locked = null;
             board.rows = Object.keys(res.projections).map(function (pid) { return { pid: pid, p: res.projections[pid] }; });
@@ -798,7 +845,7 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
             + '<div class="pos-tabs">' + tabs + '</div>'
             + '<input id="boardSearch" type="search" placeholder="search a player or team code" value="' + esc(board.q) + '" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">'
             + '<div id="boardBody">' + body + '</div>'
-            + '<div class="hint" style="margin-top:12px">Tap a column heading to sort by it; tap again to flip. Sleeper proj = Sleeper\'s published line scored with these rules. DHQ proj = the DHQ baseline (its own stat line, or Sleeper\'s line, per the switch) after the eleven factors. Actual = points scored so far this week. +/- = Actual minus DHQ proj. W/L = green when DHQ was closer to the actual than Sleeper, red when Sleeper was; sorted by how much closer. Tap a row for the why.</div>';
+            + '<div class="hint" style="margin-top:12px">Tap a column heading to sort by it; tap again to flip. Sleeper proj = Sleeper\'s published line scored with these rules. DHQ proj = the DHQ baseline (its own stat line, or Sleeper\'s line, per the switch) after the eleven factors. Actual = points scored so far this week. +/- = Actual minus DHQ proj. W/L = green when DHQ was closer to the actual than Sleeper, red when Sleeper was; sorted by how much closer. ESPN / CBS tiles: their projections for the week, captured with the lock before each kickoff and scored with these rules (NFL.com\'s own game is shut down; ESPN is the NFL\'s official game). Tap a row for the why (and their numbers).</div>';
         Array.prototype.forEach.call(document.querySelectorAll('#weekStep button'), function (b) {
             b.addEventListener('click', function () {
                 var go = b.getAttribute('data-go') != null ? Number(b.getAttribute('data-go')) : sheet.week + Number(b.getAttribute('data-step'));
@@ -839,9 +886,10 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
                 var r = board.rows.filter(function (x) { return x.pid === pid; })[0];
                 if (!r) return;
                 var why = document.createElement('tr'); why.className = 'why';
+                var platTxt = r.p.plat ? PLATFORMS.filter(function (x) { return r.p.plat[x[0]] != null; }).map(function (x) { return x[1] + ' proj ' + fmt(r.p.plat[x[0]]); }).join(' · ') : '';
                 why.innerHTML = r.p.lockedWhy != null
-                    ? '<td colspan="7"><div class="hint">' + esc(r.p.lockedWhy || 'No detail stored with this lock.') + (r.p.lockedAt ? ' · locked ' + esc(String(r.p.lockedAt).slice(0, 16).replace('T', ' ')) + ' UTC' : '') + '</div></td>'
-                    : '<td colspan="7"><div class="fx">' + factorRows(r.p) + '</div>' + (r.p.missing.length ? '<div class="missing">No data for: ' + esc(r.p.missing.map(labelOf).join(', ')) + '</div>' : '') + '</td>';
+                    ? '<td colspan="7"><div class="hint">' + (platTxt ? '<b>' + esc(platTxt) + '</b> · ' : '') + esc(r.p.lockedWhy || 'No detail stored with this lock.') + (r.p.lockedAt ? ' · locked ' + esc(String(r.p.lockedAt).slice(0, 16).replace('T', ' ')) + ' UTC' : '') + '</div></td>'
+                    : '<td colspan="7">' + (platTxt ? '<div class="hint"><b>' + esc(platTxt) + '</b></div>' : '') + '<div class="fx">' + factorRows(r.p) + '</div>' + (r.p.missing.length ? '<div class="missing">No data for: ' + esc(r.p.missing.map(labelOf).join(', ')) + '</div>' : '') + '</td>';
                 tr.parentNode.insertBefore(why, tr.nextSibling);
             });
         });
@@ -886,7 +934,7 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
         var sc = lock.scorings[key];
         return Object.keys(sc.players).map(function (pid) {
             var row = sc.players[pid], m = lock.players[pid] || {};
-            return { pid: pid, p: { position: m.pos, team: m.team, opponentAbbr: m.opp, points: { median: row[0] }, sleeper: row[1], grade: m.grade || 'C', verdict: m.verdict || 'sit', factors: [], missing: [], why: [], available: true, lockedWhy: m.why || '', lockedAt: m.t } };
+            return { pid: pid, p: { position: m.pos, team: m.team, opponentAbbr: m.opp, points: { median: row[0] }, sleeper: row[1], plat: platPts(lock, pid, sc.scoring), grade: m.grade || 'C', verdict: m.verdict || 'sit', factors: [], missing: [], why: [], available: true, lockedWhy: m.why || '', lockedAt: m.t } };
         }).sort(function (a, b) { return b.p.points.median - a.p.points.median; });
     }
     async function showLocked(week) {
@@ -945,7 +993,7 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
     // row a week with its win % against Sleeper, the season total, and the
     // season by position.
     async function summarizeSeason() {
-        var parts = [], W = 0, L = 0, T = 0, dm = 0, sm = 0, n = 0, ns = 0, byPos = {};
+        var parts = [], W = 0, L = 0, T = 0, dm = 0, sm = 0, n = 0, ns = 0, byPos = {}, plat = {};
         for (var i = 0; i < sheet.weeks.length; i++) {
             var w = sheet.weeks[i], lock = await lockFor(w); if (!lock) continue;
             var key = sheetScoringKey(lock), sc = lock.scorings[key];
@@ -956,6 +1004,8 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
                 var line = actual[pid]; if (!line || !(line.gp >= 1)) return;
                 var a = +App.calcRawPts(line, sc.scoring).toFixed(2), row = sc.players[pid];
                 var de = Math.abs(row[0] - a); n++; dm += de; wn++;
+                var g0 = (lock.players[pid] || {}).pos, pp = g0 ? platPts(lock, pid, sc.scoring) : {};
+                PLATFORMS.forEach(function (x) { if (pp[x[0]] == null) return; var m = plat[x[0]] = plat[x[0]] || {}; tallyAdd(m[g0] = m[g0] || tally(), row[0], pp[x[0]], a); });
                 if (row[1] == null) return;
                 ns++; sm += Math.abs(row[1] - a);
                 tallyAdd(wk, row[0], row[1], a);
@@ -968,7 +1018,7 @@ App.calcPPG = App.calcPPG || function (st, scoring) { return st && st.gp > 0 ? A
         $('sheetSeason').innerHTML = '<b style="color:#fff">Season to date: ' + W + '-' + L + (T ? '-' + T : '') + ' vs Sleeper · ' + winPct(W, L) + ' win rate</b> · DHQ avg miss ' + (dm / n).toFixed(2) + ' · Sleeper ' + (ns ? (sm / ns).toFixed(2) : '—')
             + '<h3>WEEK BY WEEK · VS SLEEPER</h3><div class="sc-wrap"><table class="sc"><tr><th>Week</th><th class="num">W - L</th><th class="num">Win %</th><th class="num hide-m">Even</th><th class="num">DHQ<br>miss</th><th class="num">Sleeper<br>miss</th></tr>' + parts.join('')
             + '<tr><td><b>Season</b></td><td class="num"><b>' + W + ' - ' + L + '</b></td><td class="num"><b>' + winPct(W, L) + '</b></td><td class="num hide-m">' + T + '</td><td class="num">' + (dm / n).toFixed(2) + '</td><td class="num">' + (ns ? (sm / ns).toFixed(2) : '—') + '</td></tr></table></div>'
-            + posTable(byPos, 'SEASON BY POSITION · VS SLEEPER')
+            + posTable(byPos, 'SEASON BY POSITION · VS SLEEPER', plat)
             + '<div class="hint">Win % = wins over wins + losses; an even call (within 0.05 of each other) counts for neither. Players who played, graded on the number we showed when the week locked.</div>';
     }
     $('btnRecompute').addEventListener('click', recomputeSheet);
